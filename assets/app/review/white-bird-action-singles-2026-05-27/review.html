@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codori 白い鳥アクション単体化レビュー</title>
+  <style>
+    :root {
+      color: #213047;
+      background: #fffaf0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    p {
+      margin: 0 0 24px;
+      color: #5b6472;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      gap: 18px;
+      max-width: 920px;
+    }
+    figure {
+      margin: 0;
+      padding: 10px;
+      border: 1px solid #eadfcf;
+      border-radius: 8px;
+      background: #fffdf7;
+    }
+    img {
+      display: block;
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 8px;
+      object-fit: contain;
+    }
+    figcaption {
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    small {
+      display: block;
+      color: #7a8391;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Codori 白い鳥アクション単体化レビュー</h1>
+  <p>96pxで、コード種類ごとのアクション差が読めるか確認するためのHTMLです。</p>
+  <div class="grid">
+    <figure><img src="checks/action-major-v2-96px.png" alt="Major"><figcaption>Major<small>安心して立つ</small></figcaption></figure>
+    <figure><img src="checks/action-minor-v2-96px.png" alt="minor"><figcaption>minor<small>そっと寄り添う</small></figcaption></figure>
+    <figure><img src="checks/action-7-v2-96px.png" alt="7"><figcaption>7<small>次へ誘う</small></figcaption></figure>
+    <figure><img src="checks/action-add9-v2-96px.png" alt="add9"><figcaption>add9<small>きらっと見上げる</small></figcaption></figure>
+    <figure><img src="checks/action-m7-v2-96px.png" alt="m7"><figcaption>m7<small>夜にほどける</small></figcaption></figure>
+    <figure><img src="checks/action-maj7-v2-96px.png" alt="maj7"><figcaption>maj7<small>透明にたたずむ</small></figcaption></figure>
+    <figure><img src="checks/action-mm7-v2-96px.png" alt="mM7"><figcaption>mM7<small>宿命を見つめる</small></figcaption></figure>
+    <figure><img src="checks/action-sus4-v2-96px.png" alt="sus4"><figcaption>sus4<small>まだ待っている</small></figcaption></figure>
+    <figure><img src="checks/action-m7-5-v2-96px.png" alt="m7-5"><figcaption>m7-5<small>少し揺れる</small></figcaption></figure>
+    <figure><img src="checks/action-dim-v2-96px.png" alt="dim"><figcaption>dim<small>きゅっと固まる</small></figcaption></figure>
+    <figure><img src="checks/action-aug-v2-96px.png" alt="aug"><figcaption>aug<small>ふわっと驚く</small></figcaption></figure>
+  </div>
+</body>
+</html>

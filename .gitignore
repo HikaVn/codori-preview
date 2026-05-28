@@ -1,0 +1,8 @@
+.DS_Store
+test-results/
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+*.pyc

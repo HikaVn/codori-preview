@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codori MVP</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div class="brand-block">
+          <img class="app-logo" src="../assets/logo/codori-logo-app-header-rough-04.svg" alt="Codori">
+          <h1>音のきもちをおぼえる</h1>
+        </div>
+        <div class="progress" aria-live="polite">
+          <span id="card-count">1 / 4</span>
+        </div>
+      </header>
+
+      <section class="practice-panel" aria-label="練習ステージ">
+        <div class="practice-copy">
+          <p class="eyebrow">れんしゅうの森</p>
+          <h2>今日はどの森を歩く？</h2>
+          <p id="practice-stage-description">同じCでも、鳥が変わると空気が変わるよ。</p>
+          <p class="practice-mood" id="practice-stage-mood">明るい、静か、そわっと、ふわっと。</p>
+          <div class="stage-targets" id="stage-targets" aria-label="このStageのコード"></div>
+          <div class="stage-progress" id="stage-progress" aria-live="polite">
+            <p id="stage-progress-summary">まだ羽あとなし。まずは音を聞いてみよう。</p>
+            <p class="stage-continue" id="stage-continue">つづきからはまだなし。</p>
+            <div class="stage-progress-badges" id="stage-progress-badges" aria-label="学習進捗"></div>
+            <div class="stage-progress-actions">
+              <button class="stage-reset-button" id="reset-stage-progress" type="button">このStageの羽あとを消す</button>
+            </div>
+            <div class="next-stage-guide is-hidden" id="next-stage-guide">
+              <p id="next-stage-message">次の森へ進めるよ。</p>
+              <button class="next-stage-button" id="next-stage-button" type="button">次の森へ</button>
+            </div>
+          </div>
+        </div>
+        <div class="practice-actions">
+          <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
+          <p class="stage-number-note" id="stage-number-note">Stage 3 / 4 は次の森で準備中。今は入口から進行までを先に歩く。</p>
+          <button class="catalog-button" id="open-catalog" type="button">図鑑でさがす</button>
+        </div>
+      </section>
+
+      <section class="set-panel" aria-label="コードセット切り替え">
+        <div class="set-copy">
+          <p class="eyebrow">ずかんの森</p>
+          <h2 id="set-title">はじめの4羽</h2>
+          <p id="set-description">同じCを基準に、明るい・静か・進む・広がるを聞き分ける。</p>
+          <div class="progression-flow" id="progression-flow" aria-label="コードの道しるべ"></div>
+        </div>
+        <div class="set-buttons" role="group" aria-label="学習セット">
+          <button class="set-button is-active" type="button" data-set="initial-four">はじめの4羽</button>
+          <button class="set-button" type="button" data-set="expansion-set-01">Cのまわり</button>
+          <button class="set-button" type="button" data-set="m7-set-01">m7の夜</button>
+          <button class="set-button" type="button" data-set="all-main-chords">全コード</button>
+        </div>
+      </section>
+
+      <section class="filter-panel is-hidden" id="filter-panel" aria-label="全コードフィルタ">
+        <div class="filter-head">
+          <div>
+            <p class="eyebrow">さがす羽</p>
+            <h2>コード名・音名・種類でさがす</h2>
+          </div>
+          <p class="filter-summary" id="filter-summary">132コード</p>
+        </div>
+        <div class="filter-group" aria-label="コード名検索">
+          <label class="filter-label" for="chord-search">コード名検索</label>
+          <div class="search-row">
+            <input
+              class="search-input"
+              id="chord-search"
+              type="search"
+              inputmode="search"
+              autocomplete="off"
+              placeholder="Cadd9 / m7 / sus4"
+            >
+            <button class="filter-clear-button" id="clear-search" type="button">消す</button>
+          </div>
+        </div>
+        <div class="filter-group" aria-label="音名フィルタ">
+          <p class="filter-label">音名</p>
+          <div class="filter-buttons" id="root-filter"></div>
+        </div>
+        <div class="filter-group" aria-label="コード種類フィルタ">
+          <p class="filter-label">コード種類</p>
+          <div class="filter-buttons" id="family-filter"></div>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="表示切り替え">
+        <button class="tab is-active" type="button" data-view="card">
+          <span>音カード</span>
+          <small>1つずつ</small>
+        </button>
+        <button class="tab" type="button" data-view="compare">
+          <span>ききくらべ</span>
+          <small>ちがい</small>
+        </button>
+        <button class="tab" type="button" data-view="quiz">
+          <span>音あて</span>
+          <small>思い出す</small>
+        </button>
+        <button class="tab" type="button" data-view="progression">
+          <span>進行練習</span>
+          <small>流れ</small>
+        </button>
+      </nav>
+
+      <section class="mode-guide" aria-live="polite">
+        <div>
+          <p class="eyebrow" id="mode-eyebrow">いまの歩き方</p>
+          <h2 id="mode-title">音カード</h2>
+        </div>
+        <p id="mode-description">1つのコードを、鳥・音・運指・きもちでゆっくり見る。</p>
+        <p class="first-step-tip" id="first-step-tip">まずは青い「音をきく」から。</p>
+      </section>
+
+      <section class="view is-active" id="card-view" aria-label="コードカード">
+        <div class="card-stage">
+          <section class="hero-panel" aria-labelledby="chord-name">
+            <div class="chord-head">
+              <div>
+                <p class="key-line">
+                  <span class="family-label" id="family-label">Major</span>
+                  <span class="key-chip" id="key-chip">C</span>
+                </p>
+                <h2 id="chord-name">C</h2>
+              </div>
+              <button class="icon-button card-play-button" id="play-current" type="button" aria-label="コードの音をきく">
+                <span aria-hidden="true">▶</span>
+                <small>音をきく</small>
+              </button>
+            </div>
+            <div class="visual-grid">
+              <div class="bird-frame">
+                <img id="bird-image" src="../assets/approved/characters/major.png" alt="CのCodori鳥">
+              </div>
+              <div class="fingering-frame">
+                <img id="fingering-image" src="../assets/app/fingering/initial-four/ukulele_C_vertical_strings.svg" alt="Cのウクレレ運指">
+              </div>
+            </div>
+            <p class="learning-note" id="learning-note">ほっと帰れる明るさ</p>
+          </section>
+
+          <aside class="side-panel" aria-label="学習メモ">
+            <div>
+              <p class="side-title">音のメモ</p>
+              <p id="memory-hint">Cは、ほっと帰ってこられる音。Major鳥の安心した顔と、まっすぐな響きを一緒に覚えよう。</p>
+            </div>
+            <div class="controls">
+              <button class="secondary-button" id="prev-card" type="button">まえへ</button>
+              <button class="primary-button" id="next-card" type="button">つぎへ</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="compare-view" aria-label="聞き比べ">
+        <div class="compare-panel">
+          <div class="compare-head">
+            <div>
+              <p class="family-label">ちがいを聞く</p>
+              <h2>並べてきく</h2>
+            </div>
+            <button class="primary-button" id="play-compare" type="button">順番に聞く</button>
+          </div>
+          <p class="compare-note" id="compare-note">近いコードを順番に聞いて、空気の違いを耳に残す。</p>
+          <div class="compare-grid" id="compare-grid"></div>
+        </div>
+      </section>
+
+      <section class="view" id="quiz-view" aria-label="クイズ">
+        <div class="quiz-panel">
+          <div class="quiz-visual">
+            <div class="quiz-listen-actions">
+              <button class="quiz-play-button" id="play-quiz" type="button" aria-label="音あてのコード音をきく">▶</button>
+              <button class="root-assist-button" id="play-root-assist" type="button" aria-label="音あての土台の音をきく">土台の音</button>
+            </div>
+            <p class="quiz-listen-label">音をきく</p>
+            <img id="quiz-image" src="../assets/approved/characters/major.png" alt="クイズ用Codori鳥">
+            <div class="quiz-answer-detail is-hidden" id="quiz-answer-detail">
+              <div>
+                <p class="family-label">こたえ</p>
+                <h3 id="quiz-answer-name">C</h3>
+                <p id="quiz-answer-note">ほっと帰れる明るさ</p>
+              </div>
+              <img id="quiz-fingering-image" src="../assets/app/fingering/initial-four/ukulele_C_vertical_strings.svg" alt="答えのウクレレ運指">
+            </div>
+          </div>
+          <div class="quiz-content">
+            <p class="family-label">音をきいてえらぶ</p>
+            <h2>どのコードかな？</h2>
+            <p class="quiz-score" id="quiz-score">0 / 0</p>
+            <div class="quiz-options" id="quiz-options"></div>
+            <p class="quiz-result" id="quiz-result" aria-live="polite"></p>
+            <button class="secondary-button" id="next-quiz" type="button">次の音へ</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="progression-view" aria-label="進行練習">
+        <div class="progression-panel">
+          <div class="progression-head">
+            <div>
+              <p class="family-label">流れできく</p>
+              <h2 id="progression-title">進行の森</h2>
+            </div>
+            <button class="primary-button" id="play-progression" type="button">まとめて聞く</button>
+          </div>
+          <p class="progression-note" id="progression-note">鳥たちが並ぶと、曲の景色が少し見えてくる。</p>
+          <div class="progression-selector" id="progression-selector" role="group" aria-label="進行を選ぶ"></div>
+          <div class="progression-path" id="progression-path"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

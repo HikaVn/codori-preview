@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="520" viewBox="0 0 520 520" role="img" aria-label="m7-5 provisional Codori owl">
+  <rect width="520" height="520" fill="none"/>
+  <path d="M152 190c28-54 82-88 108-38 26-50 80-16 108 38 42 80 16 222-108 250-124-28-150-170-108-250z" fill="#F7FAFC" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M174 171c-28-25-32-55-12-89 35 18 53 47 55 87" fill="#DCE7EF" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M346 171c28-25 32-55 12-89-35 18-53 47-55 87" fill="#DCE7EF" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="218" cy="256" r="38" fill="#FFFFFF" stroke="#1D2730" stroke-width="7"/>
+  <circle cx="302" cy="256" r="38" fill="#FFFFFF" stroke="#1D2730" stroke-width="7"/>
+  <circle cx="218" cy="256" r="16" fill="#111820"/>
+  <circle cx="302" cy="256" r="16" fill="#111820"/>
+  <circle cx="224" cy="249" r="5" fill="#FFFFFF"/>
+  <circle cx="308" cy="249" r="5" fill="#FFFFFF"/>
+  <path d="M246 301c9-10 21-10 30 0-8 16-22 16-30 0z" fill="#D89B2B" stroke="#1D2730" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M209 342c25 18 76 18 102 0" fill="none" stroke="#8EA2AF" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="182" cy="315" rx="18" ry="12" fill="#F7DDD5" opacity="0.75"/>
+  <ellipse cx="338" cy="315" rx="18" ry="12" fill="#F7DDD5" opacity="0.75"/>
+  <path d="M214 435c-16 15-35 16-57 2" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <path d="M306 435c16 15 35 16 57 2" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <path d="M390 144l38 38M428 144l-38 38" stroke="#1E5AA8" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
+</svg>

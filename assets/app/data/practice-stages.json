@@ -1,0 +1,322 @@
+[
+  {
+    "id": "stage-0-chord-families-in-c",
+    "stage_number": 0,
+    "label": "Stage 0",
+    "title": "Cでコード種類をさらう",
+    "short_title": "Cのきもち",
+    "description": "同じCのまま、鳥ときもちだけが変わる入口の森。",
+    "mood": "明るい、静か、そわっと、ふわっと。まずは4つの空気を聞いてみる。",
+    "code_ids": ["C", "Cm", "C7", "Cadd9"],
+    "primary_modes": ["card", "compare", "quiz"],
+    "progressions": [],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-1-c-diatonic-intro",
+    "stage_number": 1,
+    "label": "Stage 1",
+    "title": "Cのまわりの仲間",
+    "short_title": "Cのまわり",
+    "description": "Cのまわりにいる仲間たち。曲でよく会う6羽と、帰り道のG7に会いに行く。",
+    "mood": "まずはCへ帰れる感じを聞く。明るい羽、静かな羽、前へ吹く風を順番に。",
+    "code_ids": ["C", "Dm", "Em", "F", "G", "Am", "G7"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "c-f-g-c",
+        "name": "ひらいて帰る道",
+        "code_ids": ["C", "F", "G", "C"],
+        "memo": "Cでほっと出発して、Fで景色がひらき、Gの風に乗って、Cへ帰る。"
+      },
+      {
+        "id": "c-am-f-g",
+        "name": "胸にしまって進む道",
+        "code_ids": ["C", "Am", "F", "G"],
+        "memo": "Cの安心から、Amで少し胸にしまい、Fでひらいて、Gで前へ進む。"
+      },
+      {
+        "id": "dm-g7-c",
+        "name": "静かな帰り道",
+        "code_ids": ["Dm", "G7", "C"],
+        "memo": "Dmで静かに歩き、G7のそわっとした合図で、Cへほっと帰る。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-2-seventh-routes",
+    "stage_number": 2,
+    "label": "Stage 2",
+    "title": "7アクションの道しるべ",
+    "short_title": "7アクションの道",
+    "description": "7アクションは、次の枝へ案内する小さな合図。行き先とセットで覚える森。",
+    "mood": "A7はDmへ、D7はGへ、G7はCへ。そわっとした音が、次の場所を教えてくれる。",
+    "code_ids": ["A7", "Dm", "D7", "G", "G7", "C"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "a7-dm",
+        "name": "静かな小道へ",
+        "code_ids": ["A7", "Dm"],
+        "memo": "A7が、Dmの静かな小道へそっと背中を押す。7アクションは行き先を持っている。"
+      },
+      {
+        "id": "d7-g",
+        "name": "前向きな風へ",
+        "code_ids": ["D7", "G"],
+        "memo": "D7が、Gの前向きな風へ走り出す合図になる。そわっとしたら、次へ進む。"
+      },
+      {
+        "id": "g7-c",
+        "name": "ほっと帰る",
+        "code_ids": ["G7", "C"],
+        "memo": "G7が、Cへ帰りたくなる風を連れてくる。帰る場所が見えると安心する。"
+      },
+      {
+        "id": "a7-dm-g7-c",
+        "name": "そわっと帰る道",
+        "code_ids": ["A7", "Dm", "G7", "C"],
+        "memo": "A7からDmへ、G7からCへ。そわっと進む合図を聞いて、最後はほっと帰る。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-3-jazz-diatonic-in-c",
+    "stage_number": 3,
+    "label": "Stage 3",
+    "title": "Cメジャーの夜の仲間",
+    "short_title": "夜のC",
+    "description": "Cのまわりを、夜の灯りみたいな7thの響きでそっと歩く森。",
+    "mood": "難しい名前はあとで大丈夫。透明、余韻、少しゆれる感じを耳に残す。",
+    "code_ids": ["Cmaj7", "Dm7", "Em7", "Fmaj7", "G7", "Am7", "Bm7-5"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "dm7-g7-cmaj7",
+        "name": "夜の帰り道",
+        "code_ids": ["Dm7", "G7", "Cmaj7"],
+        "memo": "Dm7で夜道を歩き、G7の小さな合図を聞いて、Cmaj7の灯りへ帰る。"
+      },
+      {
+        "id": "am7-dm7-g7-cmaj7",
+        "name": "遠まわりの灯り",
+        "code_ids": ["Am7", "Dm7", "G7", "Cmaj7"],
+        "memo": "Am7で少し静まり、Dm7で歩き出す。G7を抜けると、Cmaj7に明かりがともる。"
+      },
+      {
+        "id": "em7-am7-dm7-g7",
+        "name": "夜風の連なり",
+        "code_ids": ["Em7", "Am7", "Dm7", "G7"],
+        "memo": "Em7からAm7へ、Dm7へ。夜風がゆっくり流れて、G7の合図へ向かう。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-4-key-shift-intro",
+    "stage_number": 4,
+    "label": "Stage 4",
+    "title": "キーを変えてみる",
+    "short_title": "キーの旅",
+    "description": "鳥本体はそのまま、住む枝だけを変えてみる森。",
+    "mood": "Gの森、Fの森へ小さくおでかけ。同じ鳥でも、コード名と運指が変わる。",
+    "code_ids": ["G", "Am", "Bm", "C", "D", "Em", "F", "Bb"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "g-c-d-g",
+        "name": "Gの森へ帰る",
+        "code_ids": ["G", "C", "D", "G"],
+        "memo": "Gで出発して、Cで景色がひらく。Dの風に乗ったら、Gへ帰ってこられる。"
+      },
+      {
+        "id": "f-bb-c-f",
+        "name": "Fの森へ帰る",
+        "code_ids": ["F", "Bb", "C", "F"],
+        "memo": "Fで出発して、Bbで景色が広がる。Cの風を通って、Fへ戻る。"
+      },
+      {
+        "id": "g-em-c-d",
+        "name": "Gの胸と風",
+        "code_ids": ["G", "Em", "C", "D"],
+        "memo": "Gの安心から、Emで少し胸にしまう。Cでひらいて、Dでまた前へ進む。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-5-common-progressions",
+    "stage_number": 5,
+    "label": "Stage 5",
+    "title": "よくある進行の森",
+    "short_title": "進行の森",
+    "description": "鳥たちが並ぶと、曲の景色が動き出す。よくある流れを耳でたどる森。",
+    "mood": "コード名を丸暗記するより、安心、風、胸の影、広がりの順番で聞いてみる。",
+    "code_ids": ["C", "G", "Am", "F", "Em", "Dm", "G7"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "c-g-am-f",
+        "name": "風と胸の景色",
+        "code_ids": ["C", "G", "Am", "F"],
+        "memo": "Cで明るく出発して、Gの風が吹き、Amで少し胸にしまって、Fでやわらかく広がる。"
+      },
+      {
+        "id": "c-am-f-g",
+        "name": "胸にしまって前へ",
+        "code_ids": ["C", "Am", "F", "G"],
+        "memo": "Cでほっと出発して、Amでやさしく胸にしまい、Fでふわっと広がって、Gで前へ進む。"
+      },
+      {
+        "id": "f-g-em-am",
+        "name": "光から影へ",
+        "code_ids": ["F", "G", "Em", "Am"],
+        "memo": "Fでやわらかく広がり、Gの風が吹いて、Emで影が差し、Amで静かにしまう。"
+      },
+      {
+        "id": "dm-g7-c",
+        "name": "帰り道",
+        "code_ids": ["Dm", "G7", "C"],
+        "memo": "Dmの静かな道から、G7のそわっとした合図を通って、Cへ帰る。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-6-sus4-add9-color",
+    "stage_number": 6,
+    "label": "Stage 6",
+    "title": "浮遊ときらめき",
+    "short_title": "色づけ",
+    "description": "いつものMajorに、浮く感じやきらめきを少し足す森。",
+    "mood": "sus4はまだ着地しない羽。add9は空気がきらっと広がる羽。",
+    "code_ids": ["Csus4", "C", "Gsus4", "G", "Cadd9", "Fadd9", "Gadd9"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "csus4-c",
+        "name": "ふわっと着地",
+        "code_ids": ["Csus4", "C"],
+        "memo": "Csus4で少し浮いて、Cへほっと着地する。浮く、戻る、を耳でたしかめる。"
+      },
+      {
+        "id": "gsus4-g-c",
+        "name": "風がほどける",
+        "code_ids": ["Gsus4", "G", "C"],
+        "memo": "Gsus4の浮いた感じがGでほどけて、Cへ帰る。風が落ち着く感じを聞く。"
+      },
+      {
+        "id": "c-cadd9-c",
+        "name": "空気がひらく",
+        "code_ids": ["C", "Cadd9", "C"],
+        "memo": "Cの安心に、Cadd9の小さな光を足して、またCへ戻る。少し光るだけで景色が変わる。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-7-minor-key-intro",
+    "stage_number": 7,
+    "label": "Stage 7",
+    "title": "minorキーの入口",
+    "short_title": "静かな帰り道",
+    "description": "Amを帰る場所にして、静かな森をゆっくり歩く。",
+    "mood": "暗いより、静か。E7はAmへ帰るための小さな灯り。",
+    "code_ids": ["Am", "Dm", "E7", "G", "C", "F"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "am-dm-e7-am",
+        "name": "Amへ帰る",
+        "code_ids": ["Am", "Dm", "E7", "Am"],
+        "memo": "Amで静かに出発して、Dmの小道を歩く。E7の灯りが見えたら、Amへ帰る。"
+      },
+      {
+        "id": "am-f-g-c",
+        "name": "静かから明るさへ",
+        "code_ids": ["Am", "F", "G", "C"],
+        "memo": "Amの静けさから、Fで景色が広がる。Gで進むと、Cの明るさが見えてくる。"
+      },
+      {
+        "id": "dm-e7-am",
+        "name": "静かな着地",
+        "code_ids": ["Dm", "E7", "Am"],
+        "memo": "Dmの小道から、E7の合図を通って、Amへ静かに着地する。帰る場所を耳で覚える。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-8-bluesy-seventh",
+    "stage_number": 8,
+    "label": "Stage 8",
+    "title": "ブルージーな7の森",
+    "short_title": "7アクションの遊び",
+    "description": "7アクションのいたずらっぽさを、遊びながら聞く森。",
+    "mood": "Majorより少しにやっとする。正解より、7アクションの色を耳で覚える。",
+    "code_ids": ["C7", "F7", "G7", "A7", "D7", "C"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "c7-f7-c7-g7",
+        "name": "にやっと回る",
+        "code_ids": ["C7", "F7", "C7", "G7"],
+        "memo": "C7からF7へ寄り道して、またC7へ。最後にG7が、次の風を呼んでくる。"
+      },
+      {
+        "id": "a7-d7-g7-c",
+        "name": "7アクションのリレー",
+        "code_ids": ["A7", "D7", "G7", "C"],
+        "memo": "A7、D7、G7と合図がつながる。7アクションのリレーを聞いて、最後はCへ帰る。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-9-mystery-chords",
+    "stage_number": 9,
+    "label": "Stage 9",
+    "title": "不思議な響きの森",
+    "short_title": "不思議の森",
+    "description": "dim、m7-5、augを、こわい音ではなく不思議な色としてのぞく森。",
+    "mood": "怖がらなくて大丈夫。きゅっとする、ゆれる、夢みたいにふくらむ、を少し聞く。",
+    "code_ids": ["Bdim", "Bm7-5", "Cdim", "Caug", "Gaug", "C"],
+    "primary_modes": ["card", "compare", "quiz", "progression"],
+    "progressions": [
+      {
+        "id": "bm7-5-e7-am",
+        "name": "夜から静けさへ",
+        "code_ids": ["Bm7-5", "E7", "Am"],
+        "memo": "Bm7-5で少しゆれて、E7の合図を通る。最後にAmへ落ち着くと、ほっとする。"
+      },
+      {
+        "id": "c-caug-f",
+        "name": "夢から広がりへ",
+        "code_ids": ["C", "Caug", "F"],
+        "memo": "Cの安心がCaugでふわっと夢になる。Fへ進むと、景色がやわらかく広がる。"
+      },
+      {
+        "id": "bdim-c",
+        "name": "緊張から安心へ",
+        "code_ids": ["Bdim", "C"],
+        "memo": "Bdimのきゅっとした感じが、Cでほどける。こわいより、ほどける前の小さな緊張。"
+      }
+    ],
+    "quiz_option_count": 4
+  },
+  {
+    "id": "stage-10-catalog-practice",
+    "stage_number": 10,
+    "label": "Stage 10",
+    "title": "全コード図鑑を使う",
+    "short_title": "図鑑の使い方",
+    "description": "132コードを一気に覚えず、必要な鳥を探す練習をする森。",
+    "mood": "迷ったら図鑑。音名と種類でしぼって、今ほしいコードだけ見れば大丈夫。",
+    "code_ids": ["C", "Cm", "C7", "Cadd9", "Cm7", "Cmaj7", "CmM7", "Csus4", "Cm7-5", "Cdim", "Caug"],
+    "primary_modes": ["card", "compare", "quiz"],
+    "progressions": [],
+    "quiz_option_count": 6
+  }
+]

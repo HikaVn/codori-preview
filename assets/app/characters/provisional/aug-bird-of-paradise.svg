@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="520" viewBox="0 0 520 520" role="img" aria-label="aug provisional Codori bird of paradise">
+  <rect width="520" height="520" fill="none"/>
+  <ellipse cx="260" cy="304" rx="138" ry="145" fill="#FFF4EA" stroke="#1D2730" stroke-width="8"/>
+  <path d="M198 166c-14-43 5-75 58-96 12 41 2 75-30 103" fill="#F7C78D" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M255 159c3-46 34-75 92-82-5 44-28 75-70 95" fill="#F5A46C" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M154 270c-46 25-67 65-51 101 12 29 45 39 73 22 25-15 35-47 22-82" fill="#FFE1C2" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M366 270c46 25 67 65 51 101-12 29-45 39-73 22-25-15-35-47-22-82" fill="#FFE1C2" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="217" cy="273" r="18" fill="#111820"/>
+  <circle cx="303" cy="273" r="18" fill="#111820"/>
+  <circle cx="223" cy="266" r="6" fill="#FFFFFF"/>
+  <circle cx="309" cy="266" r="6" fill="#FFFFFF"/>
+  <path d="M242 309c11-12 27-12 38 0-9 16-29 16-38 0z" fill="#D89B2B" stroke="#1D2730" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M226 352c20 20 49 20 69 0" fill="none" stroke="#BA7A4C" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="177" cy="320" rx="18" ry="12" fill="#F7B6A6" opacity="0.75"/>
+  <ellipse cx="343" cy="320" rx="18" ry="12" fill="#F7B6A6" opacity="0.75"/>
+  <path d="M211 445c-19 15-40 16-63 0" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <path d="M309 445c19 15 40 16 63 0" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <path d="M407 134h38M426 115v38" stroke="#D86F77" stroke-width="8" stroke-linecap="round"/>
+</svg>

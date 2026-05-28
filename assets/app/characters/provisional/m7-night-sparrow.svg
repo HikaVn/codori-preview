@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="520" viewBox="0 0 520 520" role="img" aria-label="m7 provisional Codori night sparrow">
+  <rect width="520" height="520" fill="none"/>
+  <ellipse cx="260" cy="292" rx="142" ry="156" fill="#F8FBFD" stroke="#1D2730" stroke-width="8"/>
+  <path d="M146 265c-38 23-55 65-42 102 9 27 32 43 56 39 23-4 36-25 29-53-5-20-20-47-43-88z" fill="#F2F7FA" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M374 265c38 23 55 65 42 102-9 27-32 43-56 39-23-4-36-25-29-53 5-20 20-47 43-88z" fill="#F2F7FA" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M176 174c38-54 130-64 186-17 28 24 43 55 45 92-36-47-74-73-143-75-40-1-65 6-88 0z" fill="#DCE9F2" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M201 168c-19-20-18-47 6-66 13 25 36 39 63 46-25 10-46 16-69 20z" fill="#DCE9F2" stroke="#1D2730" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="214" cy="273" r="17" fill="#111820"/>
+  <circle cx="306" cy="273" r="17" fill="#111820"/>
+  <circle cx="220" cy="266" r="6" fill="#FFFFFF"/>
+  <circle cx="312" cy="266" r="6" fill="#FFFFFF"/>
+  <path d="M244 300c8-9 24-13 34-2 4 4 4 10 0 14-12 12-32 12-44 0-4-4-2-9 10-12z" fill="#1D2730" stroke="#0E1419" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M230 341c15 17 45 21 62 0" fill="none" stroke="#8EA2AF" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="178" cy="313" rx="18" ry="13" fill="#F7DDD5" opacity="0.8"/>
+  <ellipse cx="342" cy="313" rx="18" ry="13" fill="#F7DDD5" opacity="0.8"/>
+  <path d="M206 445c-19 16-41 17-64 0" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <path d="M314 445c19 16 41 17 64 0" fill="none" stroke="#1D2730" stroke-width="9" stroke-linecap="round"/>
+  <g fill="none" stroke="#1E5AA8" stroke-width="7" stroke-linecap="round" opacity="0.75">
+    <path d="M393 151c22-7 33 10 20 28-9 12-28 10-31-4"/>
+    <path d="M422 128v47"/>
+  </g>
+  <circle cx="400" cy="168" r="7" fill="#1E5AA8" opacity="0.75"/>
+</svg>
