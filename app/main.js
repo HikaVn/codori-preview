@@ -1547,18 +1547,33 @@ function playRootAssist() {
 
   const context = getAudioContext();
   const now = context.currentTime;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.value = frequency;
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
-  gain.gain.setValueAtTime(0.1, now + 0.55);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start(now);
-  oscillator.stop(now + 0.95);
+  const fundamental = context.createOscillator();
+  const harmonic = context.createOscillator();
+  const fundamentalGain = context.createGain();
+  const harmonicGain = context.createGain();
+
+  fundamental.type = "sine";
+  fundamental.frequency.value = frequency;
+  harmonic.type = "sine";
+  harmonic.frequency.value = frequency * 2;
+
+  fundamentalGain.gain.setValueAtTime(0.0001, now);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
+  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  harmonicGain.gain.setValueAtTime(0.0001, now);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.024, now + 0.03);
+  harmonicGain.gain.setValueAtTime(0.02, now + 0.55);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+
+  fundamental.connect(fundamentalGain);
+  harmonic.connect(harmonicGain);
+  fundamentalGain.connect(context.destination);
+  harmonicGain.connect(context.destination);
+  fundamental.start(now);
+  harmonic.start(now);
+  fundamental.stop(now + 0.95);
+  harmonic.stop(now + 0.95);
 
   if (!quizHasAnswered) {
     elements.quizResult.textContent = currentQuizAssist.message;
