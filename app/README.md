@@ -279,8 +279,9 @@ assets/app/characters/action-candidate-old-c-v7/
 
 この候補画像は背景付きのレビュー用であり、`assets/approved/characters/` はまだ上書きしない。
 
-ワンポイントはPNGへ焼き込まず、アプリ側で重ねる。
-形はコード種類で固定し、色はキー色から作る。
+ワンポイントは鳥PNGへ焼き込まず、アプリ側で重ねる。
+2026-05-29時点では、IMAGEGENで作成したPNG素材 `assets/app/accents/imagegen-v1/` を使う。
+形はコード種類で固定し、キー違いは同じ形のままキー色の枠と背景で表す。
 
 アプリヘッダーは、現フェーズで決定したCodoriロゴ `rough-04` を基準にしたロゴを表示する。
 

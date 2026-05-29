@@ -76,57 +76,57 @@ const ONE_POINT_ACCENTS = {
   Major: {
     slug: "major",
     title: "安心のホームドット",
-    svg: '<circle cx="24" cy="22" r="10" fill="currentColor"/><path d="M12 40h24" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/major.png"
   },
   minor: {
     slug: "minor",
     title: "内向きの三日月",
-    svg: '<path d="M30 9a16 16 0 1 0 0 30a12 12 0 1 1 0-30z" fill="currentColor"/>'
+    asset: "assets/app/accents/imagegen-v1/minor.png"
   },
   "7": {
     slug: "seventh",
     title: "次へ進む矢印",
-    svg: '<path d="M10 24h28M27 12l12 12-12 12" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+    asset: "assets/app/accents/imagegen-v1/seventh.png"
   },
   add9: {
     slug: "add9",
     title: "一粒のきらめき",
-    svg: '<path d="M24 7v34M7 24h34M13 13l22 22M35 13L13 35" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/add9.png"
   },
   m7: {
     slug: "m7",
     title: "余韻の輪",
-    svg: '<circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="5"/><path d="M14 33c6 5 14 5 20 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/m7.png"
   },
   maj7: {
     slug: "maj7",
     title: "透明な小ダイヤ",
-    svg: '<path d="M24 6l18 18-18 18L6 24z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>'
+    asset: "assets/app/accents/imagegen-v1/maj7.png"
   },
   mM7: {
     slug: "mm7",
     title: "宿命の斜め小片",
-    svg: '<path d="M19 7l17 8-8 26-17-8z" fill="currentColor" opacity="0.84"/><path d="M10 40L38 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/mm7.png"
   },
   sus4: {
     slug: "sus4",
     title: "未解決の浮いた点",
-    svg: '<circle cx="24" cy="15" r="9" fill="currentColor"/><path d="M24 30v12" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/sus4.png"
   },
   "m7-5": {
     slug: "m7-5",
     title: "揺れる傾きダイヤ",
-    svg: '<path d="M13 15l25-5 5 25-25 5z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M10 41L40 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/m7-5.png"
   },
   dim: {
     slug: "dim",
     title: "縮んだ小リング",
-    svg: '<ellipse cx="24" cy="24" rx="16" ry="11" fill="none" stroke="currentColor" stroke-width="5"/><path d="M15 16l18 16M33 16L15 32" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/dim.png"
   },
   aug: {
     slug: "aug",
     title: "広がる小リング",
-    svg: '<circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="5"/><path d="M24 3v8M24 37v8M3 24h8M37 24h8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+    asset: "assets/app/accents/imagegen-v1/aug.png"
   }
 };
 const KEY_COLORS = {
@@ -420,14 +420,14 @@ function onePointAccentFor(chord) {
   return ONE_POINT_ACCENTS[chord?.family] || ONE_POINT_ACCENTS.Major;
 }
 
-function onePointAccentSvg(chord) {
+function onePointAccentImage(chord) {
   const accent = onePointAccentFor(chord);
-  return `<svg viewBox="0 0 48 48" focusable="false" aria-hidden="true">${accent.svg}</svg>`;
+  return `<img src="${assetPath(accent.asset)}" alt="" loading="lazy">`;
 }
 
 function onePointAccentMarkup(chord) {
   const accent = onePointAccentFor(chord);
-  return `<span class="one-point-accent one-point-accent--${accent.slug}" title="${accent.title}" aria-hidden="true">${onePointAccentSvg(chord)}</span>`;
+  return `<span class="one-point-accent one-point-accent--${accent.slug}" title="${accent.title}" aria-hidden="true">${onePointAccentImage(chord)}</span>`;
 }
 
 function updateOnePointAccent(element, chord) {
@@ -437,7 +437,7 @@ function updateOnePointAccent(element, chord) {
   const accent = onePointAccentFor(chord);
   element.className = `one-point-accent one-point-accent--${accent.slug}`;
   element.setAttribute("title", accent.title);
-  element.innerHTML = onePointAccentSvg(chord);
+  element.innerHTML = onePointAccentImage(chord);
 }
 
 function quizReferenceRoot() {
