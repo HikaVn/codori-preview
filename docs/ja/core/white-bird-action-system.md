@@ -93,11 +93,14 @@ C7 / G7 / A7 = 次へ誘うアクションは同じ。色だけ違う。
 
 ## 現時点のアプリ対応
 
-新しいアクション別画像が揃うまでは、アプリでは元の白い鳥を共通表示にする。
+2026-05-29時点では、アプリにv6bのアクション候補を反映している。
 
 ```text
-assets/approved/characters/major.png
+assets/app/characters/action-candidate-old-c-v6b/
 ```
+
+ただし、v6bは最終完成ではない。
+ポーズ差分の方向確認用であり、正式透明背景アセットではない。
 
 正式アクション画像を作ったら、以下のように差し替える。
 
@@ -110,3 +113,27 @@ assets/approved/characters/action-add9.png
 ```
 
 ただし、どの画像も同じ白い鳥のアクション差分として制作する。
+
+## v6bレビュー結果
+
+2026-05-29のポーズ最終化レビューでは、以下の判断とする。
+
+| コード種類 | 判断 |
+|---|---|
+| Major | 採用 |
+| 7 | 採用寄り |
+| m7-5 | 採用寄り |
+| aug | 採用寄り |
+| add9 | 微修正 |
+| mM7 | 微修正 |
+| minor | 作り直し |
+| m7 | 作り直し |
+| maj7 | 作り直し |
+| sus4 | 作り直し |
+| dim | 作り直し |
+
+詳細：
+
+```text
+assets/app/review/pose-finalization-2026-05-29/pose-finalization-v6b-review.md
+```

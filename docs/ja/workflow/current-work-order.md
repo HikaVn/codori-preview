@@ -72,6 +72,9 @@ m7仮実装
 - 練習モードMVPの実装レビューは `docs/ja/learning/practice-mode-mvp-implementation-review.md` に記録する。
 - `全コード`は図鑑モード、初心者向け練習は少数コードの練習モードとして分ける。
 - 最初の練習モード実装対象は Stage 0 / Stage 1 / Stage 2 / Stage 5 とする。
+- 2026-05-29時点で、v6b白い鳥アクションはアプリに通常表示として反映済み。ただし最終完成ではない。
+- 次の作業はv7白い鳥アクション制作。作り直し対象は minor / m7 / maj7 / sus4 / dim、微修正対象は add9 / mM7。
+- v7制作ブリーフは `docs/ja/characters/white-bird-action-v7-production-brief.md` を正とする。
 
 ---
 

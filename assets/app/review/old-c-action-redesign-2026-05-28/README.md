@@ -57,6 +57,15 @@ assets/app/characters/action-candidate-old-c-v6b/
 - `?actions=1` の学習アプリ表示は、v6bの個別切り出しを参照する。
 - このシートと個別画像はレビュー用で、まだ正式な透明背景アセットではない。
 
+2026-05-29追記：
+
+- v6bはアプリ表示用の候補として使うが、最終完成ではない。
+- 通常URLでもv6bのポーズ差分を表示するように変更済み。
+- ポーズ最終化レビューは `assets/app/review/pose-finalization-2026-05-29/pose-finalization-v6b-review.md` を参照。
+- Major / 7 / m7-5 / augは採用寄り。
+- minor / m7 / maj7 / sus4 / dimは作り直し対象。
+- add9 / mM7は微修正対象。
+
 ## 切り取り最適化メモ
 
 2026-05-28に、v6b個別画像の切り取り領域を再最適化した。
