@@ -279,9 +279,9 @@ assets/app/characters/action-candidate-old-c-v7/
 
 この候補画像は背景付きのレビュー用であり、`assets/approved/characters/` はまだ上書きしない。
 
-ワンポイントは鳥PNGへ焼き込まず、アプリ側で重ねる。
-2026-05-29時点では、IMAGEGENで作成したPNG素材 `assets/app/accents/imagegen-v1/` を使う。
-形はコード種類で固定し、キー違いは同じ形のままキー色の枠と背景で表す。
+当初はワンポイントを鳥PNGへ焼き込まずアプリ側で重ねたが、後乗せでは世界観に馴染まないため本番候補から外す。
+2026-05-29時点では、IMAGEGENで白い鳥とワンポイントを一緒に生成した統合版 `assets/app/characters/action-candidate-integrated-v1/` を使う。
+形と鳥の関係はコード種類で固定し、キー違いはカード枠、チップ、背景色で表す。
 
 アプリヘッダーは、現フェーズで決定したCodoriロゴ `rough-04` を基準にしたロゴを表示する。
 

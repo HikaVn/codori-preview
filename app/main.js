@@ -56,21 +56,22 @@ const requestedFamilyFilter = urlParams.get("family");
 const requestedSearchFilter = urlParams.get("search") || urlParams.get("q") || "";
 const STORAGE_KEY = "codori.practiceProgress.v1";
 const HARMONIC_GAIN_RATIO = 0.2;
+const USE_INTEGRATED_ACTION_ART = true;
 const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
 const ACTION_CHARACTER_ASSETS = {
-  Major: "assets/app/characters/action-candidate-old-c-v7/action-major.png",
-  minor: "assets/app/characters/action-candidate-old-c-v7/action-minor.png",
-  "7": "assets/app/characters/action-candidate-old-c-v7/action-7.png",
-  add9: "assets/app/characters/action-candidate-old-c-v7/action-add9.png",
-  m7: "assets/app/characters/action-candidate-old-c-v7/action-m7.png",
-  maj7: "assets/app/characters/action-candidate-old-c-v7/action-maj7.png",
-  mM7: "assets/app/characters/action-candidate-old-c-v7/action-mm7.png",
-  sus4: "assets/app/characters/action-candidate-old-c-v7/action-sus4.png",
-  "m7-5": "assets/app/characters/action-candidate-old-c-v7/action-m7-5.png",
-  dim: "assets/app/characters/action-candidate-old-c-v7/action-dim.png",
-  aug: "assets/app/characters/action-candidate-old-c-v7/action-aug.png"
+  Major: "assets/app/characters/action-candidate-integrated-v1/action-major.png",
+  minor: "assets/app/characters/action-candidate-integrated-v1/action-minor.png",
+  "7": "assets/app/characters/action-candidate-integrated-v1/action-7.png",
+  add9: "assets/app/characters/action-candidate-integrated-v1/action-add9.png",
+  m7: "assets/app/characters/action-candidate-integrated-v1/action-m7.png",
+  maj7: "assets/app/characters/action-candidate-integrated-v1/action-maj7.png",
+  mM7: "assets/app/characters/action-candidate-integrated-v1/action-mm7.png",
+  sus4: "assets/app/characters/action-candidate-integrated-v1/action-sus4.png",
+  "m7-5": "assets/app/characters/action-candidate-integrated-v1/action-m7-5.png",
+  dim: "assets/app/characters/action-candidate-integrated-v1/action-dim.png",
+  aug: "assets/app/characters/action-candidate-integrated-v1/action-aug.png"
 };
 const ONE_POINT_ACCENTS = {
   Major: {
@@ -426,6 +427,9 @@ function onePointAccentImage(chord) {
 }
 
 function onePointAccentMarkup(chord) {
+  if (USE_INTEGRATED_ACTION_ART) {
+    return "";
+  }
   const accent = onePointAccentFor(chord);
   return `<span class="one-point-accent one-point-accent--${accent.slug}" title="${accent.title}" aria-hidden="true">${onePointAccentImage(chord)}</span>`;
 }
@@ -434,7 +438,13 @@ function updateOnePointAccent(element, chord) {
   if (!element || !chord) {
     return;
   }
+  if (USE_INTEGRATED_ACTION_ART) {
+    element.hidden = true;
+    element.innerHTML = "";
+    return;
+  }
   const accent = onePointAccentFor(chord);
+  element.hidden = false;
   element.className = `one-point-accent one-point-accent--${accent.slug}`;
   element.setAttribute("title", accent.title);
   element.innerHTML = onePointAccentImage(chord);
