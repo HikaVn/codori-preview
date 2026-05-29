@@ -21,12 +21,29 @@ assets/app/characters/action-candidate-old-c-v6b/action-major.png
 assets/app/characters/action-candidate-old-c-v6b/
 ```
 
+v7候補：
+
+```text
+assets/app/characters/action-candidate-old-c-v7/
+```
+
 レビュー：
 
 ```text
 assets/app/review/pose-finalization-2026-05-29/pose-finalization-v6b-review.md
 assets/app/review/pose-finalization-2026-05-29/codori-pose-finalization-v6b-sheet.png
+assets/app/review/pose-finalization-2026-05-29/codori-pose-finalization-v7-sheet.png
 ```
+
+参考シート：
+
+```text
+assets/app/review/pose-finalization-2026-05-29/generated-v7-direction/codori-v7-direction-generated-sheet.png
+assets/app/review/pose-finalization-2026-05-29/generated-v7b/codori-v7b-generated-sheet.png
+```
+
+`generated-v7-direction`は動きの方向参考であり、旧C基準から外れているため本番アセットにはしない。
+`generated-v7b`は旧C基準へ寄せ直した候補で、個別切り出し後に学習アプリへ反映する。
 
 ## 共通ルール
 
@@ -48,6 +65,33 @@ assets/app/review/pose-finalization-2026-05-29/codori-pose-finalization-v6b-shee
 2. 微修正対象: add9 / mM7
 3. 採用寄り対象: 7 / m7-5 / aug
 4. Major基準との全体比較
+
+## v7b反映状況
+
+2026-05-29時点で、v6bより差を出すためのv7b候補を作成し、学習アプリのアクション候補参照を以下へ切り替えた。
+
+```text
+assets/app/characters/action-candidate-old-c-v7/
+```
+
+v7bで強まった差：
+
+- minor: 羽を前に寄せた内向きポーズ。
+- 7: 片羽上げで次へ誘うポーズ。
+- add9: 上を見る、空気が広がるポーズ。
+- m7: 低く座るようにほどけるポーズ。
+- maj7: 少し横向きで遠くを見るポーズ。
+- mM7: 横向きの静かな覚悟。
+- sus4: 片足を浮かせた未解決ポーズ。
+- m7-5: 斜めに傾く揺れ。
+- dim: 小さく固まるポーズ。
+- aug: 両羽を広げるポーズ。
+
+残る注意点：
+
+- 旧C基準より線と陰影に手描き感が少し強い。
+- minorとdimは前羽を使うため、最終判定では混同しないか確認する。
+- add9とaugはどちらも上方向の動きがあるため、アプリ内サイズでの差を確認する。
 
 ## 作り直し対象
 
