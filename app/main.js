@@ -106,7 +106,7 @@ const ONE_POINT_ACCENTS = {
   },
   mM7: {
     slug: "mm7",
-    title: "宿命の斜め小片",
+    title: "犯人の含み笑い",
     asset: "assets/app/accents/imagegen-v1/mm7.png"
   },
   sus4: {
@@ -116,7 +116,7 @@ const ONE_POINT_ACCENTS = {
   },
   "m7-5": {
     slug: "m7-5",
-    title: "揺れる傾きダイヤ",
+    title: "ニヒルなX傷",
     asset: "assets/app/accents/imagegen-v1/m7-5.png"
   },
   dim: {
