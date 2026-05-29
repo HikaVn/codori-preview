@@ -61,17 +61,17 @@ const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
 const ACTION_CHARACTER_ASSETS = {
-  Major: "assets/app/characters/action-candidate-integrated-v1/action-major.png",
-  minor: "assets/app/characters/action-candidate-integrated-v1/action-minor.png",
-  "7": "assets/app/characters/action-candidate-integrated-v1/action-7.png",
-  add9: "assets/app/characters/action-candidate-integrated-v1/action-add9.png",
-  m7: "assets/app/characters/action-candidate-integrated-v1/action-m7.png",
-  maj7: "assets/app/characters/action-candidate-integrated-v1/action-maj7.png",
-  mM7: "assets/app/characters/action-candidate-integrated-v1/action-mm7.png",
-  sus4: "assets/app/characters/action-candidate-integrated-v1/action-sus4.png",
-  "m7-5": "assets/app/characters/action-candidate-integrated-v1/action-m7-5.png",
-  dim: "assets/app/characters/action-candidate-integrated-v1/action-dim.png",
-  aug: "assets/app/characters/action-candidate-integrated-v1/action-aug.png"
+  Major: "assets/app/characters/action-candidate-integrated-v2/action-major.png",
+  minor: "assets/app/characters/action-candidate-integrated-v2/action-minor.png",
+  "7": "assets/app/characters/action-candidate-integrated-v2/action-7.png",
+  add9: "assets/app/characters/action-candidate-integrated-v2/action-add9.png",
+  m7: "assets/app/characters/action-candidate-integrated-v2/action-m7.png",
+  maj7: "assets/app/characters/action-candidate-integrated-v2/action-maj7.png",
+  mM7: "assets/app/characters/action-candidate-integrated-v2/action-mm7.png",
+  sus4: "assets/app/characters/action-candidate-integrated-v2/action-sus4.png",
+  "m7-5": "assets/app/characters/action-candidate-integrated-v2/action-m7-5.png",
+  dim: "assets/app/characters/action-candidate-integrated-v2/action-dim.png",
+  aug: "assets/app/characters/action-candidate-integrated-v2/action-aug.png"
 };
 const ONE_POINT_ACCENTS = {
   Major: {

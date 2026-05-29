@@ -113,7 +113,7 @@ assets/app/review/pose-finalization-2026-05-29/mobile-v8-compare-c-check.png
 実装メモ：
 
 - 後乗せワンポイントは、鳥の世界観から浮きやすいため本番候補から外す。
-- IMAGEGENで白い鳥とワンポイントを一緒に生成した統合版を`assets/app/characters/action-candidate-integrated-v1/`に置く。
+- IMAGEGENで白い鳥と一般的に通じやすい記号を一緒に生成した統合版を`assets/app/characters/action-candidate-integrated-v2/`に置く。
 - `app/main.js`の`ACTION_CHARACTER_ASSETS`で統合版の鳥画像を参照する。
 - キー色はカード枠、チップ、背景へ反映し、鳥のアクションとワンポイントの関係はコード種類ごとに固定する。
 
