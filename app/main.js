@@ -71,6 +71,63 @@ const ACTION_CHARACTER_ASSETS = {
   dim: "assets/app/characters/action-candidate-old-c-v7/action-dim.png",
   aug: "assets/app/characters/action-candidate-old-c-v7/action-aug.png"
 };
+const ONE_POINT_ACCENTS = {
+  Major: {
+    slug: "major",
+    title: "安心のホームドット",
+    svg: '<circle cx="24" cy="22" r="10" fill="currentColor"/><path d="M12 40h24" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+  },
+  minor: {
+    slug: "minor",
+    title: "内向きの三日月",
+    svg: '<path d="M30 9a16 16 0 1 0 0 30a12 12 0 1 1 0-30z" fill="currentColor"/>'
+  },
+  "7": {
+    slug: "seventh",
+    title: "次へ進む矢印",
+    svg: '<path d="M10 24h28M27 12l12 12-12 12" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
+  },
+  add9: {
+    slug: "add9",
+    title: "一粒のきらめき",
+    svg: '<path d="M24 7v34M7 24h34M13 13l22 22M35 13L13 35" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+  },
+  m7: {
+    slug: "m7",
+    title: "余韻の輪",
+    svg: '<circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="5"/><path d="M14 33c6 5 14 5 20 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+  },
+  maj7: {
+    slug: "maj7",
+    title: "透明な小ダイヤ",
+    svg: '<path d="M24 6l18 18-18 18L6 24z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>'
+  },
+  mM7: {
+    slug: "mm7",
+    title: "宿命の斜め小片",
+    svg: '<path d="M19 7l17 8-8 26-17-8z" fill="currentColor" opacity="0.84"/><path d="M10 40L38 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+  },
+  sus4: {
+    slug: "sus4",
+    title: "未解決の浮いた点",
+    svg: '<circle cx="24" cy="15" r="9" fill="currentColor"/><path d="M24 30v12" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+  },
+  "m7-5": {
+    slug: "m7-5",
+    title: "揺れる傾きダイヤ",
+    svg: '<path d="M13 15l25-5 5 25-25 5z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M10 41L40 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+  },
+  dim: {
+    slug: "dim",
+    title: "縮んだ小リング",
+    svg: '<ellipse cx="24" cy="24" rx="16" ry="11" fill="none" stroke="currentColor" stroke-width="5"/><path d="M15 16l18 16M33 16L15 32" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'
+  },
+  aug: {
+    slug: "aug",
+    title: "広がる小リング",
+    svg: '<circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width="5"/><path d="M24 3v8M24 37v8M3 24h8M37 24h8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>'
+  }
+};
 const KEY_COLORS = {
   C: "#F6E7B8",
   Db: "#D9C8F0",
@@ -267,6 +324,7 @@ const elements = {
   familyLabel: document.querySelector("#family-label"),
   keyChip: document.querySelector("#key-chip"),
   birdImage: document.querySelector("#bird-image"),
+  birdAccent: document.querySelector("#bird-accent"),
   fingeringImage: document.querySelector("#fingering-image"),
   learningNote: document.querySelector("#learning-note"),
   memoryHint: document.querySelector("#memory-hint"),
@@ -277,6 +335,7 @@ const elements = {
   compareNote: document.querySelector("#compare-note"),
   compareGrid: document.querySelector("#compare-grid"),
   quizImage: document.querySelector("#quiz-image"),
+  quizAccent: document.querySelector("#quiz-accent"),
   playQuiz: document.querySelector("#play-quiz"),
   playRootAssist: document.querySelector("#play-root-assist"),
   quizAnswerDetail: document.querySelector("#quiz-answer-detail"),
@@ -309,6 +368,20 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function mixHex(hex, targetHex, targetRatio) {
+  const source = hexToRgb(hex);
+  const target = hexToRgb(targetHex);
+  const ratio = Math.max(0, Math.min(1, targetRatio));
+  const mixed = {
+    r: Math.round(source.r * (1 - ratio) + target.r * ratio),
+    g: Math.round(source.g * (1 - ratio) + target.g * ratio),
+    b: Math.round(source.b * (1 - ratio) + target.b * ratio)
+  };
+  return `#${[mixed.r, mixed.g, mixed.b]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 function rootForChord(chord) {
   if (chord?.root) {
     return chord.root;
@@ -331,13 +404,38 @@ function applyKeyColor(element, chord) {
   }
   const keyColor = keyColorForChord(chord);
   element.style.setProperty("--key-color", keyColor);
+  element.style.setProperty("--key-accent", mixHex(keyColor, "#1e5aa8", 0.54));
   element.style.setProperty("--key-soft", hexToRgba(keyColor, 0.16));
   element.style.setProperty("--key-frame", hexToRgba(keyColor, 0.24));
 }
 
 function keyStyle(chord) {
   const keyColor = keyColorForChord(chord);
-  return `--key-color: ${keyColor}; --key-soft: ${hexToRgba(keyColor, 0.16)}; --key-frame: ${hexToRgba(keyColor, 0.24)};`;
+  return `--key-color: ${keyColor}; --key-accent: ${mixHex(keyColor, "#1e5aa8", 0.54)}; --key-soft: ${hexToRgba(keyColor, 0.16)}; --key-frame: ${hexToRgba(keyColor, 0.24)};`;
+}
+
+function onePointAccentFor(chord) {
+  return ONE_POINT_ACCENTS[chord?.family] || ONE_POINT_ACCENTS.Major;
+}
+
+function onePointAccentSvg(chord) {
+  const accent = onePointAccentFor(chord);
+  return `<svg viewBox="0 0 48 48" focusable="false" aria-hidden="true">${accent.svg}</svg>`;
+}
+
+function onePointAccentMarkup(chord) {
+  const accent = onePointAccentFor(chord);
+  return `<span class="one-point-accent one-point-accent--${accent.slug}" title="${accent.title}" aria-hidden="true">${onePointAccentSvg(chord)}</span>`;
+}
+
+function updateOnePointAccent(element, chord) {
+  if (!element || !chord) {
+    return;
+  }
+  const accent = onePointAccentFor(chord);
+  element.className = `one-point-accent one-point-accent--${accent.slug}`;
+  element.setAttribute("title", accent.title);
+  element.innerHTML = onePointAccentSvg(chord);
 }
 
 function isPracticeMode() {
@@ -908,6 +1006,7 @@ function renderCard() {
     elements.keyChip.textContent = "-";
     elements.birdImage.removeAttribute("src");
     elements.birdImage.alt = "条件に合うCodori鳥はまだ見つかりません";
+    elements.birdAccent.innerHTML = "";
     elements.fingeringImage.removeAttribute("src");
     elements.fingeringImage.alt = "条件に合う運指はまだ見つかりません";
     elements.learningNote.textContent = "そのコードは、いまの森では見つからなかった。";
@@ -923,6 +1022,7 @@ function renderCard() {
   applyKeyColor(elements.keyChip, chord);
   elements.birdImage.src = assetPath(characterAssetFor(chord));
   elements.birdImage.alt = `${chord.display_name}のCodori鳥`;
+  updateOnePointAccent(elements.birdAccent, chord);
   elements.fingeringImage.src = assetPath(chord.fingering_asset);
   elements.fingeringImage.alt = `${chord.display_name}のウクレレ運指`;
   elements.learningNote.textContent = chord.learning_note;
@@ -946,7 +1046,10 @@ function renderCompare() {
     card.className = "compare-card";
     card.setAttribute("style", keyStyle(chord));
     card.innerHTML = `
-      <img class="compare-bird" src="${assetPath(characterAssetFor(chord))}" alt="${chord.display_name}のCodori鳥" loading="lazy">
+      <div class="compare-bird-wrap">
+        <img class="compare-bird" src="${assetPath(characterAssetFor(chord))}" alt="${chord.display_name}のCodori鳥" loading="lazy">
+        ${onePointAccentMarkup(chord)}
+      </div>
       <div class="compare-name">
         <strong>${chord.display_name}</strong>
         <span class="compare-key-chip">${rootForChord(chord)}</span>
@@ -978,6 +1081,7 @@ function renderQuiz() {
   if (!chord) {
     elements.quizImage.removeAttribute("src");
     elements.quizImage.alt = "条件に合うCodori鳥はまだ見つかりません";
+    elements.quizAccent.innerHTML = "";
     elements.quizAnswerDetail.classList.add("is-hidden");
     elements.nextQuiz.disabled = true;
     elements.playQuiz.disabled = true;
@@ -993,6 +1097,7 @@ function renderQuiz() {
   elements.playRootAssist.disabled = false;
   elements.quizImage.src = assetPath(characterAssetFor(chord));
   elements.quizImage.alt = `${chord.display_name}のCodori鳥`;
+  updateOnePointAccent(elements.quizAccent, chord);
   elements.quizAnswerDetail.classList.add("is-hidden");
   elements.nextQuiz.disabled = true;
   elements.quizAnswerName.textContent = chord.display_name;
@@ -1320,8 +1425,12 @@ function renderProgression() {
   routeChords.forEach((chord, index) => {
     const step = document.createElement("article");
     step.className = "progression-step";
+    step.setAttribute("style", keyStyle(chord));
     step.innerHTML = `
-      <img class="progression-bird" src="${assetPath(characterAssetFor(chord))}" alt="${chord.display_name}のCodori鳥" loading="lazy">
+      <div class="progression-bird-wrap">
+        <img class="progression-bird" src="${assetPath(characterAssetFor(chord))}" alt="${chord.display_name}のCodori鳥" loading="lazy">
+        ${onePointAccentMarkup(chord)}
+      </div>
       <strong>${chord.display_name}</strong>
       <p>${chord.learning_note}</p>
       <button class="icon-button" type="button" aria-label="${chord.display_name}を再生">▶</button>
