@@ -87,11 +87,11 @@ CmM7 / FmM7 = 斜め小片の形は同じ。色だけキー色に変える。
 
 ## v8制作フロー
 
-1. ワンポイントだけの白黒ラフ表を作る。
-2. 11コード種類のワンポイント形状を固定する。
-3. v7ポーズにワンポイントを追加したv8候補シートを作る。
+1. ワンポイントだけの白黒ラフ表を作る。完了。
+2. 11コード種類のワンポイント形状を固定する。初期案として完了。
+3. v7ポーズにワンポイントを追加したv8候補をアプリ上で重ねる。完了。
 4. 96px縮小シートで、形が読めるか確認する。
-5. アプリのカード、聞き比べ、音あてで表示確認する。
+5. アプリのカード、聞き比べ、音あてで表示確認する。一部完了。
 6. キー色を当てたとき、コード種類とキー違いが混ざらないか確認する。
 7. 正式候補に昇格するか、ワンポイント形状を再調整する。
 
@@ -100,6 +100,21 @@ CmM7 / FmM7 = 斜め小片の形は同じ。色だけキー色に変える。
 ```text
 assets/app/review/pose-finalization-2026-05-29/one-point-v8-rough.svg
 ```
+
+アプリ確認：
+
+```text
+assets/app/review/pose-finalization-2026-05-29/app-v8-compare-c-check.png
+assets/app/review/pose-finalization-2026-05-29/app-v8-card-cmm7-check.png
+assets/app/review/pose-finalization-2026-05-29/app-v8-progression-check.png
+assets/app/review/pose-finalization-2026-05-29/mobile-v8-compare-c-check.png
+```
+
+実装メモ：
+
+- ワンポイントは画像素材へ焼き込まない。
+- `app/main.js`の`ONE_POINT_ACCENTS`で形を管理する。
+- `--key-accent`でキー色を少し濃くして、白背景でも読めるようにする。
 
 ## NG
 

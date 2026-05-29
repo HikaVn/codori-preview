@@ -829,6 +829,7 @@ h1 {
 .bird-frame,
 .fingering-frame,
 .quiz-visual {
+  position: relative;
   display: grid;
   place-items: center;
   min-height: 320px;
@@ -846,11 +847,80 @@ h1 {
 }
 
 .bird-frame img {
+  position: relative;
+  z-index: 1;
   width: min(78%, 360px);
   max-height: 300px;
   height: auto;
   display: block;
   object-fit: contain;
+}
+
+.one-point-accent {
+  --accent-size: 58px;
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: var(--accent-size);
+  height: var(--accent-size);
+  border: 1px solid color-mix(in srgb, var(--key-accent, #1e5aa8) 34%, #ffffff);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--key-accent, var(--key-color, #1e5aa8));
+  box-shadow: 0 10px 24px rgba(23, 56, 86, 0.13);
+  pointer-events: none;
+}
+
+.one-point-accent svg {
+  width: 70%;
+  height: 70%;
+  overflow: visible;
+}
+
+.one-point-accent--major,
+.one-point-accent--dim {
+  bottom: 9%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.one-point-accent--minor {
+  bottom: 17%;
+  left: 15%;
+}
+
+.one-point-accent--seventh {
+  top: 25%;
+  left: 16%;
+}
+
+.one-point-accent--add9 {
+  top: 17%;
+  right: 20%;
+}
+
+.one-point-accent--m7 {
+  right: 17%;
+  bottom: 10%;
+}
+
+.one-point-accent--maj7,
+.one-point-accent--mm7 {
+  top: 18%;
+  right: 17%;
+}
+
+.one-point-accent--sus4,
+.one-point-accent--m7-5 {
+  bottom: 18%;
+  left: 16%;
+}
+
+.one-point-accent--aug {
+  top: 17%;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .fingering-frame img {
@@ -965,8 +1035,16 @@ h1 {
     #ffffff;
 }
 
+.compare-bird-wrap {
+  position: relative;
+}
+
 .compare-bird {
   padding: 6px;
+}
+
+.compare-bird-wrap .one-point-accent {
+  --accent-size: 38px;
 }
 
 .compare-fingering {
@@ -1221,6 +1299,7 @@ h1 {
   background: #ffffff;
 }
 
+.progression-bird-wrap,
 .progression-bird,
 .progression-fingering {
   display: block;
@@ -1230,6 +1309,21 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.progression-bird-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.progression-bird-wrap .progression-bird {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.progression-bird-wrap .one-point-accent {
+  --accent-size: 30px;
 }
 
 .progression-step strong {
