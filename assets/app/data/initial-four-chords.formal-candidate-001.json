@@ -29,8 +29,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "C",
-    "learning_note": "今日は少し静か",
-    "memory_hint": "Cmは、Cより少し静かな音。minorアクションの内向きな姿と、しっとりした気分をそっと結びつけよう。",
+    "learning_note": "少し悲しい",
+    "memory_hint": "Cmは、Cより少し悲しい音。minorアクションの悲しい顔と、割れたハートの気分を一緒に覚えよう。",
     "temp_audio_notes": [261.63, 311.13, 392.0, 523.25]
   },
   {

@@ -17,8 +17,8 @@ let chordData = [
     ukulele_fingering: "0333",
     fingering_asset: "assets/app/fingering/initial-four/ukulele_Cm_vertical_strings.svg",
     character_asset: "assets/approved/characters/major.png",
-    learning_note: "今日は少し静か",
-    memory_hint: "Cmは、Cより少し静かな音。minorアクションの内向きな姿と、しっとりした気分をそっと結びつけよう。",
+    learning_note: "少し悲しい",
+    memory_hint: "Cmは、Cより少し悲しい音。minorアクションの悲しい顔と、割れたハートの気分を一緒に覚えよう。",
     temp_audio_notes: [261.63, 311.13, 392.0, 523.25]
   },
   {
@@ -81,7 +81,7 @@ const ONE_POINT_ACCENTS = {
   },
   minor: {
     slug: "minor",
-    title: "内向きの三日月",
+    title: "悲しい割れたハート",
     asset: "assets/app/accents/imagegen-v1/minor.png"
   },
   "7": {
@@ -177,7 +177,7 @@ const modeGuide = {
   },
   compare: {
     title: "ききくらべ",
-    description: "近いコードを並べて、明るい、静か、そわっと、ふわっとの違いを聞く。"
+    description: "近いコードを並べて、明るい、悲しい、ドヤっと、ふわっとの違いを聞く。"
   },
   quiz: {
     title: "音あて",
@@ -236,7 +236,7 @@ const chordSets = {
   "initial-four": {
     id: "initial-four",
     label: "はじめの4羽",
-    description: "同じCを基準に、明るい・静か・ドヤっと・広がるを聞き分ける。",
+    description: "同じCを基準に、明るい・悲しい・ドヤっと・広がるを聞き分ける。",
     progressions: [],
     dataPath: useFormalCandidate
       ? "../assets/app/data/initial-four-chords.formal-candidate-001.json"
@@ -849,7 +849,7 @@ function modeDescriptionForCurrentStep(guide) {
       return "Cのまわりにいる仲間を1羽ずつ見る。Cへ帰れる感じを耳に残す。";
     }
     if (activeView === "compare") {
-      return "明るい羽と静かな羽を並べて、曲でよく会う空気を聞く。";
+      return "明るい羽と悲しい羽を並べて、曲でよく会う空気を聞く。";
     }
     if (activeView === "quiz") {
       return "Cのまわりの仲間を、音から思い出す。正解より、帰り道の感覚を育てる。";
