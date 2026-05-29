@@ -128,6 +128,7 @@ characters/m7-night-sparrow-generation-prompts.md
 characters/m7-night-sparrow-formal-candidate-review.md
 characters/pre-line-chord-action-completion-plan.md
 characters/white-bird-action-production-brief.md
+characters/white-bird-one-point-accent-system.md
 characters/starter-birds-overview.md
 characters/character-expansion-roadmap.md
 ```
@@ -145,6 +146,7 @@ characters/character-expansion-roadmap.md
 - m7 / 夜雀の初回画像生成プロンプト
 - m7 / 夜雀の初回生成レビュー
 - 白い鳥アクション差分の制作ブリーフ
+- 白い鳥アクションに足すワンポイント補助設計
 - 初期4鳥の比較
 - 今後増やすキャラのロードマップ
 

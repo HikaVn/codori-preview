@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Codori v8 one-point rough sheet</title>
+  <desc id="desc">Black and white rough symbols for eleven Codori chord family one-point accents.</desc>
+  <rect width="1200" height="760" fill="#eef7fa"/>
+  <text x="32" y="54" font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif" font-size="30" font-weight="700" fill="#054870">Codori v8 one-point rough sheet</text>
+  <text x="32" y="86" font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif" font-size="15" fill="#345a73">Shape = chord family. Color = key. Keep each accent small enough to support the bird, not replace it.</text>
+
+  <defs>
+    <style>
+      .card { fill: #fff; stroke: #c9e2ec; stroke-width: 1.5; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; font-size: 26px; font-weight: 700; fill: #0067a9; }
+      .name { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; font-size: 14px; fill: #345a73; }
+      .note { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; font-size: 13px; fill: #5b7484; }
+      .mark { fill: none; stroke: #1c252b; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+      .fillmark { fill: #1c252b; stroke: none; }
+      .thinfill { fill: #1c252b; stroke: none; opacity: 0.92; }
+    </style>
+  </defs>
+
+  <g transform="translate(32 118)">
+    <g transform="translate(0 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">Major</text>
+      <circle class="fillmark" cx="102" cy="94" r="24"/>
+      <path class="mark" d="M68 132H136"/>
+      <text class="name" x="20" y="158">home dot</text>
+      <text class="note" x="20" y="176">stable center</text>
+    </g>
+
+    <g transform="translate(224 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">minor</text>
+      <path class="thinfill" d="M118 64a36 36 0 1 0 0 72a30 30 0 1 1 0-72z"/>
+      <text class="name" x="20" y="158">small crescent</text>
+      <text class="note" x="20" y="176">inward quiet</text>
+    </g>
+
+    <g transform="translate(448 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">7</text>
+      <path class="mark" d="M62 112H136"/>
+      <path class="mark" d="M112 80L144 112L112 144"/>
+      <text class="name" x="20" y="158">small arrow</text>
+      <text class="note" x="20" y="176">moves forward</text>
+    </g>
+
+    <g transform="translate(672 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">add9</text>
+      <path class="mark" d="M102 60V132"/>
+      <path class="mark" d="M66 96H138"/>
+      <path class="mark" d="M78 72L126 120"/>
+      <path class="mark" d="M126 72L78 120"/>
+      <text class="name" x="20" y="158">single sparkle</text>
+      <text class="note" x="20" y="176">air opens</text>
+    </g>
+
+    <g transform="translate(896 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">m7</text>
+      <circle class="mark" cx="102" cy="100" r="34"/>
+      <path class="mark" d="M78 124C92 136 112 136 126 124"/>
+      <text class="name" x="20" y="158">soft ring</text>
+      <text class="note" x="20" y="176">afterglow</text>
+    </g>
+  </g>
+
+  <g transform="translate(32 334)">
+    <g transform="translate(0 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">maj7</text>
+      <path class="mark" d="M102 54L146 98L102 142L58 98Z"/>
+      <text class="name" x="20" y="158">clear diamond</text>
+      <text class="note" x="20" y="176">transparent</text>
+    </g>
+
+    <g transform="translate(224 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">mM7</text>
+      <path class="thinfill" d="M88 60L134 78L114 140L68 122Z"/>
+      <path class="mark" d="M68 144L138 58"/>
+      <text class="name" x="20" y="158">diagonal shard</text>
+      <text class="note" x="20" y="176">quiet fate</text>
+    </g>
+
+    <g transform="translate(448 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">sus4</text>
+      <circle class="fillmark" cx="102" cy="78" r="14"/>
+      <path class="mark" d="M102 112V138"/>
+      <text class="name" x="20" y="158">floating dot</text>
+      <text class="note" x="20" y="176">not landed</text>
+    </g>
+
+    <g transform="translate(672 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">m7-5</text>
+      <path class="mark" d="M72 72L134 58L150 122L88 136Z"/>
+      <path class="mark" d="M66 144L154 50"/>
+      <text class="name" x="20" y="158">tilted diamond</text>
+      <text class="note" x="20" y="176">unstable tilt</text>
+    </g>
+
+    <g transform="translate(896 0)">
+      <rect class="card" width="204" height="190" rx="8"/>
+      <text class="label" x="20" y="38">dim</text>
+      <ellipse class="mark" cx="102" cy="100" rx="30" ry="22"/>
+      <path class="mark" d="M78 78L126 122"/>
+      <path class="mark" d="M126 78L78 122"/>
+      <text class="name" x="20" y="158">tight ring</text>
+      <text class="note" x="20" y="176">contracted</text>
+    </g>
+  </g>
+
+  <g transform="translate(32 550)">
+    <g transform="translate(0 0)">
+      <rect class="card" width="204" height="170" rx="8"/>
+      <text class="label" x="20" y="38">aug</text>
+      <circle class="mark" cx="102" cy="96" r="44"/>
+      <path class="mark" d="M102 42V26"/>
+      <path class="mark" d="M102 150V166"/>
+      <path class="mark" d="M48 96H32"/>
+      <path class="mark" d="M156 96H172"/>
+      <text class="name" x="20" y="154">expanding ring</text>
+    </g>
+  </g>
+</svg>
