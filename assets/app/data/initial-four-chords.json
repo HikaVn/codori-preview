@@ -46,8 +46,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "C",
-    "learning_note": "つぎへ行きたくなる",
-    "memory_hint": "C7は、まだ先へ行きたくなる音。7アクションの片羽の動きと、そわっと進む感じで覚えよう。",
+    "learning_note": "ドヤっと決まる",
+    "memory_hint": "C7は、ドヤっと決まる音。7アクションの得意げな顔と、少しにやっとする強さを一緒に覚えよう。",
     "temp_audio_notes": [261.63, 329.63, 392.0, 466.16]
   },
   {
