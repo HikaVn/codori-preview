@@ -261,6 +261,7 @@ http://localhost:8000/app/?formal=1
 
 2026-05-27時点では、コード種類を鳥種ではなく白い鳥のアクション違いで表す方針に変更した。
 2026-05-28時点では、旧アプリ初期版C鳥を正として作り直したv6b候補を表示する。
+2026-05-29時点では、コード種類ごとの差を強めたv7候補を表示する。
 
 URLに`actions=1`を付けると、正式採用前の白い鳥アクション候補をコード種類ごとに表示する。
 
@@ -272,7 +273,7 @@ http://localhost:8000/app/?actions=1&set=all-main-chords
 候補画像は以下に置く。
 
 ```text
-assets/app/characters/action-candidate-old-c-v6b/
+assets/app/characters/action-candidate-old-c-v7/
 ```
 
 この候補画像は背景付きのレビュー用であり、`assets/approved/characters/` はまだ上書きしない。
