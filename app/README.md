@@ -300,6 +300,8 @@ assets/app/characters/action-candidate-old-c-v7/
 例：`C / Cm / C7 / Cadd9`
 
 `基準をきく`は、答えの根音ではなく、Stageの中心音を鳴らす。
+
+補助音は聞き取りやすさを優先し、基音に対して約20%の第2倍音を加える。
 例：CのまわりのStageではC、minorキーの入口ではAを鳴らす。
 
 Stageごとの基準音は`assets/app/data/practice-stages.json`の`quiz_reference_root`で指定する。
