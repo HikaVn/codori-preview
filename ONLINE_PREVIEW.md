@@ -22,7 +22,7 @@ https://hikavn.github.io/codori-preview/
 
 ```text
 https://hikavn.github.io/codori-preview/app/
-https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+https://hikavn.github.io/codori-preview/app/?stage=0&view=quiz
 ```
 
 ## 事前に必要なこと
@@ -67,7 +67,7 @@ assets/app/characters/action-candidate-2026-05-27/
 ```text
 https://hikavn.github.io/codori-preview/ -> 200
 https://hikavn.github.io/codori-preview/app/ -> 200
-https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz -> 200
+https://hikavn.github.io/codori-preview/app/?stage=0&view=quiz -> 200
 https://hikavn.github.io/codori-preview/assets/app/characters/action-candidate-old-c-v6b/action-major.png -> 200
 https://hikavn.github.io/codori-preview/assets/app/characters/action-candidate-2026-05-27/action-major.png -> 404
 ```
@@ -93,7 +93,7 @@ CodoriプロジェクトをGitHub Pagesで公開できる状態にしてくだ�
 4. GitHub PagesのSourceがGitHub Actionsになっているか確認する。
 5. mainブランチへのpush、またはworkflow_dispatchでPagesデプロイを実行する。
 6. 公開URLのルートと/app/の両方を開いて確認する。
-7. app/?actions=1&stage=0&view=quizを開き、音あて画面が表示されるか確認する。
+7. app/?stage=0&view=quizを開き、音あて画面が表示されるか確認する。
 
 禁止事項：
 - キャラクター方針を変更しない。
@@ -105,7 +105,7 @@ CodoriプロジェクトをGitHub Pagesで公開できる状態にしてくだ�
 - GitHub Pagesの公開URLが得られている。
 - ルートURLからCodoriアプリへ入れる。
 - /app/で画面崩れなく表示される。
-- /app/?actions=1&stage=0&view=quizで音あて画面が表示される。
+- /app/?stage=0&view=quizで音あて画面が表示される。
 - 旧候補フォルダ assets/app/characters/action-candidate-2026-05-27/ が公開成果物に含まれていない。
 - 確認結果と公開URLを報告する。
 ```
@@ -123,7 +123,7 @@ python3 -m http.server 8766 --bind 127.0.0.1
 ```text
 http://127.0.0.1:8766/
 http://127.0.0.1:8766/app/
-http://127.0.0.1:8766/app/?actions=1&stage=0&view=quiz
+http://127.0.0.1:8766/app/?stage=0&view=quiz
 ```
 
 ## 注意

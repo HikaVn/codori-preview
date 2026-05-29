@@ -20,7 +20,7 @@ Codoriをローカルだけでなく、オンラインからも確認できる�
 ```text
 https://hikavn.github.io/codori-preview/
 https://hikavn.github.io/codori-preview/app/
-https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+https://hikavn.github.io/codori-preview/app/?stage=0&view=quiz
 ```
 
 公開用リポジトリ：
@@ -47,7 +47,7 @@ https://github.com/HikaVn/codori-preview
 ```text
 ルートURL: 200
 /app/: 200
-/app/?actions=1&stage=0&view=quiz: 200
+/app/?stage=0&view=quiz: 200
 現行v6b素材: 200
 旧候補素材 action-candidate-2026-05-27: 404
 ```
@@ -68,7 +68,7 @@ https://github.com/HikaVn/codori-preview
 ```text
 https://<GitHubユーザー名>.github.io/<リポジトリ名>/
 https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/
-https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/?actions=1&stage=0&view=quiz
+https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/?stage=0&view=quiz
 ```
 
 ローカル：
@@ -76,7 +76,7 @@ https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/?actions=1&st
 ```text
 http://127.0.0.1:8766/
 http://127.0.0.1:8766/app/
-http://127.0.0.1:8766/app/?actions=1&stage=0&view=quiz
+http://127.0.0.1:8766/app/?stage=0&view=quiz
 ```
 
 ## 完了条件

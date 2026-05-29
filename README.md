@@ -55,7 +55,7 @@ GitHub Pagesで公開できるように、静的サイト用の入口とワー�
 ```text
 https://hikavn.github.io/codori-preview/
 https://hikavn.github.io/codori-preview/app/
-https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+https://hikavn.github.io/codori-preview/app/?stage=0&view=quiz
 ```
 
 公開用リポジトリ：

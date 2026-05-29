@@ -48,7 +48,7 @@ let fullChordData = [...chordData];
 
 const urlParams = new URLSearchParams(window.location.search);
 const useFormalCandidate = urlParams.get("formal") === "1";
-const useActionCandidate = urlParams.get("actions") === "1";
+const useActionCandidate = urlParams.get("actions") !== "0";
 const requestedSetId = urlParams.get("set");
 const requestedStageId = urlParams.get("stage");
 const requestedRootFilter = urlParams.get("root");
