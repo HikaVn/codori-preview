@@ -86,7 +86,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "C",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Cadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Cadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       261.63,
       293.66,
@@ -234,8 +234,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "C",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Cdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Cdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       261.63,
       311.13,
@@ -357,7 +357,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Db",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Dbadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Dbadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       277.18,
       311.13,
@@ -505,8 +505,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Db",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Dbdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Dbdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       277.18,
       329.63,
@@ -628,7 +628,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "D",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Dadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Dadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       293.66,
       329.63,
@@ -776,8 +776,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "D",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Ddimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Ddimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       293.66,
       349.23,
@@ -899,7 +899,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Eb",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Ebadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Ebadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       311.13,
       349.23,
@@ -1047,8 +1047,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Eb",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Ebdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Ebdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       311.13,
       369.99,
@@ -1170,7 +1170,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "E",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Eadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Eadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       329.63,
       369.99,
@@ -1318,8 +1318,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "E",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Edimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Edimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       329.63,
       392.0,
@@ -1441,7 +1441,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "F",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Fadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Fadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       349.23,
       392.0,
@@ -1589,8 +1589,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "F",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Fdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Fdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       349.23,
       415.3,
@@ -1712,7 +1712,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Gb",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Gbadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Gbadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       369.99,
       415.3,
@@ -1860,8 +1860,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Gb",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Gbdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Gbdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       369.99,
       440.0,
@@ -1983,7 +1983,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "G",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Gadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Gadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       392.0,
       440.0,
@@ -2131,8 +2131,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "G",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Gdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Gdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       392.0,
       466.16,
@@ -2254,7 +2254,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Ab",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Abadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Abadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       415.3,
       466.16,
@@ -2402,8 +2402,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Ab",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Abdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Abdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       415.3,
       493.88,
@@ -2525,7 +2525,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "A",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Aadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Aadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       440.0,
       493.88,
@@ -2673,8 +2673,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "A",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Adimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Adimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       440.0,
       523.25,
@@ -2796,7 +2796,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Bb",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Bbadd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Bbadd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       466.16,
       523.25,
@@ -2944,8 +2944,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "Bb",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Bbdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Bbdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       466.16,
       554.37,
@@ -3067,7 +3067,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "B",
     "learning_note": "空気がふわっと広がる",
-    "memory_hint": "Badd9は、add9アクションのきらっとした響き。明るさに小さな風が入る感じを覚えよう。",
+    "memory_hint": "Badd9は、add9アクションの水色の小さな星。明るさにふわっと空気が抜ける感じを覚えよう。",
     "temp_audio_notes": [
       493.88,
       554.37,
@@ -3215,8 +3215,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "B",
-    "learning_note": "きゅっと不穏になる",
-    "memory_hint": "Bdimは、dimアクションのミステリーな響き。小さく緊張する感じを覚えよう。",
+    "learning_note": "悪魔っぽく不穏になる",
+    "memory_hint": "Bdimは、dimアクションの悪魔っぽい響き。コウモリ羽の不穏さを覚えよう。",
     "temp_audio_notes": [
       493.88,
       587.33,
