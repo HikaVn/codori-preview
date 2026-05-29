@@ -116,7 +116,7 @@ const ONE_POINT_ACCENTS = {
   },
   "m7-5": {
     slug: "m7-5",
-    title: "ニヒルなX傷",
+    title: "ちら見X傷",
     asset: "assets/app/accents/imagegen-v1/m7-5.png"
   },
   dim: {
