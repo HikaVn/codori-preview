@@ -50,6 +50,20 @@ http://localhost:8000/app/
 
 GitHub Pagesで公開できるように、静的サイト用の入口とワークフローを用意しています。
 
+公開確認用URL：
+
+```text
+https://hikavn.github.io/codori-preview/
+https://hikavn.github.io/codori-preview/app/
+https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+```
+
+公開用リポジトリ：
+
+```text
+https://github.com/HikaVn/codori-preview
+```
+
 ```text
 index.html
 .github/workflows/pages.yml

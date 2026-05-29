@@ -15,6 +15,23 @@ Codoriをローカルだけでなく、オンラインからも確認できる�
 - GitHub上の作業、Codexへの指示、公開URLの共有を同じ場所で扱える。
 - 無料枠で試しやすい。
 
+2026-05-29時点の公開URL：
+
+```text
+https://hikavn.github.io/codori-preview/
+https://hikavn.github.io/codori-preview/app/
+https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+```
+
+公開用リポジトリ：
+
+```text
+https://github.com/HikaVn/codori-preview
+```
+
+フルプロジェクトをそのままpublicリポジトリへ置くと、Pagesから除外した旧候補やレビュー素材もGitHub上では見えてしまう。
+そのため、公開用リポジトリにはアプリ表示に必要な最小素材だけを置く。
+
 ## 追加した公開準備
 
 - ルート`index.html`を追加し、`app/`へ入れる入口を作った。
@@ -22,6 +39,18 @@ Codoriをローカルだけでなく、オンラインからも確認できる�
 - Pagesデプロイ時に`_site`を作成し、旧候補画像フォルダ`assets/app/characters/action-candidate-2026-05-27/`を公開対象から除外する。
 - `.nojekyll`を追加し、静的ファイルをそのまま配信する前提を明示した。
 - ルート`ONLINE_PREVIEW.md`に、オンライン側のCodexへ渡す指示文をまとめた。
+
+## 公開確認結果
+
+2026-05-29に以下を確認済み。
+
+```text
+ルートURL: 200
+/app/: 200
+/app/?actions=1&stage=0&view=quiz: 200
+現行v6b素材: 200
+旧候補素材 action-candidate-2026-05-27: 404
+```
 
 ## GitHub側で必要な操作
 

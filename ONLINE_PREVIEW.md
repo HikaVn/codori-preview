@@ -6,16 +6,23 @@
 
 Codoriは静的Webアプリなので、GitHub Pagesで公開できます。
 
+現在の公開用リポジトリ：
+
+```text
+https://github.com/HikaVn/codori-preview
+```
+
 公開後の入口は以下です。
 
 ```text
-https://<GitHubユーザー名>.github.io/<リポジトリ名>/
+https://hikavn.github.io/codori-preview/
 ```
 
 アプリ本体は以下です。
 
 ```text
-https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/
+https://hikavn.github.io/codori-preview/app/
+https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
 ```
 
 ## 事前に必要なこと
@@ -28,6 +35,9 @@ https://<GitHubユーザー名>.github.io/<リポジトリ名>/app/
 ## 公開対象
 
 GitHub Pagesには、公開用ディレクトリ`_site`を作ってからアップロードします。
+
+実運用では、フルプロジェクトをそのままpublicリポジトリへ置かず、公開確認に必要な最小素材だけを`HikaVn/codori-preview`へpushします。
+理由は、Pagesから除外した旧候補やレビュー素材が、publicリポジトリ上で見えてしまうのを避けるためです。
 
 主な入口：
 
@@ -51,6 +61,16 @@ assets/app/characters/action-candidate-2026-05-27/
 ```
 
 `assets/app/characters/action-candidate-2026-05-27/`は旧候補画像を含むため、オンライン公開対象から除外します。
+
+2026-05-29時点の確認：
+
+```text
+https://hikavn.github.io/codori-preview/ -> 200
+https://hikavn.github.io/codori-preview/app/ -> 200
+https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz -> 200
+https://hikavn.github.io/codori-preview/assets/app/characters/action-candidate-old-c-v6b/action-major.png -> 200
+https://hikavn.github.io/codori-preview/assets/app/characters/action-candidate-2026-05-27/action-major.png -> 404
+```
 
 ## オンラインCodexへの指示文
 
