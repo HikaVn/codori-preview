@@ -10,6 +10,7 @@
     "code_ids": ["C", "Cm", "C7", "Cadd9"],
     "primary_modes": ["card", "compare", "quiz"],
     "progressions": [],
+    "quiz_reference_root": "C",
     "quiz_option_count": 4
   },
   {
@@ -22,6 +23,7 @@
     "mood": "まずはCへ帰れる感じを聞く。明るい羽、静かな羽、前へ吹く風を順番に。",
     "code_ids": ["C", "Dm", "Em", "F", "G", "Am", "G7"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "c-f-g-c",
@@ -54,6 +56,7 @@
     "mood": "A7はDmへ、D7はGへ、G7はCへ。そわっとした音が、次の場所を教えてくれる。",
     "code_ids": ["A7", "Dm", "D7", "G", "G7", "C"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "a7-dm",
@@ -92,6 +95,7 @@
     "mood": "難しい名前はあとで大丈夫。透明、余韻、少しゆれる感じを耳に残す。",
     "code_ids": ["Cmaj7", "Dm7", "Em7", "Fmaj7", "G7", "Am7", "Bm7-5"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "dm7-g7-cmaj7",
@@ -124,6 +128,7 @@
     "mood": "Gの森、Fの森へ小さくおでかけ。同じ鳥でも、コード名と運指が変わる。",
     "code_ids": ["G", "Am", "Bm", "C", "D", "Em", "F", "Bb"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "g-c-d-g",
@@ -156,6 +161,7 @@
     "mood": "コード名を丸暗記するより、安心、風、胸の影、広がりの順番で聞いてみる。",
     "code_ids": ["C", "G", "Am", "F", "Em", "Dm", "G7"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "c-g-am-f",
@@ -194,6 +200,7 @@
     "mood": "sus4はまだ着地しない羽。add9は空気がきらっと広がる羽。",
     "code_ids": ["Csus4", "C", "Gsus4", "G", "Cadd9", "Fadd9", "Gadd9"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "csus4-c",
@@ -226,6 +233,7 @@
     "mood": "暗いより、静か。E7はAmへ帰るための小さな灯り。",
     "code_ids": ["Am", "Dm", "E7", "G", "C", "F"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "A",
     "progressions": [
       {
         "id": "am-dm-e7-am",
@@ -258,6 +266,7 @@
     "mood": "Majorより少しにやっとする。正解より、7アクションの色を耳で覚える。",
     "code_ids": ["C7", "F7", "G7", "A7", "D7", "C"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "c7-f7-c7-g7",
@@ -284,6 +293,7 @@
     "mood": "怖がらなくて大丈夫。きゅっとする、ゆれる、夢みたいにふくらむ、を少し聞く。",
     "code_ids": ["Bdim", "Bm7-5", "Cdim", "Caug", "Gaug", "C"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
+    "quiz_reference_root": "C",
     "progressions": [
       {
         "id": "bm7-5-e7-am",
@@ -317,6 +327,7 @@
     "code_ids": ["C", "Cm", "C7", "Cadd9", "Cm7", "Cmaj7", "CmM7", "Csus4", "Cm7-5", "Cdim", "Caug"],
     "primary_modes": ["card", "compare", "quiz"],
     "progressions": [],
+    "quiz_reference_root": "C",
     "quiz_option_count": 6
   }
 ]

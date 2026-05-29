@@ -278,6 +278,7 @@ let quizCorrectCount = 0;
 let quizAnsweredCount = 0;
 let quizHasPlayed = false;
 let quizHasAnswered = false;
+let currentQuizAssist = { mode: "foundation", root: "C" };
 let activeView = initialView;
 let renderedCompareKey = "";
 let activeFilters = {
@@ -436,6 +437,45 @@ function updateOnePointAccent(element, chord) {
   element.className = `one-point-accent one-point-accent--${accent.slug}`;
   element.setAttribute("title", accent.title);
   element.innerHTML = onePointAccentSvg(chord);
+}
+
+function quizReferenceRoot() {
+  if (activePracticeStage?.quiz_reference_root) {
+    return activePracticeStage.quiz_reference_root;
+  }
+  if (activeFilters.root !== ALL_FILTER) {
+    return activeFilters.root;
+  }
+  return "C";
+}
+
+function quizAssistForOptions(options) {
+  const roots = [...new Set(options.map((option) => rootForChord(option)))];
+  if (roots.length === 1) {
+    return {
+      mode: "foundation",
+      root: roots[0],
+      label: "土台をきく",
+      ariaLabel: "音あての土台をきく",
+      message: "土台を鳴らしたよ。同じ根っこのまま、響きの色を聞いてみよう。"
+    };
+  }
+  const root = quizReferenceRoot();
+  return {
+    mode: "reference",
+    root,
+    label: "基準をきく",
+    ariaLabel: `${root}の基準音をきく`,
+    message: `${root}の基準音を鳴らしたよ。答えの根音ではなく、耳のものさしとして聞いてみよう。`
+  };
+}
+
+function updateQuizAssistButton(assist) {
+  currentQuizAssist = assist;
+  elements.playRootAssist.textContent = assist.label;
+  elements.playRootAssist.setAttribute("aria-label", assist.ariaLabel);
+  elements.playRootAssist.dataset.assistMode = assist.mode;
+  elements.playRootAssist.dataset.assistRoot = assist.root;
 }
 
 function isPracticeMode() {
@@ -1114,7 +1154,9 @@ function renderQuiz() {
   const optionLimit = Math.max(1, (activePracticeStage?.quiz_option_count || 6) - 1);
   const optionPool = shuffle(chordData.filter((option) => option.code_id !== chord.code_id))
     .slice(0, Math.min(optionLimit, chordData.length - 1));
-  shuffle([chord, ...optionPool]).forEach((option) => {
+  const quizOptions = shuffle([chord, ...optionPool]);
+  updateQuizAssistButton(quizAssistForOptions(quizOptions));
+  quizOptions.forEach((option) => {
     const button = document.createElement("button");
     button.className = "quiz-option";
     button.type = "button";
@@ -1493,13 +1535,12 @@ function playQuizChord() {
 }
 
 function playRootAssist() {
-  const chord = chordData[quizIndex];
-  if (!chord) {
+  if (!chordData[quizIndex]) {
     return;
   }
 
-  const root = rootForChord(chord);
-  const frequency = ROOT_NOTE_FREQUENCIES[root] || chord.temp_audio_notes?.[0];
+  const root = currentQuizAssist.root || "C";
+  const frequency = ROOT_NOTE_FREQUENCIES[root] || chordData[quizIndex].temp_audio_notes?.[0];
   if (!frequency) {
     return;
   }
@@ -1520,7 +1561,7 @@ function playRootAssist() {
   oscillator.stop(now + 0.95);
 
   if (!quizHasAnswered) {
-    elements.quizResult.textContent = "土台の音を鳴らしたよ。そこから響きの色を聞いてみよう。";
+    elements.quizResult.textContent = currentQuizAssist.message;
   }
 }
 
