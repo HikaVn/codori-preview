@@ -284,6 +284,26 @@ assets/app/characters/action-candidate-old-c-v7/
 
 アプリヘッダーは、現フェーズで決定したCodoriロゴ `rough-04` を基準にしたロゴを表示する。
 
+## 音あて補助音
+
+音あては絶対音感テストにしない。
+ただし、答えの根音を常に鳴らすと、根音が混ざるStageではそれだけで回答できてしまう。
+
+そのため、補助音は以下のように切り替える。
+
+```text
+選択肢の根音が同じ場合: 土台をきく
+選択肢の根音が混ざる場合: 基準をきく
+```
+
+`土台をきく`は、同じ根音のコード種類を聞き分けるために、答えと同じ根音を鳴らす。
+例：`C / Cm / C7 / Cadd9`
+
+`基準をきく`は、答えの根音ではなく、Stageの中心音を鳴らす。
+例：CのまわりのStageではC、minorキーの入口ではAを鳴らす。
+
+Stageごとの基準音は`assets/app/data/practice-stages.json`の`quiz_reference_root`で指定する。
+
 ```text
 assets/logo/codori-logo-app-header-rough-04.svg
 ```
