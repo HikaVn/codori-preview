@@ -55,6 +55,7 @@ const requestedRootFilter = urlParams.get("root");
 const requestedFamilyFilter = urlParams.get("family");
 const requestedSearchFilter = urlParams.get("search") || urlParams.get("q") || "";
 const STORAGE_KEY = "codori.practiceProgress.v1";
+const HARMONIC_GAIN_RATIO = 0.2;
 const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
@@ -1562,8 +1563,8 @@ function playRootAssist() {
   fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
   fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
   harmonicGain.gain.setValueAtTime(0.0001, now);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.024, now + 0.03);
-  harmonicGain.gain.setValueAtTime(0.02, now + 0.55);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
+  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
   harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
 
   fundamental.connect(fundamentalGain);
@@ -1719,17 +1720,29 @@ function playSyntheticChord(chord) {
   chord.temp_audio_notes.forEach((frequency, index) => {
     const start = now + index * 0.045;
     const oscillator = context.createOscillator();
+    const harmonic = context.createOscillator();
     const gain = context.createGain();
+    const harmonicGain = context.createGain();
     oscillator.type = "sine";
     oscillator.frequency.value = frequency;
+    harmonic.type = "sine";
+    harmonic.frequency.value = frequency * 2;
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
     gain.gain.setValueAtTime(0.13, start + 1.05);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5);
+    harmonicGain.gain.setValueAtTime(0.0001, start);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.16 * HARMONIC_GAIN_RATIO, start + 0.025);
+    harmonicGain.gain.setValueAtTime(0.13 * HARMONIC_GAIN_RATIO, start + 1.05);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5);
     oscillator.connect(gain);
+    harmonic.connect(harmonicGain);
     gain.connect(master);
+    harmonicGain.connect(master);
     oscillator.start(start);
+    harmonic.start(start);
     oscillator.stop(start + 2.6);
+    harmonic.stop(start + 2.6);
   });
 }
 
