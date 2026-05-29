@@ -113,8 +113,9 @@ assets/app/review/pose-finalization-2026-05-29/mobile-v8-compare-c-check.png
 実装メモ：
 
 - ワンポイントは画像素材へ焼き込まない。
-- `app/main.js`の`ONE_POINT_ACCENTS`で形を管理する。
-- `--key-accent`でキー色を少し濃くして、白背景でも読めるようにする。
+- `app/main.js`の`ONE_POINT_ACCENTS`で素材パスを管理する。
+- IMAGEGEN版の素材は`assets/app/accents/imagegen-v1/`に置く。
+- キー色は`--key-accent`で枠と背景へ反映し、形はコード種類ごとに固定する。
 
 ## NG
 
