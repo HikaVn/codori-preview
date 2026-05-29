@@ -40,7 +40,7 @@ let chordData = [
     fingering_asset: "assets/app/fingering/initial-four/ukulele_Cadd9_vertical_strings.svg",
     character_asset: "assets/approved/characters/major.png",
     learning_note: "ふわっと空気が広がる",
-    memory_hint: "Cadd9は、Cに小さな風が入る音。add9アクションの見上げる顔と、ふわっと広がる空気を一緒に。",
+    memory_hint: "Cadd9は、Cに小さな風が入る音。add9アクションのうつろに見上げる顔と、水色の小さな星を一緒に。",
     temp_audio_notes: [261.63, 293.66, 329.63, 392.0, 523.25]
   }
 ];
@@ -61,17 +61,17 @@ const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
 const ACTION_CHARACTER_ASSETS = {
-  Major: "assets/app/characters/action-candidate-integrated-v2/action-major.png",
-  minor: "assets/app/characters/action-candidate-integrated-v2/action-minor.png",
-  "7": "assets/app/characters/action-candidate-integrated-v2/action-7.png",
-  add9: "assets/app/characters/action-candidate-integrated-v2/action-add9.png",
-  m7: "assets/app/characters/action-candidate-integrated-v2/action-m7.png",
-  maj7: "assets/app/characters/action-candidate-integrated-v2/action-maj7.png",
-  mM7: "assets/app/characters/action-candidate-integrated-v2/action-mm7.png",
-  sus4: "assets/app/characters/action-candidate-integrated-v2/action-sus4.png",
-  "m7-5": "assets/app/characters/action-candidate-integrated-v2/action-m7-5.png",
-  dim: "assets/app/characters/action-candidate-integrated-v2/action-dim.png",
-  aug: "assets/app/characters/action-candidate-integrated-v2/action-aug.png"
+  Major: "assets/app/characters/action-candidate-integrated-v3/action-major.png",
+  minor: "assets/app/characters/action-candidate-integrated-v3/action-minor.png",
+  "7": "assets/app/characters/action-candidate-integrated-v3/action-7.png",
+  add9: "assets/app/characters/action-candidate-integrated-v3/action-add9.png",
+  m7: "assets/app/characters/action-candidate-integrated-v3/action-m7.png",
+  maj7: "assets/app/characters/action-candidate-integrated-v3/action-maj7.png",
+  mM7: "assets/app/characters/action-candidate-integrated-v3/action-mm7.png",
+  sus4: "assets/app/characters/action-candidate-integrated-v3/action-sus4.png",
+  "m7-5": "assets/app/characters/action-candidate-integrated-v3/action-m7-5.png",
+  dim: "assets/app/characters/action-candidate-integrated-v3/action-dim.png",
+  aug: "assets/app/characters/action-candidate-integrated-v3/action-aug.png"
 };
 const ONE_POINT_ACCENTS = {
   Major: {
@@ -91,7 +91,7 @@ const ONE_POINT_ACCENTS = {
   },
   add9: {
     slug: "add9",
-    title: "一粒のきらめき",
+    title: "うつろな水色星",
     asset: "assets/app/accents/imagegen-v1/add9.png"
   },
   m7: {
@@ -121,7 +121,7 @@ const ONE_POINT_ACCENTS = {
   },
   dim: {
     slug: "dim",
-    title: "縮んだ小リング",
+    title: "悪魔的なコウモリ羽",
     asset: "assets/app/accents/imagegen-v1/dim.png"
   },
   aug: {
@@ -207,9 +207,9 @@ const stageViewGuides = {
     quiz: "どの枝にいる鳥か、音とコード名を結びつける。"
   },
   6: {
-    card: "sus4の浮遊とadd9のきらめきを、いつものMajorの近くで聞く。",
+    card: "sus4の浮遊とadd9の水色の小さな星を、いつものMajorの近くで聞く。",
     compare: "着地しない音、空気が広がる音、安心する音を並べて聞く。",
-    quiz: "浮いているのか、きらめいているのか、音の空気で思い出す。"
+    quiz: "浮いているのか、水色の星みたいに空気が抜けるのか、音の違いで思い出す。"
   },
   7: {
     card: "Amを帰る場所にして、静かな森の仲間を見る。",
@@ -961,7 +961,7 @@ function quizPromptForCurrentStage() {
     return "どのキーの鳥かな。音名と運指を一緒に見つけよう。";
   }
   if (activePracticeStage.stage_number === 6) {
-    return "浮いている音かな、きらめく音かな。空気の違いを聞いてみよう。";
+    return "浮いている音かな、水色の星みたいに空気が抜ける音かな。違いを聞いてみよう。";
   }
   if (activePracticeStage.stage_number === 7) {
     return "静かな森のどのコードかな。Amへ帰る感じを思い出してみよう。";
@@ -999,7 +999,7 @@ function quizReadyPromptForCurrentStage() {
     return "同じ鳥でも、どの音名かをえらんでみよう。";
   }
   if (activePracticeStage.stage_number === 6) {
-    return "浮遊か、きらめきか、安心か。近いコードをえらんでみよう。";
+    return "浮遊か、水色の星か、安心か。近いコードをえらんでみよう。";
   }
   if (activePracticeStage.stage_number === 7) {
     return "静かな帰り道にいるコードをえらんでみよう。";

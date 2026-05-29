@@ -194,10 +194,10 @@
     "id": "stage-6-sus4-add9-color",
     "stage_number": 6,
     "label": "Stage 6",
-    "title": "浮遊ときらめき",
+    "title": "浮遊と水色星",
     "short_title": "色づけ",
-    "description": "いつものMajorに、浮く感じやきらめきを少し足す森。",
-    "mood": "sus4はまだ着地しない羽。add9は空気がきらっと広がる羽。",
+    "description": "いつものMajorに、浮く感じや水色の小さな星を少し足す森。",
+    "mood": "sus4はまだ着地しない羽。add9はうつろに上を見て、空気がふわっと抜ける羽。",
     "code_ids": ["Csus4", "C", "Gsus4", "G", "Cadd9", "Fadd9", "Gadd9"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
     "quiz_reference_root": "C",
@@ -218,7 +218,7 @@
         "id": "c-cadd9-c",
         "name": "空気がひらく",
         "code_ids": ["C", "Cadd9", "C"],
-        "memo": "Cの安心に、Cadd9の小さな光を足して、またCへ戻る。少し光るだけで景色が変わる。"
+        "memo": "Cの安心に、Cadd9の水色の小さな星を足して、またCへ戻る。少し空気が抜けるだけで景色が変わる。"
       }
     ],
     "quiz_option_count": 4

@@ -1054,6 +1054,7 @@ h1 {
 
 .compare-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -1061,12 +1062,17 @@ h1 {
 }
 
 .compare-name strong {
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: max-content;
   margin-right: auto;
   font-family: var(--font-code);
   color: var(--blue);
-  font-size: 28px;
-  overflow-wrap: anywhere;
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.compare-name .icon-button {
+  margin-left: auto;
 }
 
 .compare-key-chip {
