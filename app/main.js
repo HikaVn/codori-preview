@@ -28,8 +28,8 @@ let chordData = [
     ukulele_fingering: "0001",
     fingering_asset: "assets/app/fingering/initial-four/ukulele_C7_vertical_strings.svg",
     character_asset: "assets/approved/characters/major.png",
-    learning_note: "つぎへ行きたくなる",
-    memory_hint: "C7は、まだ先へ行きたくなる音。7アクションの片羽の動きと、そわっと進む感じで覚えよう。",
+    learning_note: "ドヤっと決まる",
+    memory_hint: "C7は、ドヤっと決まる音。7アクションの得意げな顔と、少しにやっとする強さを一緒に覚えよう。",
     temp_audio_notes: [261.63, 329.63, 392.0, 466.16]
   },
   {
@@ -86,7 +86,7 @@ const ONE_POINT_ACCENTS = {
   },
   "7": {
     slug: "seventh",
-    title: "次へ進む矢印",
+    title: "ドヤっと決めるキラッ",
     asset: "assets/app/accents/imagegen-v1/seventh.png"
   },
   add9: {
@@ -236,7 +236,7 @@ const chordSets = {
   "initial-four": {
     id: "initial-four",
     label: "はじめの4羽",
-    description: "同じCを基準に、明るい・静か・進む・広がるを聞き分ける。",
+    description: "同じCを基準に、明るい・静か・ドヤっと・広がるを聞き分ける。",
     progressions: [],
     dataPath: useFormalCandidate
       ? "../assets/app/data/initial-four-chords.formal-candidate-001.json"
@@ -834,7 +834,7 @@ function modeDescriptionForCurrentStep(guide) {
 
   if (stageNumber === 0) {
     if (activeView === "card") {
-      return "まずCを聞く。つぎへ進んで、Cm / C7 / Cadd9のきもちを比べる。";
+      return "まずCを聞く。Cm / C7 / Cadd9のきもちを比べる。C7はドヤっと決まる感じ。";
     }
     if (activeView === "compare") {
       return "4羽を並べて聞く。同じCでも、きもちだけが変わる入口。";
