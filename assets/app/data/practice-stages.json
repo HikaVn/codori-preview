@@ -6,7 +6,7 @@
     "title": "Cでコード種類をさらう",
     "short_title": "Cのきもち",
     "description": "同じCのまま、鳥ときもちだけが変わる入口の森。",
-    "mood": "明るい、静か、ドヤっと、ふわっと。まずは4つの空気を聞いてみる。",
+    "mood": "明るい、悲しい、ドヤっと、ふわっと。まずは4つの空気を聞いてみる。",
     "code_ids": ["C", "Cm", "C7", "Cadd9"],
     "primary_modes": ["card", "compare", "quiz"],
     "progressions": [],
