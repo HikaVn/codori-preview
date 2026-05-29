@@ -112,10 +112,10 @@ assets/app/review/pose-finalization-2026-05-29/mobile-v8-compare-c-check.png
 
 実装メモ：
 
-- ワンポイントは画像素材へ焼き込まない。
-- `app/main.js`の`ONE_POINT_ACCENTS`で素材パスを管理する。
-- IMAGEGEN版の素材は`assets/app/accents/imagegen-v1/`に置く。
-- キー色は`--key-accent`で枠と背景へ反映し、形はコード種類ごとに固定する。
+- 後乗せワンポイントは、鳥の世界観から浮きやすいため本番候補から外す。
+- IMAGEGENで白い鳥とワンポイントを一緒に生成した統合版を`assets/app/characters/action-candidate-integrated-v1/`に置く。
+- `app/main.js`の`ACTION_CHARACTER_ASSETS`で統合版の鳥画像を参照する。
+- キー色はカード枠、チップ、背景へ反映し、鳥のアクションとワンポイントの関係はコード種類ごとに固定する。
 
 ## NG
 
