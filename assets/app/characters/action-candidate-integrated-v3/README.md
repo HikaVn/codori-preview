@@ -14,7 +14,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 | 7 | `action-7.png` | ドヤ顔、キラッ |
 | add9 | `action-add9.png` | うつろに見上げる、水色の小さな星 |
 | m7 | `action-m7.png` | グラサン、夜の余韻 |
-| maj7 | `action-maj7.png` | 夢見る目、ダイヤ |
+| maj7 | `action-maj7.png` | 胸で羽を組む、十字架を見つめる |
 | mM7 | `action-mm7.png` | 不気味な目元、稲妻、嘴下の口線なし |
 | sus4 | `action-sus4.png` | 空中で浮く、Cと同じ丸目を正しい位置に配置 |
 | m7-5 | `action-m7-5.png` | 振り向きざまのちら見、頬のX傷 |
@@ -27,6 +27,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-major-closed-beak-20260530.png`: Majorの嘴下の口線を消し、閉じた嘴だけにした最終出力。
 - `source-action-add9-vacant-20260530.png`: add9の見上げ表情と水色星を再生成した単体出力。
 - `source-action-m7-sunglasses-20260530.png`: m7のグラサン姿を再生成した単体出力。
+- `source-action-maj7-cross-20260530.png`: maj7の胸で羽を組み、十字架を見つめる最終出力。
 - `source-action-mm7-suspense-smile-20260530.png`: mM7のサスペンス犯人風の笑みを再生成した単体出力。
 - `source-action-mm7-no-mouthline-20260530.png`: mM7の嘴下の口線を消した最終出力。
 - `source-action-m7-5-nihil-scar-20260530.png`: m7-5のニヒルな表情と頬のX傷を再生成した単体出力。
