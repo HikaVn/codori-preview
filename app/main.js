@@ -106,7 +106,7 @@ const ONE_POINT_ACCENTS = {
   },
   mM7: {
     slug: "mm7",
-    title: "犯人の含み笑い",
+    title: "犯人の目元",
     asset: "assets/app/accents/imagegen-v1/mm7.png"
   },
   sus4: {
