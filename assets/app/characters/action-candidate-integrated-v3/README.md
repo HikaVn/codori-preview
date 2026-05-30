@@ -19,7 +19,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 | sus4 | `action-sus4.png` | 空中で浮く、Cと同じ丸目を正しい位置に配置 |
 | m7-5 | `action-m7-5.png` | 振り向きざまのちら見、頬のX傷 |
 | dim | `action-dim.png` | 悪魔的な目、コウモリ羽 |
-| aug | `action-aug.png` | 開放、外向き矢印 |
+| aug | `action-aug.png` | 首を傾げる、頭に羽、？マーク |
 
 ## Source
 
@@ -33,6 +33,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-m7-5-nihil-scar-20260530.png`: m7-5のニヒルな表情と頬のX傷を再生成した単体出力。
 - `source-action-m7-5-lookback-scar-20260530.png`: m7-5の振り向きざまのちら見と頬のX傷を再生成した単体出力。
 - `source-action-dim-20260530.png`: dimのコウモリ羽を再生成した単体出力。
+- `source-action-aug-question-20260530.png`: augの首を傾げ、頭に羽を当て、？マークを浮かべた最終出力。
 - `source-action-sus4-floating-smirk-20260530.png`: sus4の空中で浮くすまし顔を再生成した単体出力。
 - `source-action-sus4-floating-c-eyes-20260530.png`: sus4の目をCと同じ丸目へ手修正した最終出力。
 - `source-action-sus4-floating-c-eyes-position-20260530.png`: sus4の丸目を嘴より上の自然な位置へ再配置した最終出力。

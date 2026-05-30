@@ -126,7 +126,7 @@ const ONE_POINT_ACCENTS = {
   },
   aug: {
     slug: "aug",
-    title: "広がる小リング",
+    title: "不思議な？マーク",
     asset: "assets/app/accents/imagegen-v1/aug.png"
   }
 };
