@@ -16,7 +16,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 | m7 | `action-m7.png` | グラサン、夜の余韻 |
 | maj7 | `action-maj7.png` | 胸で羽を組む、十字架を見つめる |
 | mM7 | `action-mm7.png` | 不気味な目元、稲妻、嘴下の口線なし |
-| sus4 | `action-sus4.png` | 空中で浮く、Cと同じ丸目を正しい位置に配置 |
+| sus4 | `action-sus4.png` | 空中で浮く、目サイズを維持しつつ体をC基準の比率へ調整 |
 | m7-5 | `action-m7-5.png` | 振り向きざまのちら見、頬のX傷 |
 | dim | `action-dim.png` | 悪魔的な目、コウモリ羽 |
 | aug | `action-aug.png` | 首を傾げる、頭に羽、？マーク |
@@ -44,6 +44,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-sus4-floating-c-eyes-20260530.png`: sus4の目をCと同じ丸目へ手修正した最終出力。
 - `source-action-sus4-floating-c-eyes-position-20260530.png`: sus4の丸目を嘴より上の自然な位置へ再配置した最終出力。
 - `source-action-sus4-proportion-fix-20260530.png`: sus4の頭幅、目、嘴の見た目サイズをC基準へ寄せた最終出力。
+- `source-action-sus4-body-ratio-fix-20260531.png`: sus4の目サイズを維持し、体をC基準の比率へ寄せた最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
