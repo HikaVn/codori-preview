@@ -101,7 +101,7 @@ const ONE_POINT_ACCENTS = {
   },
   maj7: {
     slug: "maj7",
-    title: "透明な小ダイヤ",
+    title: "静かな十字架",
     asset: "assets/app/accents/imagegen-v1/maj7.png"
   },
   mM7: {
