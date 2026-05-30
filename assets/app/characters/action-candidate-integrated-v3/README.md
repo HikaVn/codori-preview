@@ -9,7 +9,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 
 | Family | File | Expression / symbol |
 |---|---|---|
-| Major | `action-major.png` | 明るい笑顔、太陽 |
+| Major | `action-major.png` | 明るい丸目、太陽、閉じた嘴、嘴下の口線なし |
 | minor | `action-minor.png` | 悲しい顔、割れたハート |
 | 7 | `action-7.png` | ドヤ顔、キラッ |
 | add9 | `action-add9.png` | うつろに見上げる、水色の小さな星 |
@@ -24,6 +24,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 ## Source
 
 - `source-sheet.png`: IMAGEGEN出力シート。
+- `source-action-major-closed-beak-20260530.png`: Majorの嘴下の口線を消し、閉じた嘴だけにした最終出力。
 - `source-action-add9-vacant-20260530.png`: add9の見上げ表情と水色星を再生成した単体出力。
 - `source-action-m7-sunglasses-20260530.png`: m7のグラサン姿を再生成した単体出力。
 - `source-action-mm7-suspense-smile-20260530.png`: mM7のサスペンス犯人風の笑みを再生成した単体出力。
