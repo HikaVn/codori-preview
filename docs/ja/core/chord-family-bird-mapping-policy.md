@@ -142,7 +142,7 @@ assets/approved/characters/add9.png
 | minor | Cm, Dm, Am | 文鳥 | 切ない、内向き、寄り添い |
 | 7 | C7, G7, A7 | カラス | いたずら、前へ進みたがる、ブルージー |
 | M7 / maj7 | CM7, Cmaj7 | 白鳥 | 透明感、上品、おしゃれ |
-| m7 | Cm7, Am7 | 夜雀 | 夜、余韻、エモい |
+| m7 | Cm7, Am7 | 白い鳥のグラサン | 夜、余韻、エモい、クール |
 | mM7 | CmM7, Cm(maj7) | 白い鳥の不気味な笑み | サスペンス、犯人の含み笑い、過酷な運命 |
 | sus4 | Csus4, Gsus4 | ペンギン | 浮遊、未解決、まだ着地しない |
 | add9 | Cadd9, Dadd9 | 青い小鳥 | きらきら、青春、空気感 |
@@ -155,8 +155,8 @@ assets/approved/characters/add9.png
 
 ## 3. 将来追加する鳥種のデザイン
 
-`m7`、`maj7`、`mM7`、`sus4`、`m7-5` は、まだ正式デザイン未作成。
-追加時に、既存4鳥と並べて区別できるかを確認してから採用する。
+`m7`、`maj7`、`mM7`、`sus4`、`m7-5` は、白い鳥のアクション違いとして本番候補を作成済み。
+追加・差し替え時は、既存4種類と並べて区別できるかを確認してから採用する。
 
 ---
 
@@ -190,20 +190,19 @@ docs/ja/characters/chord-expression-and-key-color-policy.md
 
 ## m7
 
-2026-05-23時点では、アプリ確認用に仮実装済み。
+2026-05-30時点では、白い鳥のグラサンアクションとして本番候補へ反映済み。
 
 ```text
-Am7 / Dm7 / Em7
+Cm7 / Am7 / Dm7 / Em7 など、m7ファミリー全体
 ```
 
-仮キャラクター：
+採用アクション：
 
 ```text
-assets/app/characters/provisional/m7-night-sparrow.svg
+assets/app/characters/action-candidate-integrated-v3/action-m7.png
 ```
 
-これは正式採用画像ではない。
-正式m7鳥は、別途画像生成・レビュー後に`assets/approved/characters/`へ移す。
+キー違いは、同じアクションの色違いとして扱う。
 
 役割：
 

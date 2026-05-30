@@ -13,7 +13,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 | minor | `action-minor.png` | 悲しい顔、割れたハート |
 | 7 | `action-7.png` | ドヤ顔、キラッ |
 | add9 | `action-add9.png` | うつろに見上げる、水色の小さな星 |
-| m7 | `action-m7.png` | 脱力、波の余韻 |
+| m7 | `action-m7.png` | グラサン、夜の余韻 |
 | maj7 | `action-maj7.png` | 夢見る目、ダイヤ |
 | mM7 | `action-mm7.png` | 不気味な笑み、稲妻 |
 | sus4 | `action-sus4.png` | 困惑、疑問符 |
@@ -25,6 +25,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 
 - `source-sheet.png`: IMAGEGEN出力シート。
 - `source-action-add9-vacant-20260530.png`: add9の見上げ表情と水色星を再生成した単体出力。
+- `source-action-m7-sunglasses-20260530.png`: m7のグラサン姿を再生成した単体出力。
 - `source-action-mm7-suspense-smile-20260530.png`: mM7のサスペンス犯人風の笑みを再生成した単体出力。
 - `source-action-m7-5-nihil-scar-20260530.png`: m7-5のニヒルな表情と頬のX傷を再生成した単体出力。
 - `source-action-m7-5-lookback-scar-20260530.png`: m7-5の振り向きざまのちら見と頬のX傷を再生成した単体出力。
