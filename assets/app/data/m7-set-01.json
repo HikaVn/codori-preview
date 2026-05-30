@@ -12,8 +12,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "A",
-    "learning_note": "夜にふっとほどける",
-    "memory_hint": "Am7は、Amより少しほどけた夜の音。m7アクションの余韻と、ぜんぶ開放の形を一緒に覚えよう。",
+    "learning_note": "グラサンでゆるくほどける",
+    "memory_hint": "Am7は、Amより少しほどけた夜の音。m7アクションのグラサンの余韻と、ぜんぶ開放の形を一緒に覚えよう。",
     "temp_audio_notes": [392.0, 261.63, 329.63, 440.0],
     "expansion_set": "m7-set-01",
     "difficulty": "beginner"
@@ -31,8 +31,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "D",
-    "learning_note": "静かな道がやわらぐ",
-    "memory_hint": "Dm7は、Dmの静けさに余韻が増えた音。minorより少しゆるむ感じを、m7アクションの夜の表情と結びつけよう。",
+    "learning_note": "グラサンで道がやわらぐ",
+    "memory_hint": "Dm7は、Dmの静けさに余韻が増えた音。minorより少しゆるむ感じを、m7アクションのグラサン姿と結びつけよう。",
     "temp_audio_notes": [440.0, 293.66, 349.23, 523.25],
     "expansion_set": "m7-set-01",
     "difficulty": "beginner"
@@ -50,8 +50,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "E",
-    "learning_note": "影がさらっと流れる",
-    "memory_hint": "Em7は、Emの影が少し軽く流れる音。m7アクションの夜の余韻と、0202の形をゆっくりつなげよう。",
+    "learning_note": "グラサンで影が流れる",
+    "memory_hint": "Em7は、Emの影が少し軽く流れる音。m7アクションのグラサンの余韻と、0202の形をゆっくりつなげよう。",
     "temp_audio_notes": [392.0, 293.66, 329.63, 493.88],
     "expansion_set": "m7-set-01",
     "difficulty": "beginner"

@@ -96,7 +96,7 @@ const ONE_POINT_ACCENTS = {
   },
   m7: {
     slug: "m7",
-    title: "余韻の輪",
+    title: "グラサンの余韻",
     asset: "assets/app/accents/imagegen-v1/m7.png"
   },
   maj7: {

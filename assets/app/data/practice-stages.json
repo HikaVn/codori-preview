@@ -92,7 +92,7 @@
     "title": "Cメジャーの夜の仲間",
     "short_title": "夜のC",
     "description": "Cのまわりを、夜の灯りみたいな7thの響きでそっと歩く森。",
-    "mood": "難しい名前はあとで大丈夫。透明、余韻、少しゆれる感じを耳に残す。",
+    "mood": "難しい名前はあとで大丈夫。透明、グラサンの余韻、少しゆれる感じを耳に残す。",
     "code_ids": ["Cmaj7", "Dm7", "Em7", "Fmaj7", "G7", "Am7", "Bm7-5"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
     "quiz_reference_root": "C",
@@ -101,19 +101,19 @@
         "id": "dm7-g7-cmaj7",
         "name": "夜の帰り道",
         "code_ids": ["Dm7", "G7", "Cmaj7"],
-        "memo": "Dm7で夜道を歩き、G7の小さな合図を聞いて、Cmaj7の灯りへ帰る。"
+        "memo": "Dm7でグラサンの夜道を歩き、G7の小さな合図を聞いて、Cmaj7の灯りへ帰る。"
       },
       {
         "id": "am7-dm7-g7-cmaj7",
         "name": "遠まわりの灯り",
         "code_ids": ["Am7", "Dm7", "G7", "Cmaj7"],
-        "memo": "Am7で少し静まり、Dm7で歩き出す。G7を抜けると、Cmaj7に明かりがともる。"
+        "memo": "Am7でグラサンのまま少し静まり、Dm7で歩き出す。G7を抜けると、Cmaj7に明かりがともる。"
       },
       {
         "id": "em7-am7-dm7-g7",
         "name": "夜風の連なり",
         "code_ids": ["Em7", "Am7", "Dm7", "G7"],
-        "memo": "Em7からAm7へ、Dm7へ。夜風がゆっくり流れて、G7の合図へ向かう。"
+        "memo": "Em7からAm7へ、Dm7へ。グラサンの夜風がゆっくり流れて、G7の合図へ向かう。"
       }
     ],
     "quiz_option_count": 4
