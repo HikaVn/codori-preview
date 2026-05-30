@@ -197,7 +197,7 @@
     "title": "浮遊と水色星",
     "short_title": "色づけ",
     "description": "いつものMajorに、浮く感じや水色の小さな星を少し足す森。",
-    "mood": "sus4はまだ着地しない羽。add9はうつろに上を見て、空気がふわっと抜ける羽。",
+    "mood": "sus4は空中ですましたまま浮く羽。add9はうつろに上を見て、空気がふわっと抜ける羽。",
     "code_ids": ["Csus4", "C", "Gsus4", "G", "Cadd9", "Fadd9", "Gadd9"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
     "quiz_reference_root": "C",
@@ -206,13 +206,13 @@
         "id": "csus4-c",
         "name": "ふわっと着地",
         "code_ids": ["Csus4", "C"],
-        "memo": "Csus4で少し浮いて、Cへほっと着地する。浮く、戻る、を耳でたしかめる。"
+        "memo": "Csus4で空中にすっと浮いて、Cへほっと着地する。浮く、戻る、を耳でたしかめる。"
       },
       {
         "id": "gsus4-g-c",
         "name": "風がほどける",
         "code_ids": ["Gsus4", "G", "C"],
-        "memo": "Gsus4の浮いた感じがGでほどけて、Cへ帰る。風が落ち着く感じを聞く。"
+        "memo": "Gsus4のすました浮遊感がGでほどけて、Cへ帰る。風が落ち着く感じを聞く。"
       },
       {
         "id": "c-cadd9-c",

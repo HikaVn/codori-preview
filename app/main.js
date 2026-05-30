@@ -111,7 +111,7 @@ const ONE_POINT_ACCENTS = {
   },
   sus4: {
     slug: "sus4",
-    title: "未解決の浮いた点",
+    title: "すました浮遊点",
     asset: "assets/app/accents/imagegen-v1/sus4.png"
   },
   "m7-5": {
