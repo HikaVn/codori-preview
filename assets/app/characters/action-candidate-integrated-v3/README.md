@@ -50,6 +50,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-sus4-face-cleanup-20260601.png`: sus4の目の光をC基準へ寄せ、嘴上と頬横の残骸を消した最終出力。
 - `source-action-*-body-size-normalized-20260601.png`: Cの本体黒輪郭bboxの幾何平均を基準に、各コード種類の体サイズを±5%以内へ調整した最終出力。
 - `source-action-*-v6b-c-beak-20260601.png`: 旧アプリ初期版v6bのC嘴を基準に、全コード種類の嘴を丸みと光のある形へ統一した最終出力。
+- `source-action-*-beak-eye-consistent-20260601.png`: 目の角度、幅と嘴の向き、幅の矛盾を抑え、m7はグラサンを残すよう肌補正領域を縮小した最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
