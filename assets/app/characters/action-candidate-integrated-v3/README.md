@@ -47,6 +47,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-sus4-body-ratio-fix-20260531.png`: sus4の目サイズを維持し、体をC基準の比率へ寄せた最終出力。
 - `source-action-sus4-c-face-float-marks-20260531.png`: sus4の目と嘴をC基準へ戻し、背景の点を削除して浮遊マークを追加した最終出力。
 - `source-action-sus4-beak-up-20260601.png`: sus4の嘴上の余分な線を消し、嘴位置を少し上へ調整した最終出力。
+- `source-action-sus4-face-cleanup-20260601.png`: sus4の目の光をC基準へ寄せ、嘴上と頬横の残骸を消した最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
