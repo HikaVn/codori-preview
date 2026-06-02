@@ -57,6 +57,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-*-eye-cheek-normalized-20260602.png`: Cのほっぺ色を基準に全コード種類のほっぺを統一し、目は左右の平均横幅比を使って現状パーツを拡大縮小した最終出力。m7はグラサンのため目サイズ補正を除外。
 - `source-action-{add9,mm7,m7-5}-eye-size-restored-20260602.png`: add9、mM7、m7-5の目が小さくなりすぎたため、目サイズを前段階へ戻し、C基準のほっぺ色だけを維持した最終出力。
 - `source-action-{add9,maj7,aug}-right-look-beak-shift-20260602.png`: 右向きの表情で嘴が正面に残りすぎないよう、嘴形状と角度は維持したまま右目側へ約5px寄せた最終出力。
+- `source-action-sus4-cheek-no-outline-20260602.png`: sus4のほっぺの茶色い円輪郭を消し、輪郭なしの淡い頬色だけにした最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
