@@ -53,6 +53,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-*-beak-eye-consistent-20260601.png`: 目の角度、幅と嘴の向き、幅の矛盾を抑え、m7はグラサンを残すよう肌補正領域を縮小した最終出力。
 - `source-action-*-beak-eye-angle-20260601.png`: 左右の目中心を結ぶ線とX軸の角度でv6b Cの嘴原寸パッチを回転し、m7はグラサンを上レイヤーで保持した最終出力。
 - `source-action-*-fill-copy-c-beak-rotate-20260602.png`: 元画像の旧嘴を肌色ペン相当で消し、旧アプリ初期版v6bのC嘴を範囲選択コピーして各コードの目中心線角度へ回転貼付した最終出力。
+- `source-action-*-beak-horizontal-offset-20260602.png`: C、CmM7、sus4、dimなどの水平基準組が水平に見えるよう全体の嘴回転量を約7度戻し、その戻し量を他のコード種類にも適用した最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
