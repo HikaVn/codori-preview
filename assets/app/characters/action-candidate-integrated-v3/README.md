@@ -60,6 +60,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-sus4-cheek-no-outline-20260602.png`: sus4のほっぺの茶色い円輪郭を消し、輪郭なしの淡い頬色だけにした最終出力。
 - `source-action-*-alpha-bg-20260602.png`: 背景をアルファチャンネル化し、透明ベースにグレースケール影、鳥本体、小物の順で再構成した最終出力。
 - `source-action-*-shadow-grayscale-20260602.png`: 鳥本体と小物の色は維持し、下部の半透明影だけを輝度ベースのグレースケールへ変換した最終出力。
+- `source-action-*-shadow-wand-grayscale-20260602.png`: 足元範囲内で鳥本体、足、輪郭をワンド選択相当で除外し、反転側として抽出した影だけをグレースケール化した最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
