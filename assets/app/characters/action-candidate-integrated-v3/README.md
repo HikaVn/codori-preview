@@ -55,6 +55,7 @@ v3では11種類すべてを、表情、ポーズ、一般記号の組み合わ�
 - `source-action-*-fill-copy-c-beak-rotate-20260602.png`: 元画像の旧嘴を肌色ペン相当で消し、旧アプリ初期版v6bのC嘴を範囲選択コピーして各コードの目中心線角度へ回転貼付した最終出力。
 - `source-action-*-beak-horizontal-offset-20260602.png`: C、CmM7、sus4、dimなどの水平基準組が水平に見えるよう全体の嘴回転量を約7度戻し、その戻し量を他のコード種類にも適用した最終出力。
 - `source-action-*-eye-cheek-normalized-20260602.png`: Cのほっぺ色を基準に全コード種類のほっぺを統一し、目は左右の平均横幅比を使って現状パーツを拡大縮小した最終出力。m7はグラサンのため目サイズ補正を除外。
+- `source-action-{add9,mm7,m7-5}-eye-size-restored-20260602.png`: add9、mM7、m7-5の目が小さくなりすぎたため、目サイズを前段階へ戻し、C基準のほっぺ色だけを維持した最終出力。
 - `review-contact-sheet.png`: 11種類の切り出し確認用。
 
 最終的にアプリで参照するのは`action-*.png`の512px画像。
