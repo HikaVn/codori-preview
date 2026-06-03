@@ -12,8 +12,8 @@
     "sound_file_ready": false,
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "A",
-    "learning_note": "グラサンでゆるくほどける",
-    "memory_hint": "Am7は、Amより少しほどけた夜の音。m7アクションのグラサンの余韻と、ぜんぶ開放の形を一緒に覚えよう。",
+    "learning_note": "グラサンでちょっとオトナ気分",
+    "memory_hint": "Am7は、Amより少し軽く流れる夜の音。m7アクションのグラサン姿と、ぜんぶ開放の形を一緒に覚えよう。",
     "temp_audio_notes": [392.0, 261.63, 329.63, 440.0],
     "expansion_set": "m7-set-01",
     "difficulty": "beginner"
@@ -51,7 +51,7 @@
     "character_asset": "assets/approved/characters/major.png",
     "key_accent": "E",
     "learning_note": "グラサンで影が流れる",
-    "memory_hint": "Em7は、Emの影が少し軽く流れる音。m7アクションのグラサンの余韻と、0202の形をゆっくりつなげよう。",
+    "memory_hint": "Em7は、Emの影が少し軽く流れる音。m7アクションのちょっとオトナな気分と、0202の形をゆっくりつなげよう。",
     "temp_audio_notes": [392.0, 293.66, 329.63, 493.88],
     "expansion_set": "m7-set-01",
     "difficulty": "beginner"

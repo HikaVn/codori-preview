@@ -96,17 +96,17 @@ const ONE_POINT_ACCENTS = {
   },
   m7: {
     slug: "m7",
-    title: "グラサンの余韻",
+    title: "グラサンのオトナ気分",
     asset: "assets/app/accents/imagegen-v1/m7.png"
   },
   maj7: {
     slug: "maj7",
-    title: "静かな十字架",
+    title: "静かな祈り",
     asset: "assets/app/accents/imagegen-v1/maj7.png"
   },
   mM7: {
     slug: "mm7",
-    title: "犯人の目元",
+    title: "疑惑の目元",
     asset: "assets/app/accents/imagegen-v1/mm7.png"
   },
   sus4: {
@@ -170,6 +170,8 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
+const DATA_CACHE_VERSION = "20260603-story-catalog-ui-v1";
+const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const modeGuide = {
   card: {
     title: "音カード",
@@ -259,7 +261,7 @@ const chordSets = {
   "all-main-chords": {
     id: "all-main-chords",
     label: "全コード",
-    description: "12音と主要11種類を、森の図鑑みたいに少しずつ見ていく。",
+    description: "12音と主要11種類を、コード図鑑で少しずつ見ていく。",
     progressions: ["12音", "11種類", "132コード"],
     dataPath: "../assets/app/data/all-main-chords.json"
   }
@@ -290,6 +292,7 @@ let activeFilters = {
 };
 let practiceStages = [];
 let activePracticeStage = null;
+let activeLearningMenuGroup = "story";
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
 const missingAudioFiles = new Set();
@@ -308,6 +311,10 @@ const elements = {
   practiceStageButtons: document.querySelector("#practice-stage-buttons"),
   stageTargets: document.querySelector("#stage-targets"),
   stageNumberNote: document.querySelector("#stage-number-note"),
+  learningMenu: document.querySelector("#learning-menu"),
+  learningMenuStatus: document.querySelector("#learning-menu-status"),
+  learningMenuGroupButtons: document.querySelectorAll(".learning-menu-switch-button"),
+  learningMenuPanels: document.querySelectorAll(".learning-menu-panel"),
   openCatalog: document.querySelector("#open-catalog"),
   setPanel: document.querySelector(".set-panel"),
   setTitle: document.querySelector("#set-title"),
@@ -577,10 +584,10 @@ function nextStageMessageFor(nextStage) {
     return "";
   }
   if (!nextStage) {
-    return "ここまで歩けたよ。気になる森を図鑑で探して、もう一度聞いてみよう。";
+    return "ここまで歩けたよ。気になるコードを図鑑で探して、もう一度聞いてみよう。";
   }
   if (activePracticeStage.stage_number === 5) {
-    return `おすすめの道を歩ききったよ。次は「${nextStage.short_title}」で、もっと歩く森をのぞいてみよう。`;
+    return `おすすめの道を歩ききったよ。次は「${nextStage.short_title}」で、追加ストーリーをのぞいてみよう。`;
   }
   if (recommendedStageNumbers.includes(activePracticeStage.stage_number)) {
     return `羽あとがそろったよ。次は「${nextStage.short_title}」へ歩いてみよう。`;
@@ -823,11 +830,70 @@ function updateModeGuide() {
   elements.modeTitle.textContent = guide.title;
   elements.modeDescription.textContent = modeDescriptionForCurrentStep(guide);
   elements.firstStepTip.textContent = firstStepTipForCurrentStep();
+  updateLearningMenuStatus();
+}
+
+function isMobileMenuMode() {
+  return window.matchMedia(MOBILE_MENU_QUERY).matches;
+}
+
+function closeMobileLearningMenu() {
+  if (elements.learningMenu && isMobileMenuMode()) {
+    elements.learningMenu.open = false;
+  }
+}
+
+function syncLearningMenuMode() {
+  if (!elements.learningMenu) {
+    return;
+  }
+  if (isMobileMenuMode()) {
+    elements.learningMenu.open = false;
+    return;
+  }
+  elements.learningMenu.open = true;
+}
+
+function updateLearningMenuStatus() {
+  if (!elements.learningMenuStatus) {
+    return;
+  }
+  const stageText = activePracticeStage?.short_title || "図鑑";
+  const viewText = (modeGuide[activeView] || modeGuide.card).title;
+  elements.learningMenuStatus.textContent = activePracticeStage
+    ? `ストーリー: ${stageText} / ${viewText}`
+    : `コード図鑑 / ${viewText}`;
+}
+
+function setLearningMenuGroup(group) {
+  activeLearningMenuGroup = group === "catalog" ? "catalog" : "story";
+  elements.learningMenuGroupButtons.forEach((button) => {
+    const isActive = button.dataset.menuGroup === activeLearningMenuGroup;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+  elements.learningMenuPanels.forEach((panel) => {
+    const isActive = panel.dataset.menuPanel === activeLearningMenuGroup;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
+}
+
+function syncLearningMenuGroup() {
+  setLearningMenuGroup(isPracticeMode() ? "story" : "catalog");
+}
+
+async function handleLearningMenuGroupClick(group) {
+  if (group === "catalog" && isPracticeMode()) {
+    await setChordSet(activeSet?.id || "all-main-chords");
+    return;
+  }
+  setLearningMenuGroup(group);
 }
 
 function modeDescriptionForCurrentStep(guide) {
   if (!isPracticeMode()) {
-    return `${guide.description} 図鑑では、探すことを優先する。`;
+    return `${guide.description} コード図鑑では、探すことを優先する。`;
   }
 
   const stageNumber = activePracticeStage.stage_number;
@@ -892,7 +958,7 @@ function modeDescriptionForCurrentStep(guide) {
 
 function firstStepTipForCurrentStep() {
   if (!isPracticeMode()) {
-    return "図鑑は探す場所。覚えるときはStageへ。";
+    return "コード図鑑は探す場所。覚えるときは音あてストーリーへ。";
   }
   const stageNumber = activePracticeStage.stage_number;
   if (stageNumber === 0 && activeView === "card") {
@@ -1088,7 +1154,7 @@ function renderCompare() {
   if (!chordData.length) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
-    empty.textContent = "この条件のコードは、いまの森では見つからなかった。";
+    empty.textContent = "この条件のコードは、コード図鑑では見つからなかった。";
     elements.compareGrid.appendChild(empty);
     return;
   }
@@ -1117,7 +1183,7 @@ function renderCompare() {
 
 function compareNoteForCurrentStep() {
   if (!isPracticeMode()) {
-    return "図鑑の検索結果を、表示中の先頭8コードまで順番に聞く。気になるコードは1枚ずつもう一度聞ける。";
+    return "コード図鑑の検索結果を、表示中の先頭8コードまで順番に聞く。気になるコードは1枚ずつもう一度聞ける。";
   }
   if (chordData.length > 8) {
     return `${activePracticeStage.short_title}の先頭8コードまで順番に聞く。多いStageは、気になるカードを1枚ずつ聞き直す。`;
@@ -1173,7 +1239,7 @@ function renderQuiz() {
     button.type = "button";
     button.disabled = true;
     button.textContent = option.display_name;
-    button.addEventListener("click", () => checkQuizAnswer(button, option.code_id === chord.code_id));
+    button.addEventListener("click", () => handleQuizOption(button, option));
     elements.quizOptions.appendChild(button);
   });
 }
@@ -1197,6 +1263,7 @@ async function setChordSet(setId) {
   renderedCompareKey = "";
   activeProgressionIndex = 0;
   await loadChordData();
+  setLearningMenuGroup("catalog");
   renderFilterPanel();
   chordData = filteredChordData();
   renderFilterSummary();
@@ -1218,12 +1285,12 @@ function renderPracticeStageChrome() {
   const moreStages = practiceStages.filter((stage) => !recommendedStageNumbers.includes(stage.stage_number));
 
   renderPracticeStageGroup("おすすめの道", "まずはここから", recommendedStages);
-  renderPracticeStageGroup("もっと歩く森", "あとで聞く", moreStages);
+  renderPracticeStageGroup("追加ストーリー", "あとで聞く", moreStages);
 
   if (!activePracticeStage) {
-    elements.practiceStageDescription.textContent = "図鑑の森を見ているよ。練習するときは上のStageを選んでね。";
-    elements.practiceStageMood.textContent = "コードを探すときは図鑑、覚えるときは練習の森。";
-    elements.stageNumberNote.textContent = "練習はStage 0〜10、探すときは図鑑の森へ。";
+    elements.practiceStageDescription.textContent = "コード図鑑を見ているよ。音あてストーリーへ戻るときはStageを選んでね。";
+    elements.practiceStageMood.textContent = "コードを探すときは図鑑、覚えるときはストーリー。";
+    elements.stageNumberNote.textContent = "音あてストーリーはStage 0〜10、探すときはコード図鑑へ。";
     elements.stageTargets.innerHTML = "";
     elements.stageTargets.classList.add("is-hidden");
     elements.stageProgress.classList.add("is-hidden");
@@ -1234,7 +1301,7 @@ function renderPracticeStageChrome() {
   elements.practiceStageMood.textContent = activePracticeStage.mood;
   elements.stageNumberNote.textContent = recommendedStageNumbers.includes(activePracticeStage.stage_number)
     ? "おすすめの道を歩いているよ。まずは0、1、2、5の順にゆっくり。"
-    : "もっと歩く森を開いているよ。急がず、気になる響きからで大丈夫。";
+    : "追加ストーリーを開いているよ。急がず、気になる響きからで大丈夫。";
   renderStageTargets();
   elements.stageProgress.classList.remove("is-hidden");
   renderPracticeProgress();
@@ -1255,6 +1322,7 @@ function renderStageTargets() {
       renderCard();
       updateStageProgress();
       setView("card");
+      closeMobileLearningMenu();
     });
     elements.stageTargets.appendChild(button);
   });
@@ -1329,7 +1397,7 @@ function renderNextStageGuide(progress) {
 
   const nextStage = nextStageAfter();
   elements.nextStageMessage.textContent = nextStageMessageFor(nextStage);
-  elements.nextStageButton.textContent = nextStage ? `${nextStage.short_title}へ進む` : "図鑑でさがす";
+  elements.nextStageButton.textContent = nextStage ? `${nextStage.short_title}へ進む` : "コード図鑑へ";
   elements.nextStageButton.dataset.nextStageId = nextStage?.id || "";
   elements.nextStageGuide.classList.remove("is-hidden");
 }
@@ -1394,6 +1462,7 @@ function setPracticeStage(stageId) {
   activePracticeStage = nextStage;
   activeView = activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView;
   fullChordData = resolveStageCodes(activePracticeStage);
+  setLearningMenuGroup("story");
   chordData = [...fullChordData];
   currentIndex = 0;
   activeProgressionIndex = 0;
@@ -1417,6 +1486,8 @@ function setPracticeStage(stageId) {
     renderCompare();
   }
   renderProgression();
+  updateLearningMenuStatus();
+  closeMobileLearningMenu();
 }
 
 function resolveStageCodes(stage) {
@@ -1507,6 +1578,7 @@ function playSelectedProgression() {
     return;
   }
 
+  resumeAudioContext();
   updateStageProgress({ progressionHeard: true, heard: true });
   progression.code_ids
     .map((codeId) => practiceCatalog.get(codeId))
@@ -1521,6 +1593,7 @@ function playSelectedCompare() {
     return;
   }
 
+  resumeAudioContext();
   updateStageProgress({ heard: true });
   chordData.slice(0, Math.min(chordData.length, 8)).forEach((chord, index) => {
     window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
@@ -1556,7 +1629,7 @@ function playRootAssist() {
     return;
   }
 
-  const context = getAudioContext();
+  const context = resumeAudioContext();
   const now = context.currentTime;
   const fundamental = context.createOscillator();
   const harmonic = context.createOscillator();
@@ -1591,6 +1664,23 @@ function playRootAssist() {
   }
 }
 
+function handleQuizOption(button, option) {
+  const currentChord = chordData[quizIndex];
+  if (!currentChord) {
+    return;
+  }
+
+  if (quizHasAnswered) {
+    playChord(option, { trackProgress: false });
+    elements.quizResult.textContent = option.code_id === currentChord.code_id
+      ? `正解の ${option.display_name} をもう一度きく。`
+      : `正解は ${currentChord.display_name}。${option.display_name} との違いをきく。`;
+    return;
+  }
+
+  checkQuizAnswer(button, option.code_id === currentChord.code_id);
+}
+
 function checkQuizAnswer(button, isCorrect) {
   if (!quizHasPlayed) {
     elements.quizResult.textContent = "先に音をきいてみよう。";
@@ -1620,6 +1710,10 @@ function checkQuizAnswer(button, isCorrect) {
       .find((optionButton) => optionButton.textContent === chordData[quizIndex].display_name);
     correct.classList.add("is-correct");
   }
+  document.querySelectorAll(".quiz-option").forEach((optionButton) => {
+    optionButton.disabled = false;
+    optionButton.classList.add("is-reviewable");
+  });
   elements.quizScore.textContent = `${quizCorrectCount} / ${quizAnsweredCount}`;
 }
 
@@ -1642,6 +1736,7 @@ function setView(viewName) {
   }
   updateModeGuide();
   saveLastLocation();
+  closeMobileLearningMenu();
 }
 
 function assetPath(path) {
@@ -1680,20 +1775,38 @@ function chooseNextQuizIndex() {
 }
 
 function getAudioContext() {
-  if (!audioContext) {
-    audioContext = new AudioContext();
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    throw new Error("AudioContext is not supported.");
+  }
+  if (!audioContext || audioContext.state === "closed") {
+    audioContext = new AudioContextConstructor();
   }
   return audioContext;
 }
 
+function resumeAudioContext() {
+  const context = getAudioContext();
+  if (context.state === "suspended") {
+    const resumePromise = context.resume();
+    if (resumePromise?.catch) {
+      resumePromise.catch((error) => {
+        console.warn("AudioContext resume failed.", error);
+      });
+    }
+  }
+  return context;
+}
+
 async function playChord(chord, options = {}) {
+  const context = resumeAudioContext();
   if (options.trackProgress !== false) {
     updateStageProgress({ heard: true });
   }
   if (await playAudioFile(chord)) {
     return;
   }
-  playSyntheticChord(chord);
+  playSyntheticChord(chord, context);
 }
 
 async function playAudioFile(chord) {
@@ -1703,12 +1816,8 @@ async function playAudioFile(chord) {
 
   const soundUrl = assetPath(chord.sound_file);
   try {
-    const response = await fetch(soundUrl, { method: "HEAD" });
-    if (!response.ok) {
-      missingAudioFiles.add(chord.sound_file);
-      return false;
-    }
     const audio = new Audio(soundUrl);
+    audio.preload = "auto";
     await audio.play();
     return true;
   } catch (error) {
@@ -1717,8 +1826,7 @@ async function playAudioFile(chord) {
   }
 }
 
-function playSyntheticChord(chord) {
-  const context = getAudioContext();
+function playSyntheticChord(chord, context = resumeAudioContext()) {
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
@@ -1762,6 +1870,10 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 document.querySelectorAll(".set-button").forEach((button) => {
   button.addEventListener("click", () => setChordSet(button.dataset.set));
+});
+
+elements.learningMenuGroupButtons.forEach((button) => {
+  button.addEventListener("click", () => handleLearningMenuGroupClick(button.dataset.menuGroup));
 });
 
 elements.chordSearch.addEventListener("input", (event) => {
@@ -1815,9 +1927,16 @@ elements.nextQuiz.addEventListener("click", () => {
   renderQuiz();
 });
 
+const mobileMenuMedia = window.matchMedia(MOBILE_MENU_QUERY);
+if (mobileMenuMedia.addEventListener) {
+  mobileMenuMedia.addEventListener("change", syncLearningMenuMode);
+} else if (mobileMenuMedia.addListener) {
+  mobileMenuMedia.addListener(syncLearningMenuMode);
+}
+
 async function loadChordData() {
   try {
-    const response = await fetch(activeSet.dataPath);
+    const response = await fetch(cacheBustedDataPath(activeSet.dataPath));
     if (!response.ok) {
       throw new Error(`Failed to load chord data: ${response.status}`);
     }
@@ -1830,8 +1949,8 @@ async function loadChordData() {
 
 async function loadPracticeResources() {
   const [stageResponse, ...sourceResponses] = await Promise.all([
-    fetch(PRACTICE_STAGE_PATH),
-    ...PRACTICE_SOURCE_PATHS.map((path) => fetch(path))
+    fetch(cacheBustedDataPath(PRACTICE_STAGE_PATH)),
+    ...PRACTICE_SOURCE_PATHS.map((path) => fetch(cacheBustedDataPath(path)))
   ]);
   if (!stageResponse.ok) {
     throw new Error(`Failed to load practice stages: ${stageResponse.status}`);
@@ -1851,6 +1970,11 @@ async function loadPracticeResources() {
   });
 }
 
+function cacheBustedDataPath(path) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}v=${DATA_CACHE_VERSION}`;
+}
+
 async function init() {
   await loadPracticeResources();
   await loadChordData();
@@ -1858,6 +1982,7 @@ async function init() {
   if (activePracticeStage) {
     fullChordData = resolveStageCodes(activePracticeStage);
   }
+  syncLearningMenuGroup();
   applyRequestedFilters();
   renderFilterPanel();
   chordData = filteredChordData();

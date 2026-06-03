@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260602-manual-image-fix-v1">
+    <link rel="stylesheet" href="./styles.css?v=20260603-story-catalog-ui-v1">
   </head>
   <body>
     <main class="app-shell">
@@ -18,10 +18,22 @@
         </div>
       </header>
 
-      <section class="practice-panel" aria-label="練習ステージ">
+      <details class="learning-menu" id="learning-menu" open>
+        <summary class="learning-menu-summary">
+          <span>音あてストーリー / コード図鑑</span>
+          <small id="learning-menu-status">ストーリー: Cのきもち / 音カード</small>
+        </summary>
+
+        <div class="learning-menu-switch" role="tablist" aria-label="メニュー分類">
+          <button class="learning-menu-switch-button is-active" type="button" data-menu-group="story" role="tab" aria-selected="true">音あてストーリー</button>
+          <button class="learning-menu-switch-button" type="button" data-menu-group="catalog" role="tab" aria-selected="false">コード図鑑</button>
+        </div>
+
+        <div class="learning-menu-panel is-active" data-menu-panel="story" role="tabpanel">
+      <section class="practice-panel" aria-label="音あてストーリー">
         <div class="practice-copy">
-          <p class="eyebrow">れんしゅうの森</p>
-          <h2>今日はどの森を歩く？</h2>
+          <p class="eyebrow">音あてストーリー</p>
+          <h2>どのストーリーを進める？</h2>
           <p id="practice-stage-description">同じCでも、鳥が変わると空気が変わるよ。</p>
           <p class="practice-mood" id="practice-stage-mood">明るい、静か、そわっと、ふわっと。</p>
           <div class="stage-targets" id="stage-targets" aria-label="このStageのコード"></div>
@@ -33,21 +45,23 @@
               <button class="stage-reset-button" id="reset-stage-progress" type="button">このStageの羽あとを消す</button>
             </div>
             <div class="next-stage-guide is-hidden" id="next-stage-guide">
-              <p id="next-stage-message">次の森へ進めるよ。</p>
-              <button class="next-stage-button" id="next-stage-button" type="button">次の森へ</button>
+              <p id="next-stage-message">次のストーリーへ進めるよ。</p>
+              <button class="next-stage-button" id="next-stage-button" type="button">次のストーリーへ</button>
             </div>
           </div>
         </div>
         <div class="practice-actions">
           <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
-          <p class="stage-number-note" id="stage-number-note">Stage 3 / 4 は次の森で準備中。今は入口から進行までを先に歩く。</p>
-          <button class="catalog-button" id="open-catalog" type="button">図鑑でさがす</button>
+          <p class="stage-number-note" id="stage-number-note">Stage 3以降は追加ストーリー。まずは入口から進行までを先に歩く。</p>
+          <button class="catalog-button" id="open-catalog" type="button">コード図鑑へ</button>
         </div>
       </section>
+        </div>
 
-      <section class="set-panel" aria-label="コードセット切り替え">
+        <div class="learning-menu-panel" data-menu-panel="catalog" role="tabpanel" hidden>
+      <section class="set-panel" aria-label="コード図鑑切り替え">
         <div class="set-copy">
-          <p class="eyebrow">ずかんの森</p>
+          <p class="eyebrow">コード図鑑</p>
           <h2 id="set-title">はじめの4羽</h2>
           <p id="set-description">同じCを基準に、明るい・静か・進む・広がるを聞き分ける。</p>
           <div class="progression-flow" id="progression-flow" aria-label="コードの道しるべ"></div>
@@ -60,10 +74,10 @@
         </div>
       </section>
 
-      <section class="filter-panel is-hidden" id="filter-panel" aria-label="全コードフィルタ">
+      <section class="filter-panel is-hidden" id="filter-panel" aria-label="コード図鑑フィルタ">
         <div class="filter-head">
           <div>
-            <p class="eyebrow">さがす羽</p>
+            <p class="eyebrow">図鑑でさがす</p>
             <h2>コード名・音名・種類でさがす</h2>
           </div>
           <p class="filter-summary" id="filter-summary">132コード</p>
@@ -119,6 +133,8 @@
         <p id="mode-description">1つのコードを、鳥・音・運指・きもちでゆっくり見る。</p>
         <p class="first-step-tip" id="first-step-tip">まずは青い「音をきく」から。</p>
       </section>
+        </div>
+      </details>
 
       <section class="view is-active" id="card-view" aria-label="コードカード">
         <div class="card-stage">
@@ -221,6 +237,6 @@
       </section>
     </main>
 
-    <script src="./main.js?v=20260602-manual-image-fix-v1"></script>
+    <script src="./main.js?v=20260603-story-catalog-ui-v1"></script>
   </body>
 </html>
