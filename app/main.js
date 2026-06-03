@@ -170,9 +170,10 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-arpeggio-interval-010-v1";
+const DATA_CACHE_VERSION = "20260603-audio-return-resume-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
+const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
 const modeGuide = {
   card: {
     title: "音カード",
@@ -1667,7 +1668,7 @@ function playQuizChord() {
   playChord(chordData[quizIndex]);
 }
 
-function playRootAssist() {
+async function playRootAssist() {
   if (!chordData[quizIndex]) {
     return;
   }
@@ -1678,7 +1679,7 @@ function playRootAssist() {
     return;
   }
 
-  const context = resumeAudioContext();
+  const context = await ensureAudioContextReady();
   const now = context.currentTime;
   const fundamental = context.createOscillator();
   const harmonic = context.createOscillator();
@@ -1834,9 +1835,21 @@ function getAudioContext() {
   return audioContext;
 }
 
+async function ensureAudioContextReady() {
+  const context = getAudioContext();
+  if (context.state !== "running" && typeof context.resume === "function") {
+    try {
+      await context.resume();
+    } catch (error) {
+      console.warn("AudioContext resume failed.", error);
+    }
+  }
+  return context;
+}
+
 function resumeAudioContext() {
   const context = getAudioContext();
-  if (context.state === "suspended") {
+  if (context.state !== "running" && typeof context.resume === "function") {
     const resumePromise = context.resume();
     if (resumePromise?.catch) {
       resumePromise.catch((error) => {
@@ -1848,7 +1861,7 @@ function resumeAudioContext() {
 }
 
 async function playChord(chord, options = {}) {
-  const context = resumeAudioContext();
+  const context = await ensureAudioContextReady();
   if (options.trackProgress !== false) {
     updateStageProgress({ heard: true });
   }
@@ -1870,12 +1883,14 @@ async function playAudioFile(chord) {
     await audio.play();
     return true;
   } catch (error) {
-    missingAudioFiles.add(chord.sound_file);
+    if (!TRANSIENT_AUDIO_ERROR_NAMES.has(error?.name)) {
+      missingAudioFiles.add(chord.sound_file);
+    }
     return false;
   }
 }
 
-function playSyntheticChord(chord, context = resumeAudioContext()) {
+function playSyntheticChord(chord, context = getAudioContext()) {
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
@@ -1912,6 +1927,21 @@ function playSyntheticChord(chord, context = resumeAudioContext()) {
     harmonic.stop(start + 2.6);
   });
 }
+
+function handleAppReturn() {
+  if (document.hidden) {
+    return;
+  }
+  if (audioContext?.state === "closed") {
+    audioContext = undefined;
+  }
+  updateTabAvailability();
+  updateLearningMenuStatus();
+}
+
+document.addEventListener("visibilitychange", handleAppReturn);
+window.addEventListener("pageshow", handleAppReturn);
+window.addEventListener("focus", handleAppReturn);
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.view));
