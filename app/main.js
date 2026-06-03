@@ -170,8 +170,9 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-simple-story-menu-v1";
+const DATA_CACHE_VERSION = "20260603-arpeggio-interval-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
+const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.2;
 const modeGuide = {
   card: {
     title: "音カード",
@@ -1884,7 +1885,7 @@ function playSyntheticChord(chord, context = resumeAudioContext()) {
   master.connect(context.destination);
 
   chord.temp_audio_notes.forEach((frequency, index) => {
-    const start = now + index * 0.045;
+    const start = now + index * ARPEGGIO_NOTE_INTERVAL_SECONDS;
     const oscillator = context.createOscillator();
     const harmonic = context.createOscillator();
     const gain = context.createGain();
