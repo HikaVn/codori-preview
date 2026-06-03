@@ -1330,6 +1330,7 @@ h1 {
 }
 
 .quiz-answer-detail.is-hidden {
+  display: none;
   visibility: hidden;
   pointer-events: none;
   opacity: 0;

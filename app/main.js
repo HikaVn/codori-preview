@@ -170,7 +170,7 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-audio-return-resume-v1";
+const DATA_CACHE_VERSION = "20260603-hide-answer-placeholder-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
