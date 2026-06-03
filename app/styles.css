@@ -352,9 +352,73 @@ h1 {
   opacity: 0.45;
 }
 
+.story-start-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.story-choice-button {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-weight: 900;
+}
+
+.story-choice-button span {
+  color: var(--blue);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.story-choice-button small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.story-choice-button.is-primary {
+  border-color: rgba(45, 105, 167, 0.42);
+  background: #eef6ff;
+  box-shadow: 0 8px 18px rgba(45, 105, 167, 0.1);
+}
+
+.story-choice-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.story-list-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.story-list-panel.is-hidden {
+  display: none;
+}
+
+.story-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .practice-stage-buttons {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   min-width: 0;
 }
@@ -434,6 +498,7 @@ h1 {
 }
 
 .practice-stage-button em {
+  display: none;
   flex: 0 1 auto;
   padding: 2px 6px;
   border-radius: 999px;
@@ -454,8 +519,8 @@ h1 {
 }
 
 .practice-stage-button.is-recommended {
-  border-color: #c7d9e8;
-  background: #f2f8fd;
+  border-color: var(--line);
+  background: #f7fafb;
 }
 
 .practice-stage-button strong {

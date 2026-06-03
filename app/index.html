@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260603-story-catalog-ui-v1">
+    <link rel="stylesheet" href="./styles.css?v=20260603-simple-story-menu-v1">
   </head>
   <body>
     <main class="app-shell">
@@ -51,8 +51,28 @@
           </div>
         </div>
         <div class="practice-actions">
-          <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
-          <p class="stage-number-note" id="stage-number-note">Stage 3以降は追加ストーリー。まずは入口から進行までを先に歩く。</p>
+          <div class="story-start-actions" id="story-start-actions" role="group" aria-label="ストーリー開始">
+            <button class="story-choice-button is-primary" id="start-story-from-beginning" type="button">
+              <span>最初から</span>
+              <small>Stage 0から始める</small>
+            </button>
+            <button class="story-choice-button" id="continue-story" type="button">
+              <span>つづける</span>
+              <small id="continue-story-note">前回の場所へ戻る</small>
+            </button>
+            <button class="story-choice-button" id="show-story-list" type="button">
+              <span>ストーリーリスト</span>
+              <small>Stageを選ぶ</small>
+            </button>
+          </div>
+          <div class="story-list-panel is-hidden" id="story-list-panel">
+            <div class="story-list-head">
+              <strong>ストーリーリスト</strong>
+              <button class="stage-reset-button" id="hide-story-list" type="button">閉じる</button>
+            </div>
+            <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
+          </div>
+          <p class="stage-number-note" id="stage-number-note">迷ったら「最初から」。慣れたらリストから好きなStageを選ぶ。</p>
           <button class="catalog-button" id="open-catalog" type="button">コード図鑑へ</button>
         </div>
       </section>
@@ -237,6 +257,6 @@
       </section>
     </main>
 
-    <script src="./main.js?v=20260603-story-catalog-ui-v1"></script>
+    <script src="./main.js?v=20260603-simple-story-menu-v1"></script>
   </body>
 </html>

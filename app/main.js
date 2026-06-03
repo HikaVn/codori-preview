@@ -170,7 +170,7 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-story-catalog-ui-v1";
+const DATA_CACHE_VERSION = "20260603-simple-story-menu-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const modeGuide = {
   card: {
@@ -293,6 +293,7 @@ let activeFilters = {
 let practiceStages = [];
 let activePracticeStage = null;
 let activeLearningMenuGroup = "story";
+let isStoryListVisible = false;
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
 const missingAudioFiles = new Set();
@@ -308,6 +309,13 @@ const elements = {
   nextStageGuide: document.querySelector("#next-stage-guide"),
   nextStageMessage: document.querySelector("#next-stage-message"),
   nextStageButton: document.querySelector("#next-stage-button"),
+  storyStartActions: document.querySelector("#story-start-actions"),
+  startStoryFromBeginning: document.querySelector("#start-story-from-beginning"),
+  continueStory: document.querySelector("#continue-story"),
+  continueStoryNote: document.querySelector("#continue-story-note"),
+  showStoryList: document.querySelector("#show-story-list"),
+  hideStoryList: document.querySelector("#hide-story-list"),
+  storyListPanel: document.querySelector("#story-list-panel"),
   practiceStageButtons: document.querySelector("#practice-stage-buttons"),
   stageTargets: document.querySelector("#stage-targets"),
   stageNumberNote: document.querySelector("#stage-number-note"),
@@ -587,12 +595,9 @@ function nextStageMessageFor(nextStage) {
     return "ここまで歩けたよ。気になるコードを図鑑で探して、もう一度聞いてみよう。";
   }
   if (activePracticeStage.stage_number === 5) {
-    return `おすすめの道を歩ききったよ。次は「${nextStage.short_title}」で、追加ストーリーをのぞいてみよう。`;
+    return `ひと区切り。次は「${nextStage.short_title}」をのぞいてみよう。`;
   }
-  if (recommendedStageNumbers.includes(activePracticeStage.stage_number)) {
-    return `羽あとがそろったよ。次は「${nextStage.short_title}」へ歩いてみよう。`;
-  }
-  return `この森も歩けたよ。次は「${nextStage.short_title}」を少しのぞいてみよう。`;
+  return `このStageも歩けたよ。次は「${nextStage.short_title}」を少しのぞいてみよう。`;
 }
 
 function lastLocationForActiveStage() {
@@ -607,6 +612,39 @@ function hasStageTrail(progress) {
     || Boolean(last.view)
     || Number.isFinite(last.cardIndex)
     || Number.isFinite(last.progressionIndex);
+}
+
+function firstPracticeStage() {
+  return practiceStages.find((stage) => stage.stage_number === 0) || practiceStages[0] || null;
+}
+
+function orderedPracticeStages() {
+  return [...practiceStages].sort((a, b) => a.stage_number - b.stage_number);
+}
+
+function latestPracticeStageWithTrail() {
+  if (practiceProgress.last?.mode === "practice") {
+    const lastStage = practiceStages.find((stage) => stage.id === practiceProgress.last.stageId);
+    if (lastStage) {
+      return lastStage;
+    }
+  }
+
+  return orderedPracticeStages()
+    .map((stage) => ({ stage, progress: stageProgress(stage.id) }))
+    .filter(({ progress }) => hasStageProgress(progress))
+    .sort((a, b) => String(b.progress.updatedAt || "").localeCompare(String(a.progress.updatedAt || "")))[0]?.stage || null;
+}
+
+function updateStoryEntryControls() {
+  const continueStage = latestPracticeStageWithTrail();
+  elements.continueStory.disabled = !continueStage;
+  elements.continueStoryNote.textContent = continueStage
+    ? `${continueStage.short_title}へ戻る`
+    : "まだ記録なし";
+  elements.storyListPanel.classList.toggle("is-hidden", !isStoryListVisible);
+  elements.showStoryList.querySelector("span").textContent = isStoryListVisible ? "リストを閉じる" : "ストーリーリスト";
+  elements.showStoryList.querySelector("small").textContent = isStoryListVisible ? "3択に戻る" : "Stageを選ぶ";
 }
 
 function stageContinueText(progress) {
@@ -1281,16 +1319,13 @@ async function setChordSet(setId) {
 
 function renderPracticeStageChrome() {
   elements.practiceStageButtons.innerHTML = "";
-  const recommendedStages = practiceStages.filter((stage) => recommendedStageNumbers.includes(stage.stage_number));
-  const moreStages = practiceStages.filter((stage) => !recommendedStageNumbers.includes(stage.stage_number));
-
-  renderPracticeStageGroup("おすすめの道", "まずはここから", recommendedStages);
-  renderPracticeStageGroup("追加ストーリー", "あとで聞く", moreStages);
+  renderPracticeStageList();
+  updateStoryEntryControls();
 
   if (!activePracticeStage) {
-    elements.practiceStageDescription.textContent = "コード図鑑を見ているよ。音あてストーリーへ戻るときはStageを選んでね。";
-    elements.practiceStageMood.textContent = "コードを探すときは図鑑、覚えるときはストーリー。";
-    elements.stageNumberNote.textContent = "音あてストーリーはStage 0〜10、探すときはコード図鑑へ。";
+    elements.practiceStageDescription.textContent = "3つの入口から選ぶだけ。迷ったら最初から始める。";
+    elements.practiceStageMood.textContent = "音で選ぶ、鳥で確認する、少しずつ覚える。";
+    elements.stageNumberNote.textContent = "コードを探すときはコード図鑑へ。";
     elements.stageTargets.innerHTML = "";
     elements.stageTargets.classList.add("is-hidden");
     elements.stageProgress.classList.add("is-hidden");
@@ -1299,9 +1334,7 @@ function renderPracticeStageChrome() {
 
   elements.practiceStageDescription.textContent = activePracticeStage.description;
   elements.practiceStageMood.textContent = activePracticeStage.mood;
-  elements.stageNumberNote.textContent = recommendedStageNumbers.includes(activePracticeStage.stage_number)
-    ? "おすすめの道を歩いているよ。まずは0、1、2、5の順にゆっくり。"
-    : "追加ストーリーを開いているよ。急がず、気になる響きからで大丈夫。";
+  elements.stageNumberNote.textContent = "他のStageを見るときだけ、ストーリーリストを開く。";
   renderStageTargets();
   elements.stageProgress.classList.remove("is-hidden");
   renderPracticeProgress();
@@ -1328,34 +1361,24 @@ function renderStageTargets() {
   });
 }
 
-function renderPracticeStageGroup(title, badge, stages) {
+function renderPracticeStageList() {
+  const stages = orderedPracticeStages();
   if (!stages.length) {
     return;
   }
-  const heading = document.createElement("div");
-  heading.className = "practice-stage-group-heading";
-  heading.innerHTML = `
-    <span>${title}</span>
-    <small>${badge}</small>
-  `;
-  elements.practiceStageButtons.appendChild(heading);
 
   stages.forEach((stage) => {
     const progress = stageProgress(stage.id);
     const stageProgressItems = progressItemsForStage(stage);
     const completedCount = completedItemsForStage(stage, progress).length;
-    const isRecommended = recommendedStageNumbers.includes(stage.stage_number);
     const button = document.createElement("button");
     button.className = "practice-stage-button";
     button.type = "button";
     button.dataset.stageId = stage.id;
-    button.classList.toggle("is-recommended", isRecommended);
-    button.classList.toggle("is-more-stage", !isRecommended);
     button.classList.toggle("is-active", activePracticeStage?.id === stage.id);
     button.innerHTML = `
       <span class="stage-label-line">
         <span>${stage.label}</span>
-        <em>${isRecommended ? "おすすめ" : "もっと歩く"}</em>
       </span>
       <strong>${stage.short_title}</strong>
       <small>${stage.code_ids.length}音 / ${stage.progressions.length ? "流れも聞く" : "まず1羽ずつ"} / 羽あと${completedCount}/${stageProgressItems.length}</small>
@@ -1419,6 +1442,29 @@ function resetCurrentStageProgress() {
   renderPracticeStageChrome();
 }
 
+function startStoryFromBeginning() {
+  const firstStage = firstPracticeStage();
+  if (!firstStage) {
+    return;
+  }
+  isStoryListVisible = false;
+  setPracticeStage(firstStage.id, { restore: false, view: "card" });
+}
+
+function continueStoryFromLastPlace() {
+  const continueStage = latestPracticeStageWithTrail();
+  if (!continueStage) {
+    return;
+  }
+  isStoryListVisible = false;
+  setPracticeStage(continueStage.id);
+}
+
+function toggleStoryList() {
+  isStoryListVisible = !isStoryListVisible;
+  renderPracticeStageChrome();
+}
+
 function restorePracticePosition() {
   if (!isPracticeMode()) {
     return;
@@ -1453,14 +1499,14 @@ function clampIndex(value, length) {
   return Math.min(Math.max(Math.trunc(number), 0), length - 1);
 }
 
-function setPracticeStage(stageId) {
+function setPracticeStage(stageId, options = {}) {
   const nextStage = practiceStages.find((stage) => stage.id === stageId);
   if (!nextStage) {
     return;
   }
 
   activePracticeStage = nextStage;
-  activeView = activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView;
+  activeView = options.view || (activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView);
   fullChordData = resolveStageCodes(activePracticeStage);
   setLearningMenuGroup("story");
   chordData = [...fullChordData];
@@ -1473,7 +1519,9 @@ function setPracticeStage(stageId) {
   };
   resetQuizState();
   renderedCompareKey = "";
-  restorePracticePosition();
+  if (options.restore !== false) {
+    restorePracticePosition();
+  }
   quizIndex = chooseNextQuizIndex();
   saveLastLocation();
   renderPracticeStageChrome();
@@ -1893,6 +1941,13 @@ elements.playQuiz.addEventListener("click", playQuizChord);
 elements.playRootAssist.addEventListener("click", playRootAssist);
 elements.playProgression.addEventListener("click", playSelectedProgression);
 elements.resetStageProgress.addEventListener("click", resetCurrentStageProgress);
+elements.startStoryFromBeginning.addEventListener("click", startStoryFromBeginning);
+elements.continueStory.addEventListener("click", continueStoryFromLastPlace);
+elements.showStoryList.addEventListener("click", toggleStoryList);
+elements.hideStoryList.addEventListener("click", () => {
+  isStoryListVisible = false;
+  renderPracticeStageChrome();
+});
 elements.nextStageButton.addEventListener("click", () => {
   const nextStageId = elements.nextStageButton.dataset.nextStageId;
   if (nextStageId) {
