@@ -170,9 +170,9 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-arpeggio-interval-v1";
+const DATA_CACHE_VERSION = "20260603-arpeggio-interval-010-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
-const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.2;
+const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const modeGuide = {
   card: {
     title: "音カード",
