@@ -1431,9 +1431,9 @@ function renderPracticeStageChrome() {
   updateStoryEntryControls();
 
   if (!activePracticeStage) {
-    elements.practiceStageDescription.textContent = "まずは遊び方を選ぶ。続きからでも、最初からでも、図鑑からでも始められる。";
-    elements.practiceStageMood.textContent = "コードは、モードを選んでから表示する。";
-    elements.stageNumberNote.textContent = "ゲームモードを選ぶ画面。コードカードはまだ出さない。";
+    elements.practiceStageDescription.textContent = "今日はどこから始める？";
+    elements.practiceStageMood.textContent = "迷ったら「最初から」。前回の続きやコード図鑑からも始められる。";
+    elements.stageNumberNote.textContent = "好きな入口を選ぶと、音のカードへ進む。";
     elements.stageTargets.innerHTML = "";
     elements.stageTargets.classList.add("is-hidden");
     elements.stageProgress.classList.add("is-hidden");
