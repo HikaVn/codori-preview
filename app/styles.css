@@ -860,6 +860,11 @@ body.is-mode-select-only .view.is-active {
   display: none;
 }
 
+body.is-practice-active .learning-menu,
+body.is-catalog-active .learning-menu-switch {
+  display: none;
+}
+
 .card-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;

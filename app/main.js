@@ -720,8 +720,14 @@ function updateStoryEntryControls() {
 
 function setModeSelectOnly(enabled) {
   isModeSelectOnly = Boolean(enabled);
-  document.body.classList.toggle("is-mode-select-only", isModeSelectOnly);
+  syncAppModeClasses();
   updateLearningMenuStatus();
+}
+
+function syncAppModeClasses() {
+  document.body.classList.toggle("is-mode-select-only", isModeSelectOnly);
+  document.body.classList.toggle("is-practice-active", !isModeSelectOnly && isPracticeMode());
+  document.body.classList.toggle("is-catalog-active", !isModeSelectOnly && !isPracticeMode());
 }
 
 function stageContinueText(progress) {
@@ -1395,8 +1401,8 @@ async function setChordSet(setId) {
     return;
   }
 
-  setModeSelectOnly(false);
   activePracticeStage = null;
+  setModeSelectOnly(false);
   activeSet = nextSet;
   saveLastLocation();
   activeFilters = {
@@ -1625,8 +1631,8 @@ function setPracticeStage(stageId, options = {}) {
     return;
   }
 
-  setModeSelectOnly(false);
   activePracticeStage = nextStage;
+  setModeSelectOnly(false);
   activeView = options.view || (activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView);
   fullChordData = resolveStageCodes(activePracticeStage);
   setLearningMenuGroup("story");
