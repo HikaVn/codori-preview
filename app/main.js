@@ -58,6 +58,17 @@ const STORAGE_KEY = "codori.practiceProgress.v1";
 const HARMONIC_GAIN_RATIO = 0.2;
 const USE_INTEGRATED_ACTION_ART = true;
 const QUIZ_REPETITIONS_PER_CHORD = 3;
+const hasDirectLaunchTarget = Boolean(
+  requestedSetId
+    || requestedStageId
+    || urlParams.has("view")
+    || requestedRootFilter
+    || requestedFamilyFilter
+    || requestedSearchFilter
+    || urlParams.has("formal")
+    || urlParams.has("actions")
+);
+const shouldStartOnModeSelect = !hasDirectLaunchTarget;
 const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
@@ -171,7 +182,7 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260610-story-flow-v1";
+const DATA_CACHE_VERSION = "20260610-mode-select-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
@@ -295,6 +306,7 @@ let activeFilters = {
 let practiceStages = [];
 let activePracticeStage = null;
 let activeLearningMenuGroup = "story";
+let isModeSelectOnly = shouldStartOnModeSelect;
 let isStoryListVisible = false;
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
@@ -706,6 +718,12 @@ function updateStoryEntryControls() {
   elements.showStoryList.querySelector("small").textContent = isStoryListVisible ? "3択に戻る" : "Stageを選ぶ";
 }
 
+function setModeSelectOnly(enabled) {
+  isModeSelectOnly = Boolean(enabled);
+  document.body.classList.toggle("is-mode-select-only", isModeSelectOnly);
+  updateLearningMenuStatus();
+}
+
 function stageContinueText(progress) {
   const last = lastLocationForActiveStage();
   if (!hasStageTrail(progress)) {
@@ -771,6 +789,9 @@ function updateStageProgress(patch = {}) {
 }
 
 function saveLastLocation(shouldSave = true) {
+  if (isModeSelectOnly) {
+    return;
+  }
   if (isPracticeMode()) {
     practiceProgress.last = {
       mode: "practice",
@@ -969,6 +990,10 @@ function updateLearningMenuStatus() {
   if (!elements.learningMenuStatus) {
     return;
   }
+  if (isModeSelectOnly) {
+    elements.learningMenuStatus.textContent = "ゲームモードを選ぶ";
+    return;
+  }
   const stageText = activePracticeStage?.short_title || "図鑑";
   const viewText = (modeGuide[activeView] || modeGuide.card).title;
   elements.learningMenuStatus.textContent = activePracticeStage
@@ -991,6 +1016,10 @@ function setLearningMenuGroup(group) {
 }
 
 function syncLearningMenuGroup() {
+  if (isModeSelectOnly) {
+    setLearningMenuGroup("story");
+    return;
+  }
   setLearningMenuGroup(isPracticeMode() ? "story" : "catalog");
 }
 
@@ -1362,9 +1391,11 @@ function renderQuiz() {
 async function setChordSet(setId) {
   const nextSet = chordSets[setId];
   if (!nextSet || (nextSet.id === activeSet.id && !isPracticeMode())) {
+    setModeSelectOnly(false);
     return;
   }
 
+  setModeSelectOnly(false);
   activePracticeStage = null;
   activeSet = nextSet;
   saveLastLocation();
@@ -1400,9 +1431,9 @@ function renderPracticeStageChrome() {
   updateStoryEntryControls();
 
   if (!activePracticeStage) {
-    elements.practiceStageDescription.textContent = "3つの入口から選ぶだけ。迷ったら最初から始める。";
-    elements.practiceStageMood.textContent = "音で選ぶ、鳥で確認する、少しずつ覚える。";
-    elements.stageNumberNote.textContent = "コードを探すときはコード図鑑へ。";
+    elements.practiceStageDescription.textContent = "まずは遊び方を選ぶ。続きからでも、最初からでも、図鑑からでも始められる。";
+    elements.practiceStageMood.textContent = "コードは、モードを選んでから表示する。";
+    elements.stageNumberNote.textContent = "ゲームモードを選ぶ画面。コードカードはまだ出さない。";
     elements.stageTargets.innerHTML = "";
     elements.stageTargets.classList.add("is-hidden");
     elements.stageProgress.classList.add("is-hidden");
@@ -1594,6 +1625,7 @@ function setPracticeStage(stageId, options = {}) {
     return;
   }
 
+  setModeSelectOnly(false);
   activePracticeStage = nextStage;
   activeView = options.view || (activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView);
   fullChordData = resolveStageCodes(activePracticeStage);
@@ -2214,6 +2246,7 @@ async function init() {
   renderCard();
   renderQuiz();
   renderProgression();
+  setModeSelectOnly(shouldStartOnModeSelect);
   setView(activeView);
 }
 
@@ -2234,6 +2267,10 @@ function applyRequestedFilters() {
 }
 
 function initialPracticeStage() {
+  if (shouldStartOnModeSelect && !requestedStageId) {
+    return null;
+  }
+
   if (requestedStageId === "none" || (!requestedStageId && requestedSetId)) {
     return null;
   }

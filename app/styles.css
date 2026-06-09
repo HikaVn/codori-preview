@@ -852,6 +852,14 @@ h1 {
   display: block;
 }
 
+body.is-mode-select-only .progress,
+body.is-mode-select-only .tabs,
+body.is-mode-select-only .mode-guide,
+body.is-mode-select-only .filter-panel,
+body.is-mode-select-only .view.is-active {
+  display: none;
+}
+
 .card-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
