@@ -92,7 +92,7 @@
     "title": "Cメジャーの夜の仲間",
     "short_title": "夜のC",
     "description": "Cのまわりを、夜の灯りみたいな7thの響きでそっと歩く森。",
-    "mood": "難しい名前はあとで大丈夫。透明、グラサンの余韻、少しゆれる感じを耳に残す。",
+    "mood": "難しい名前はあとで大丈夫。透明、グラサンのオトナ気分、少しゆれる感じを耳に残す。",
     "code_ids": ["Cmaj7", "Dm7", "Em7", "Fmaj7", "G7", "Am7", "Bm7-5"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
     "quiz_reference_root": "C",
@@ -197,7 +197,7 @@
     "title": "浮遊と水色星",
     "short_title": "色づけ",
     "description": "いつものMajorに、浮く感じや水色の小さな星を少し足す森。",
-    "mood": "sus4はCと同じ丸目のまま、空中ですまして浮く羽。add9はうつろに上を見て、空気がふわっと抜ける羽。",
+    "mood": "sus4は着地せずにふわっと待つ羽。add9はうつろに上を見て、空気がふわっと抜ける羽。",
     "code_ids": ["Csus4", "C", "Gsus4", "G", "Cadd9", "Fadd9", "Gadd9"],
     "primary_modes": ["card", "compare", "quiz", "progression"],
     "quiz_reference_root": "C",
@@ -206,13 +206,13 @@
         "id": "csus4-c",
         "name": "ふわっと着地",
         "code_ids": ["Csus4", "C"],
-        "memo": "Csus4でCと同じ丸目のまま空中にすっと浮いて、Cへほっと着地する。浮く、戻る、を耳でたしかめる。"
+        "memo": "Csus4でふわっと待って、Cへほっと着地する。浮く、戻る、を耳でたしかめる。"
       },
       {
         "id": "gsus4-g-c",
         "name": "風がほどける",
         "code_ids": ["Gsus4", "G", "C"],
-        "memo": "Gsus4のCと同じ丸目の浮遊感がGでほどけて、Cへ帰る。風が落ち着く感じを聞く。"
+        "memo": "Gsus4の浮遊感がGでほどけて、Cへ帰る。風が落ち着く感じを聞く。"
       },
       {
         "id": "c-cadd9-c",
@@ -299,7 +299,7 @@
         "id": "bm7-5-e7-am",
         "name": "夜から静けさへ",
         "code_ids": ["Bm7-5", "E7", "Am"],
-        "memo": "Bm7-5で振り向きざまにちらっと見て、E7の合図を通る。最後にAmへ落ち着くと、ほっとする。"
+        "memo": "Bm7-5で足場が少し傾いて、E7の合図を通る。最後にAmへ落ち着くと、ほっとする。"
       },
       {
         "id": "c-caug-f",
