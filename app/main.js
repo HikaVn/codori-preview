@@ -57,6 +57,7 @@ const requestedSearchFilter = urlParams.get("search") || urlParams.get("q") || "
 const STORAGE_KEY = "codori.practiceProgress.v1";
 const HARMONIC_GAIN_RATIO = 0.2;
 const USE_INTEGRATED_ACTION_ART = true;
+const QUIZ_REPETITIONS_PER_CHORD = 3;
 const savedProgress = readPracticeProgress();
 const ALL_FILTER = "all";
 const FAMILY_ORDER = ["Major", "minor", "7", "add9", "m7", "maj7", "mM7", "sus4", "m7-5", "dim", "aug"];
@@ -170,7 +171,7 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-hide-answer-placeholder-v1";
+const DATA_CACHE_VERSION = "20260610-story-flow-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
@@ -194,8 +195,7 @@ const modeGuide = {
 };
 const progressItems = [
   { key: "heard", label: "聞いた" },
-  { key: "quizzed", label: "音あて" },
-  { key: "progressionHeard", label: "進行" }
+  { key: "quizzed", label: "音あて" }
 ];
 const recommendedStageNumbers = [0, 1, 2, 5];
 const moreStageNumbers = [3, 4, 6, 7, 8, 9, 10];
@@ -550,24 +550,67 @@ function stageProgress(stageId = activePracticeStage?.id) {
   return practiceProgress.stages[stageId] || {};
 }
 
-function progressItemsForStage(stage = activePracticeStage) {
-  if (!stage?.progressions?.length) {
-    return progressItems.filter((item) => item.key !== "progressionHeard");
+function stageChordIds(stage = activePracticeStage) {
+  if (stage?.code_ids?.length) {
+    return stage.code_ids;
   }
+  return chordData.map((chord) => chord.code_id).filter(Boolean);
+}
+
+function quizTargetCount(stage = activePracticeStage) {
+  return stageChordIds(stage).length * QUIZ_REPETITIONS_PER_CHORD;
+}
+
+function heardCodeIdsForStage(progress = stageProgress(), stage = activePracticeStage) {
+  const validCodeIds = new Set(stageChordIds(stage));
+  return [...new Set(Array.isArray(progress.heardCodeIds) ? progress.heardCodeIds : [])]
+    .filter((codeId) => validCodeIds.has(codeId));
+}
+
+function heardCountForStage(progress = stageProgress(), stage = activePracticeStage) {
+  return heardCodeIdsForStage(progress, stage).length;
+}
+
+function quizAnsweredTotalForStage(progress = stageProgress()) {
+  const answeredTotal = Number(progress.quizAnsweredTotal);
+  return Number.isFinite(answeredTotal) ? Math.max(0, Math.trunc(answeredTotal)) : 0;
+}
+
+function isStageHeardComplete(stage = activePracticeStage, progress = stageProgress(stage?.id)) {
+  const total = stageChordIds(stage).length;
+  return total > 0 && heardCountForStage(progress, stage) >= total;
+}
+
+function isStageQuizComplete(stage = activePracticeStage, progress = stageProgress(stage?.id)) {
+  const target = quizTargetCount(stage);
+  return target > 0 && quizAnsweredTotalForStage(progress) >= target;
+}
+
+function progressItemsForStage(stage = activePracticeStage) {
   return progressItems;
 }
 
 function completedItemsForStage(stage = activePracticeStage, progress = stageProgress(stage?.id)) {
-  return progressItemsForStage(stage).filter((item) => progress[item.key]);
+  return progressItemsForStage(stage).filter((item) => {
+    if (item.key === "heard") {
+      return isStageHeardComplete(stage, progress);
+    }
+    if (item.key === "quizzed") {
+      return isStageQuizComplete(stage, progress);
+    }
+    return progress[item.key];
+  });
 }
 
 function isStageComplete(stage = activePracticeStage, progress = stageProgress(stage?.id)) {
   const items = progressItemsForStage(stage);
-  return items.length > 0 && items.every((item) => progress[item.key]);
+  return items.length > 0 && completedItemsForStage(stage, progress).length === items.length;
 }
 
 function hasStageProgress(progress) {
   return progressItems.some((item) => progress[item.key])
+    || (Array.isArray(progress.heardCodeIds) && progress.heardCodeIds.length > 0)
+    || quizAnsweredTotalForStage(progress) > 0
     || Number.isFinite(progress.lastCardIndex)
     || Number.isFinite(progress.lastProgressionIndex)
     || Boolean(progress.lastView);
@@ -600,6 +643,20 @@ function nextStageMessageFor(nextStage) {
     return `ひと区切り。次は「${nextStage.short_title}」をのぞいてみよう。`;
   }
   return `このStageも歩けたよ。次は「${nextStage.short_title}」を少しのぞいてみよう。`;
+}
+
+function nextCourseButtonText() {
+  const nextStage = nextStageAfter();
+  return nextStage ? `${nextStage.short_title}へ進む` : "コード図鑑へ";
+}
+
+function goToNextCourse() {
+  const nextStage = nextStageAfter();
+  if (nextStage) {
+    setPracticeStage(nextStage.id, { restore: false, view: "card" });
+    return;
+  }
+  setChordSet("all-main-chords");
 }
 
 function lastLocationForActiveStage() {
@@ -674,6 +731,13 @@ function stageContinueText(progress) {
     : `つづきから: ${viewLabel}`;
 }
 
+function quizScoreText() {
+  if (!isPracticeMode()) {
+    return `${quizCorrectCount} / ${quizAnsweredCount}`;
+  }
+  return `${Math.min(quizAnsweredCount, quizTargetCount())} / ${quizTargetCount()}`;
+}
+
 function updateStageProgress(patch = {}) {
   if (!isPracticeMode()) {
     return;
@@ -683,9 +747,11 @@ function updateStageProgress(patch = {}) {
     heard: false,
     quizzed: false,
     progressionHeard: false,
+    heardCodeIds: [],
+    quizAnsweredTotal: 0,
     ...stageProgress(stageId)
   };
-  practiceProgress.stages[stageId] = {
+  const nextProgress = {
     ...current,
     ...patch,
     lastView: activeView,
@@ -693,6 +759,11 @@ function updateStageProgress(patch = {}) {
     lastProgressionIndex: activeProgressionIndex,
     updatedAt: new Date().toISOString()
   };
+  nextProgress.heardCodeIds = heardCodeIdsForStage(nextProgress, activePracticeStage);
+  nextProgress.quizAnsweredTotal = quizAnsweredTotalForStage(nextProgress);
+  nextProgress.heard = isStageHeardComplete(activePracticeStage, nextProgress);
+  nextProgress.quizzed = isStageQuizComplete(activePracticeStage, nextProgress);
+  practiceProgress.stages[stageId] = nextProgress;
   saveLastLocation(false);
   savePracticeProgress();
   renderPracticeProgress();
@@ -1235,6 +1306,7 @@ function renderQuiz() {
   const chord = chordData[quizIndex];
   quizHasPlayed = false;
   quizHasAnswered = false;
+  const quizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   if (!chord) {
     elements.quizImage.removeAttribute("src");
     elements.quizImage.alt = "条件に合うCodori鳥はまだ見つかりません";
@@ -1243,7 +1315,7 @@ function renderQuiz() {
     elements.nextQuiz.disabled = true;
     elements.playQuiz.disabled = true;
     elements.playRootAssist.disabled = true;
-    elements.quizScore.textContent = `${quizCorrectCount} / ${quizAnsweredCount}`;
+    elements.quizScore.textContent = quizScoreText();
     elements.quizResult.textContent = "この条件では音あてできるコードが見つからなかった。";
     elements.quizOptions.innerHTML = "";
     return;
@@ -1256,7 +1328,8 @@ function renderQuiz() {
   elements.quizImage.alt = `${chord.display_name}のCodori鳥`;
   updateOnePointAccent(elements.quizAccent, chord);
   elements.quizAnswerDetail.classList.add("is-hidden");
-  elements.nextQuiz.disabled = true;
+  elements.nextQuiz.disabled = !quizComplete;
+  elements.nextQuiz.textContent = quizComplete ? nextCourseButtonText() : "次の音へ";
   elements.quizAnswerName.textContent = chord.display_name;
   elements.quizAnswerNote.textContent = chord.learning_note;
   elements.quizFingeringImage.src = assetPath(chord.fingering_asset);
@@ -1264,8 +1337,10 @@ function renderQuiz() {
   elements.playQuiz.classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").textContent = "音をきく";
-  elements.quizScore.textContent = `${quizCorrectCount} / ${quizAnsweredCount}`;
-  elements.quizResult.textContent = quizPromptForCurrentStage();
+  elements.quizScore.textContent = quizScoreText();
+  elements.quizResult.textContent = quizComplete
+    ? "音あて完了。次のコースへ進めるよ。"
+    : quizPromptForCurrentStage();
   elements.quizOptions.innerHTML = "";
 
   const optionLimit = Math.max(1, (activePracticeStage?.quiz_option_count || 6) - 1);
@@ -1397,17 +1472,28 @@ function renderPracticeProgress() {
   const progress = stageProgress();
   const availableItems = progressItemsForStage();
   const completed = completedItemsForStage(activePracticeStage, progress);
+  const heardCount = heardCountForStage(progress);
+  const chordCount = stageChordIds().length;
+  const quizAnsweredCountForStage = Math.min(quizAnsweredTotalForStage(progress), quizTargetCount());
+  const quizTotal = quizTargetCount();
   elements.stageProgressSummary.textContent = completed.length
-    ? `羽あと ${completed.length} / ${availableItems.length}。${completed.map((item) => item.label).join("・")} がついたよ。`
-    : "まだ羽あとなし。まずは音を聞いてみよう。";
+    ? `音カード ${heardCount} / ${chordCount}、音あて ${quizAnsweredCountForStage} / ${quizTotal}。`
+    : `音カード 0 / ${chordCount}、音あて 0 / ${quizTotal}。まずは音を聞いてみよう。`;
   elements.stageContinue.textContent = stageContinueText(progress);
   elements.resetStageProgress.disabled = !hasStageTrail(progress);
   elements.stageProgressBadges.innerHTML = "";
   availableItems.forEach((item) => {
     const badge = document.createElement("span");
+    const isDone = completed.some((completedItem) => completedItem.key === item.key);
     badge.className = "stage-progress-badge";
-    badge.classList.toggle("is-done", Boolean(progress[item.key]));
-    badge.textContent = progress[item.key] ? `${item.label} 済` : item.label;
+    badge.classList.toggle("is-done", isDone);
+    if (item.key === "heard") {
+      badge.textContent = `聞いた ${heardCount} / ${chordCount}`;
+    } else if (item.key === "quizzed") {
+      badge.textContent = `音あて ${quizAnsweredCountForStage} / ${quizTotal}`;
+    } else {
+      badge.textContent = isDone ? `${item.label} 済` : item.label;
+    }
     elements.stageProgressBadges.appendChild(badge);
   });
   renderNextStageGuide(progress);
@@ -1431,7 +1517,7 @@ function resetCurrentStageProgress() {
   if (!isPracticeMode()) {
     return;
   }
-  const message = `${activePracticeStage.label}「${activePracticeStage.short_title}」の羽あとを消しますか？\nこの端末に残っている、聞いた・音あて・進行の記録だけを消します。`;
+  const message = `${activePracticeStage.label}「${activePracticeStage.short_title}」の羽あとを消しますか？\nこの端末に残っている、聞いたコードと音あて回数の記録を消します。`;
   if (!window.confirm(message)) {
     return;
   }
@@ -1484,6 +1570,7 @@ function restorePracticePosition() {
 
   currentIndex = clampIndex(restoredCardIndex, chordData.length);
   activeProgressionIndex = clampIndex(restoredProgressionIndex, activeProgressions().length);
+  quizAnsweredCount = Math.min(quizAnsweredTotalForStage(progress), quizTargetCount());
 
   if (!urlParams.get("view") && progress.lastView) {
     activeView = progress.lastView;
@@ -1629,7 +1716,7 @@ function playSelectedProgression() {
   }
 
   resumeAudioContext();
-  updateStageProgress({ progressionHeard: true, heard: true });
+  updateStageProgress({ progressionHeard: true });
   progression.code_ids
     .map((codeId) => practiceCatalog.get(codeId))
     .filter(Boolean)
@@ -1644,10 +1731,38 @@ function playSelectedCompare() {
   }
 
   resumeAudioContext();
-  updateStageProgress({ heard: true });
-  chordData.slice(0, Math.min(chordData.length, 8)).forEach((chord, index) => {
+  const chordsToPlay = chordData.slice(0, Math.min(chordData.length, 8));
+  if (isPracticeMode()) {
+    const heardCodeIds = new Set(heardCodeIdsForStage(stageProgress()));
+    chordsToPlay.forEach((chord) => heardCodeIds.add(chord.code_id));
+    updateStageProgress({ heardCodeIds: [...heardCodeIds] });
+  }
+  chordsToPlay.forEach((chord, index) => {
     window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
   });
+}
+
+function recordChordHeard(chord) {
+  if (!isPracticeMode() || !chord?.code_id) {
+    return;
+  }
+
+  const stageCodeIdSet = new Set(stageChordIds());
+  if (!stageCodeIdSet.has(chord.code_id)) {
+    return;
+  }
+
+  const heardCodeIds = new Set(heardCodeIdsForStage(stageProgress()));
+  heardCodeIds.add(chord.code_id);
+  updateStageProgress({ heardCodeIds: [...heardCodeIds] });
+
+  if (activeView === "card" && isStageHeardComplete(activePracticeStage, stageProgress())) {
+    window.setTimeout(() => {
+      if (isPracticeMode() && activeView === "card") {
+        setView("quiz");
+      }
+    }, 0);
+  }
 }
 
 function enableQuizOptions() {
@@ -1661,11 +1776,13 @@ function playQuizChord() {
     return;
   }
   quizHasPlayed = true;
-  if (!quizHasAnswered) {
+  if (!quizHasAnswered && !(isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress()))) {
     enableQuizOptions();
     elements.quizResult.textContent = quizReadyPromptForCurrentStage();
+  } else if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
+    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
   }
-  playChord(chordData[quizIndex]);
+  playChord(chordData[quizIndex], { trackProgress: false });
 }
 
 async function playRootAssist() {
@@ -1720,6 +1837,11 @@ function handleQuizOption(button, option) {
     return;
   }
 
+  if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
+    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
+    return;
+  }
+
   if (quizHasAnswered) {
     playChord(option, { trackProgress: false });
     elements.quizResult.textContent = option.code_id === currentChord.code_id
@@ -1741,12 +1863,14 @@ function checkQuizAnswer(button, isCorrect) {
     optionButton.disabled = true;
   });
   quizHasAnswered = true;
-  updateStageProgress({ quizzed: true });
+  quizAnsweredCount += 1;
+  updateStageProgress({ quizAnsweredTotal: quizAnsweredCount });
+  const quizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   elements.nextQuiz.disabled = false;
+  elements.nextQuiz.textContent = quizComplete ? nextCourseButtonText() : "次の音へ";
   elements.playQuiz.classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").textContent = "もう一度きく";
   elements.quizAnswerDetail.classList.remove("is-hidden");
-  quizAnsweredCount += 1;
 
   if (isCorrect) {
     quizCorrectCount += 1;
@@ -1764,7 +1888,13 @@ function checkQuizAnswer(button, isCorrect) {
     optionButton.disabled = false;
     optionButton.classList.add("is-reviewable");
   });
-  elements.quizScore.textContent = `${quizCorrectCount} / ${quizAnsweredCount}`;
+  elements.quizScore.textContent = quizScoreText();
+  if (quizComplete) {
+    document.querySelectorAll(".quiz-option").forEach((optionButton) => {
+      optionButton.disabled = true;
+    });
+    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
+  }
 }
 
 function setView(viewName) {
@@ -1812,6 +1942,10 @@ function shuffle(items) {
 }
 
 function chooseNextQuizIndex() {
+  if (isPracticeMode() && chordData.length) {
+    return quizAnsweredCount % chordData.length;
+  }
+
   if (chordData.length < 2) {
     return 0;
   }
@@ -1861,10 +1995,10 @@ function resumeAudioContext() {
 }
 
 async function playChord(chord, options = {}) {
-  const context = await ensureAudioContextReady();
   if (options.trackProgress !== false) {
-    updateStageProgress({ heard: true });
+    recordChordHeard(chord);
   }
+  const context = await ensureAudioContextReady();
   if (await playAudioFile(chord)) {
     return;
   }
@@ -1980,12 +2114,7 @@ elements.hideStoryList.addEventListener("click", () => {
   renderPracticeStageChrome();
 });
 elements.nextStageButton.addEventListener("click", () => {
-  const nextStageId = elements.nextStageButton.dataset.nextStageId;
-  if (nextStageId) {
-    setPracticeStage(nextStageId);
-    return;
-  }
-  setChordSet("all-main-chords");
+  goToNextCourse();
 });
 elements.openCatalog.addEventListener("click", () => setChordSet("all-main-chords"));
 elements.prevCard.addEventListener("click", () => {
@@ -2006,6 +2135,10 @@ elements.nextCard.addEventListener("click", () => {
 });
 elements.nextQuiz.addEventListener("click", () => {
   if (!chordData.length) {
+    return;
+  }
+  if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
+    goToNextCourse();
     return;
   }
   quizIndex = chooseNextQuizIndex();
