@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-indeterminate-progress-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-chroma-tuning-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -265,6 +265,24 @@
               </label>
             </div>
             <div class="import-settings">
+              <label>コード解析の楽器・音域
+                <select id="chroma-preset"></select>
+              </label>
+              <label>音域 下限(Hz)
+                <input id="chroma-min" type="number" min="30" max="1000" step="5" value="60">
+              </label>
+              <label>音域 上限(Hz)
+                <input id="chroma-max" type="number" min="200" max="8000" step="50" value="5000">
+              </label>
+              <label class="check-label">
+                <input id="chroma-log" type="checkbox">
+                対数圧縮
+              </label>
+            </div>
+            <p class="hint">
+              コード解析は<b>分離から再解析</b>で反映。コードが濁る・拾い間違うときは、<b>楽器・音域</b>で帯域を絞る（ドラムやシンバルの高域＝上限を下げる＝ローパス相当）。低音だけで根音を当てたいときは「低音重視」。
+            </p>
+            <div class="import-settings">
               <label>コード切替のねばり
                 <span class="tune-row">
                   <input id="tune-penalty" type="range" min="0.02" max="0.30" step="0.02" value="0.10">
@@ -333,9 +351,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-indeterminate-progress-v1"></script>
-    <script src="./dsp.js?v=20260612-indeterminate-progress-v1"></script>
-    <script src="./import.js?v=20260612-indeterminate-progress-v1"></script>
-    <script src="./transcribe.js?v=20260612-indeterminate-progress-v1"></script>
+    <script src="./song.js?v=20260612-chroma-tuning-v1"></script>
+    <script src="./dsp.js?v=20260612-chroma-tuning-v1"></script>
+    <script src="./import.js?v=20260612-chroma-tuning-v1"></script>
+    <script src="./transcribe.js?v=20260612-chroma-tuning-v1"></script>
   </body>
 </html>
