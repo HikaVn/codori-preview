@@ -255,15 +255,17 @@ async function scoreLoadMusicXml(file) {
   }
 }
 
-async function scoreLoadPdf(file) {
+async function scoreLoadPdf(file, beatsPerBar) {
   setScoreProgress("PDFを読み込んでる…（pdf.jsをダウンロード）");
+  scoreState.lastPdfFile = file;
+  const bpb = beatsPerBar || Number(scoreEl.beatsPerBar.value) || 4;
   try {
     const text = await extractPdfLyrics(file);
     const parsed = parseScoreText(text);
     let vectorMelody = [];
     try {
       const lib = await loadPdfjs();
-      const res = await extractPdfVectorMelody(file, lib.getDocument.bind(lib), lib.OPS);
+      const res = await extractPdfVectorMelody(file, lib.getDocument.bind(lib), lib.OPS, null, bpb);
       vectorMelody = res.melody || [];
     } catch (e) {
       console.warn("vector note read failed", e);
@@ -276,7 +278,7 @@ async function scoreLoadPdf(file) {
     loadScoreData({
       title: parsed.title,
       bpm: parsed.bpm,
-      beatsPerBar: 4,
+      beatsPerBar: bpb,
       melody: vectorMelody,
       chordEvents: parsed.chords.map((c, i) => ({ startBeat: i, chord: c })),
       words: [],
@@ -303,7 +305,15 @@ scoreEl.pdfButton?.addEventListener("click", () => scoreEl.pdfInput.click());
 scoreEl.pdfInput?.addEventListener("change", (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scoreLoadPdf(f); });
 
 scoreEl.bpm?.addEventListener("change", () => { scoreState.bpm = Number(scoreEl.bpm.value) || 100; syncScorePianoRoll(); });
-scoreEl.beatsPerBar?.addEventListener("change", () => { scoreState.beatsPerBar = Number(scoreEl.beatsPerBar.value) || 4; renderScore(); });
+scoreEl.beatsPerBar?.addEventListener("change", () => {
+  scoreState.beatsPerBar = Number(scoreEl.beatsPerBar.value) || 4;
+  // PDFは小節割りが拍子に依存するので、PDFなら拍子を変えたら読み直す
+  if (scoreState.lastPdfFile) {
+    scoreLoadPdf(scoreState.lastPdfFile, scoreState.beatsPerBar);
+  } else {
+    renderScore();
+  }
+});
 scoreEl.playMelody?.addEventListener("click", scorePlayMelody);
 scoreEl.fitLyrics?.addEventListener("click", scoreFitLyrics);
 scoreEl.convert?.addEventListener("click", scoreToSong);
