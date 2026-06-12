@@ -557,6 +557,12 @@ h1 {
   font-weight: 900;
 }
 
+a.song-mode-link {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
 .set-copy {
   min-width: 0;
 }

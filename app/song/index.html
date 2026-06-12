@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codori うた練習</title>
+    <link rel="stylesheet" href="./song.css?v=20260612-song-mode-v1">
+  </head>
+  <body>
+    <main class="song-shell">
+      <header class="song-top">
+        <div class="brand-block">
+          <a class="back-link" href="../index.html">← Codoriへ</a>
+          <h1>うた練習（β）</h1>
+        </div>
+        <nav class="mode-tabs" aria-label="モード切り替え">
+          <button class="mode-tab is-active" type="button" id="tab-edit">
+            <span>エディット</span>
+            <small>譜面をつくる</small>
+          </button>
+          <button class="mode-tab" type="button" id="tab-play">
+            <span>プレイ</span>
+            <small>自動伴奏で歌う</small>
+          </button>
+        </nav>
+      </header>
+
+      <!-- ===== エディットモード ===== -->
+      <section class="song-view is-active" id="edit-view" aria-label="エディットモード">
+        <div class="panel library-panel">
+          <label class="library-label">
+            保存した曲
+            <select id="song-select"></select>
+          </label>
+          <div class="library-buttons">
+            <button class="ghost-button" id="new-song" type="button">新規</button>
+            <button class="primary-button" id="save-song" type="button">保存</button>
+            <button class="ghost-button" id="delete-song" type="button">削除</button>
+            <button class="ghost-button" id="export-song" type="button">JSON書き出し</button>
+            <button class="ghost-button" id="import-song-button" type="button">JSON読み込み</button>
+            <input type="file" id="import-song" accept="application/json,.json" hidden>
+          </div>
+        </div>
+
+        <div class="panel meta-panel">
+          <label>曲名
+            <input id="title-input" type="text" placeholder="曲名">
+          </label>
+          <label>アーティスト
+            <input id="artist-input" type="text" placeholder="アーティスト">
+          </label>
+          <label>BPM
+            <input id="bpm-input" type="number" min="40" max="240" step="1" value="100">
+          </label>
+          <label>拍子
+            <select id="beats-per-bar">
+              <option value="4" selected>4/4</option>
+              <option value="3">3/4</option>
+              <option value="2">2/4</option>
+              <option value="6">6/8</option>
+            </select>
+          </label>
+          <label>1コードの基本拍数
+            <input id="default-beats" type="number" min="0.5" max="16" step="0.5" value="2">
+          </label>
+        </div>
+
+        <div class="panel editor-panel">
+          <div class="editor-head">
+            <h2>歌詞とコードの入力</h2>
+            <button class="primary-button" id="build-events" type="button">譜面をつくる</button>
+          </div>
+          <p class="hint">
+            歌詞の中に <code>[C]</code> や <code>[Am]</code> のようにコードを書く。<br>
+            行頭の <code>[Aメロ]</code> のような行はセクション名になる。コード前の歌詞はアウフタクト（先取り歌詞）。<br>
+            「譜面をつくる」でテキストから演奏イベントを生成し、下の表で拍数やコードを手なおしできる。<br>
+            ※ 独自曲・権利処理済みの曲で使ってね。
+          </p>
+          <textarea id="source-input" spellcheck="false"></textarea>
+        </div>
+
+        <div class="panel timeline-panel">
+          <div class="editor-head">
+            <h2>譜面の手なおし</h2>
+            <p class="timeline-summary" id="timeline-summary">まだ譜面がないよ。</p>
+          </div>
+          <div class="timeline-table" id="timeline"></div>
+        </div>
+      </section>
+
+      <!-- ===== プレイモード ===== -->
+      <section class="song-view" id="play-view" aria-label="プレイモード">
+        <div class="panel play-controls">
+          <div class="transport">
+            <button class="primary-button play-button" id="play-button" type="button">▶ 再生</button>
+            <button class="ghost-button" id="stop-button" type="button">⏹ 先頭へ</button>
+            <span class="play-position" id="play-position">小節 1</span>
+          </div>
+          <div class="play-options">
+            <label>BPM
+              <input id="play-bpm" type="number" min="40" max="240" step="1" value="100">
+            </label>
+            <label>移調
+              <span class="transpose-group">
+                <button class="ghost-button small-button" id="transpose-down" type="button">-1</button>
+                <span id="transpose-label">0</span>
+                <button class="ghost-button small-button" id="transpose-up" type="button">+1</button>
+              </span>
+            </label>
+            <label>流れる速さ
+              <input id="note-speed" type="range" min="60" max="200" step="10" value="110">
+            </label>
+            <label class="check-label">
+              <input id="metronome-toggle" type="checkbox">
+              メトロノーム
+            </label>
+            <label class="check-label">
+              <input id="countin-toggle" type="checkbox" checked>
+              カウントイン
+            </label>
+            <label class="check-label">
+              <input id="loop-toggle" type="checkbox">
+              ループ
+            </label>
+          </div>
+          <p class="play-hint">ノートをクリックすると、そこが再生開始位置になるよ。</p>
+        </div>
+
+        <div class="panel lane-wrap" id="lane-wrap">
+          <div class="stage-area">
+            <div class="stage-bird" id="stage-bird">
+              <img id="stage-bird-img" src="../../assets/app/characters/action-candidate-integrated-v3/action-major.png" alt="いまのコードのCodori">
+            </div>
+            <div class="stage-chord" id="stage-chord">-</div>
+          </div>
+          <div class="lane" id="lane">
+            <div class="lane-track" id="lane-track"></div>
+            <div class="judge-line" aria-hidden="true"></div>
+            <div class="count-overlay is-hidden" id="count-overlay">4</div>
+          </div>
+          <div class="current-line" id="current-line">再生すると、いまの歌詞がここに出るよ。</div>
+        </div>
+      </section>
+    </main>
+    <script src="./song.js?v=20260612-song-mode-v1"></script>
+  </body>
+</html>
