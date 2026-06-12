@@ -33,6 +33,10 @@ const importEl = {
   tuneClarity: document.querySelector("#tune-clarity"),
   tuneClarityVal: document.querySelector("#tune-clarity-val"),
   separationMethod: document.querySelector("#separation-method"),
+  chromaPreset: document.querySelector("#chroma-preset"),
+  chromaMinHz: document.querySelector("#chroma-min"),
+  chromaMaxHz: document.querySelector("#chroma-max"),
+  chromaLog: document.querySelector("#chroma-log"),
   tuneRepet: document.querySelector("#tune-repet"),
   tuneRepetVal: document.querySelector("#tune-repet-val"),
   reanalyzeMelody: document.querySelector("#reanalyze-melody"),
@@ -48,7 +52,20 @@ const importTuning = {
   vocalSideFactor: 1.2,
   clarityThreshold: 0.55,
   separationMethod: "center-repet",
-  repetStrength: 1.0
+  repetStrength: 1.0,
+  chromaPreset: "auto",
+  chromaMinHz: 60,
+  chromaMaxHz: 5000,
+  chromaLogCompress: false
+};
+
+// コード解析の音域プリセット（楽器ごとに和音が見えやすい帯域へ絞る）
+const CHROMA_PRESETS = {
+  auto: { label: "おまかせ（60–5000Hz）", minHz: 60, maxHz: 5000 },
+  guitar: { label: "ギター / ウクレレ（80–1200Hz）", minHz: 80, maxHz: 1200 },
+  piano: { label: "ピアノ（55–2200Hz）", minHz: 55, maxHz: 2200 },
+  bass: { label: "低音重視・根音（50–700Hz）", minHz: 50, maxHz: 700 },
+  backing: { label: "高音のバッキング（200–2000Hz）", minHz: 200, maxHz: 2000 }
 };
 
 const importState = {
@@ -168,6 +185,9 @@ async function runImportAnalysis() {
       method: importTuning.separationMethod,
       vocalSideFactor: importTuning.vocalSideFactor,
       repetStrength: importTuning.repetStrength,
+      chromaMinHz: importTuning.chromaMinHz,
+      chromaMaxHz: importTuning.chromaMaxHz,
+      chromaLogCompress: importTuning.chromaLogCompress,
       onProgress: (ratio) => setImportProgress("ボーカルと伴奏を分けてる…", 0.05 + ratio * 0.6)
     });
 
@@ -419,6 +439,9 @@ async function reanalyzeFull() {
       method: importTuning.separationMethod,
       vocalSideFactor: importTuning.vocalSideFactor,
       repetStrength: importTuning.repetStrength,
+      chromaMinHz: importTuning.chromaMinHz,
+      chromaMaxHz: importTuning.chromaMaxHz,
+      chromaLogCompress: importTuning.chromaLogCompress,
       onProgress: (ratio) => setImportProgress("分離からやりなおしてる…", ratio * 0.7)
     });
     setImportProgress("メロディを聞き取ってる…", 0.72);
@@ -632,6 +655,42 @@ importEl.tuneClarity?.addEventListener("input", () => {
 importEl.separationMethod?.addEventListener("change", () => {
   importTuning.separationMethod = importEl.separationMethod.value;
 });
+
+if (importEl.chromaPreset) {
+  importEl.chromaPreset.innerHTML = "";
+  Object.entries(CHROMA_PRESETS).forEach(([key, preset]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = preset.label;
+    importEl.chromaPreset.appendChild(option);
+  });
+  const customOption = document.createElement("option");
+  customOption.value = "custom";
+  customOption.textContent = "カスタム（手動指定）";
+  importEl.chromaPreset.appendChild(customOption);
+  const applyChromaPreset = (key) => {
+    const preset = CHROMA_PRESETS[key] || CHROMA_PRESETS.auto;
+    importTuning.chromaPreset = key;
+    if (key !== "custom") {
+      importTuning.chromaMinHz = preset.minHz;
+      importTuning.chromaMaxHz = preset.maxHz;
+      importEl.chromaMinHz.value = String(preset.minHz);
+      importEl.chromaMaxHz.value = String(preset.maxHz);
+    }
+  };
+  importEl.chromaPreset.addEventListener("change", () => applyChromaPreset(importEl.chromaPreset.value));
+  const syncRange = () => {
+    importTuning.chromaMinHz = Math.max(30, Math.min(1000, Number(importEl.chromaMinHz.value) || 65));
+    importTuning.chromaMaxHz = Math.max(importTuning.chromaMinHz + 50, Math.min(8000, Number(importEl.chromaMaxHz.value) || 2000));
+    importTuning.chromaPreset = "custom";
+    importEl.chromaPreset.value = "custom";
+  };
+  importEl.chromaMinHz.addEventListener("change", syncRange);
+  importEl.chromaMaxHz.addEventListener("change", syncRange);
+  importEl.chromaLog.addEventListener("change", () => {
+    importTuning.chromaLogCompress = importEl.chromaLog.checked;
+  });
+}
 importEl.tuneRepet?.addEventListener("input", () => {
   importTuning.repetStrength = Number(importEl.tuneRepet.value);
   importEl.tuneRepetVal.textContent = importTuning.repetStrength.toFixed(1);

@@ -156,6 +156,10 @@ async function analyzeAudio(options) {
   const method = options.method || "center-repet";
   const repetStrength = options.repetStrength ?? 1.0;
   const useRepet = method !== "center" && repetStrength > 0;
+  // コード解析（クロマ）用の音域と圧縮。楽器/音域指定で精度を上げる。
+  const chromaMinHz = options.chromaMinHz ?? 60;
+  const chromaMaxHz = options.chromaMaxHz ?? 5000;
+  const chromaLogCompress = options.chromaLogCompress === true;
 
   const size = DSP_FFT_SIZE;
   const hop = DSP_HOP;
@@ -269,10 +273,12 @@ async function analyzeAudio(options) {
       iRe[k] = mRe[k] * (1 - mask) + sRe[k];
       iIm[k] = mIm[k] * (1 - mask) + sIm[k];
 
-      if (freq >= 60 && freq <= 5000) {
+      if (freq >= chromaMinHz && freq <= chromaMaxHz) {
         const instMag = Math.hypot(iRe[k], iIm[k]);
+        // 対数圧縮: 大きい音の支配を抑え、コードの和声成分を拾いやすくする
+        const weight = chromaLogCompress ? Math.log(1 + instMag) : instMag;
         const pc = ((Math.round(midiFromFrequency(freq)) % 12) + 12) % 12;
-        chroma[f * 12 + pc] += instMag;
+        chroma[f * 12 + pc] += weight;
       }
     }
     flux[f] = fluxSum;
