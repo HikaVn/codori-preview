@@ -18,6 +18,23 @@ const FAMILY_ASSETS = {
   aug: "action-aug.png"
 };
 
+const FINGERING_BASE = "../../assets/app/fingering/all-main-chords/";
+const SHARP_TO_FLAT = { "A#": "Bb", "C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab" };
+// 運指SVGはコード11種類ぶんなので、細かいコードは近いファミリーの図で代用する
+const FAMILY_FINGERING_SUFFIX = {
+  Major: "",
+  minor: "m",
+  "7": "7",
+  m7: "m7",
+  maj7: "maj7",
+  mM7: "mM7",
+  sus4: "sus4",
+  add9: "add9",
+  dim: "dim",
+  aug: "aug",
+  "m7-5": "m7_5"
+};
+
 const SHARP_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT_TO_SHARP = { Db: "C#", Eb: "D#", Gb: "F#", Ab: "G#", Bb: "A#" };
 const ROOT_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -60,19 +77,24 @@ const RHYTHM_PATTERNS = {
   none: { label: "伴奏なし（元音源だけ）", unit: null, silent: true }
 };
 
-const DEMO_SOURCE = `[まえ奏]
-[C]　[G7]　[C]　[C7]
+// 全11種類のコードファミリーが出てくる、オリジナルのジャズ風デモ曲
+const DEMO_SOURCE = `[イントロ]
+[Cmaj7]　[Bm7-5]　[E7]　[Am7]　[Dm7]　[Gsus4]　[G7]　[Cadd9]
 
 [Aメロ]
-[F]そらを とべ[C]たら　[G7]どこへ ゆこ[C]う
-[F]ことりと う[C]たう　[G7]ちいさな う[C]た
+[C]ほしが またたく[C#dim]よるは　[Dm7]スウィングしたく[G7]なる
+[C]つきも くちぶえ[Caug]ふいて　[F]ふわり [G7]おどり[Cmaj7]だす
+
+[Bメロ]
+[Am]よるの[AmM7]とびらを　[Am7]そっと ひらい[D7]たら
+[Bm7-5]ことりが [E7]うたう　[Fm]ひみつの[G7]メロディ
 
 [サビ]
-とりの[F]うたに みみを すま[Dm]せて
-[Bb]きょうも いっぽ[C7]　あるいて ゆ[F]く
+[Cmaj7]ゆれて [A7]はねて　[Dm7]リズムに[G7]のって
+[Em7]こころ [A7]かるく　[Dm7]あさまで[Gsus4]とぼ[G7]う　[Cadd9]
 
-[あと奏]
-[F]　[Bb]　[C7]　[F]`;
+[アウトロ]
+[Dm7]　[G7]　[Cmaj7]　[Caug]　[F]　[Bm7-5]　[E7]　[Cadd9]`;
 
 // ===== 状態 =====
 
@@ -147,6 +169,10 @@ const el = {
   stageBird: document.querySelector("#stage-bird"),
   stageBirdImg: document.querySelector("#stage-bird-img"),
   stageChord: document.querySelector("#stage-chord"),
+  stageFingeringImg: document.querySelector("#stage-fingering-img"),
+  stageNext: document.querySelector("#stage-next"),
+  nextChordName: document.querySelector("#next-chord-name"),
+  nextFingeringImg: document.querySelector("#next-fingering-img"),
   currentLine: document.querySelector("#current-line")
 };
 
@@ -221,6 +247,18 @@ function chordFamily(chord) {
 function characterAssetForChord(chord) {
   const family = chordFamily(chord);
   return CHARACTER_BASE + (FAMILY_ASSETS[family] || FAMILY_ASSETS.Major);
+}
+
+function fingeringAssetForChord(chord) {
+  const main = String(chord || "").split("/")[0].trim();
+  const match = main.match(/^([A-G])(#|b)?/);
+  if (!match) {
+    return null;
+  }
+  let root = match[1] + (match[2] || "");
+  root = SHARP_TO_FLAT[root] || root;
+  const suffix = FAMILY_FINGERING_SUFFIX[chordFamily(chord)] ?? "";
+  return `${FINGERING_BASE}ukulele_${root}${suffix}_vertical_strings.svg`;
 }
 
 function midiToFrequency(midi) {
@@ -352,6 +390,31 @@ function ensureAudioContext() {
   return audioCtx;
 }
 
+// 鳴っている最中のコード（コード切り替え時にカットするための追跡）
+let ringingChords = [];
+
+function cutRingingChords(time) {
+  ringingChords.forEach((node) => {
+    if (node.until <= time) {
+      return;
+    }
+    const gainParam = node.gain.gain;
+    try {
+      gainParam.cancelAndHoldAtTime(time);
+    } catch (error) {
+      gainParam.cancelScheduledValues(time);
+      gainParam.setValueAtTime(0.1, time);
+    }
+    gainParam.exponentialRampToValueAtTime(0.0001, time + 0.06);
+  });
+  ringingChords = [];
+}
+
+// 音あて（コードカード）と同じ鳴らし方：0.1秒間隔のアルペジオ＋倍音0.2＋長い余韻。
+// 余韻はコード切り替え時に cutRingingChords でカットされる。
+const STRUM_ARPEGGIO_INTERVAL = 0.1;
+const STRUM_HARMONIC_RATIO = 0.2;
+
 function strumChord(chord, time, beats, strumGain = 1) {
   const frequencies = chordFrequencies(chord);
   if (!frequencies) {
@@ -359,12 +422,20 @@ function strumChord(chord, time, beats, strumGain = 1) {
   }
   const ctx = audioCtx;
   const secPerBeatNow = 60 / song.bpm;
-  const duration = Math.min(Math.max(beats * secPerBeatNow, 0.35), 2.4);
+  const duration = Math.min(Math.max(beats * secPerBeatNow + 0.5, 0.8), 2.6);
+  const masterHold = Math.min(1.15, duration * 0.45);
   const master = ctx.createGain();
-  master.gain.value = 0.16;
+  master.gain.setValueAtTime(0.0001, time);
+  master.gain.exponentialRampToValueAtTime(0.16 * strumGain, time + 0.04);
+  master.gain.setValueAtTime(0.16 * strumGain, time + masterHold);
+  master.gain.exponentialRampToValueAtTime(0.0001, time + duration);
   master.connect(ctx.destination);
+  ringingChords.push({ gain: master, until: time + duration + 0.3 });
+
   frequencies.forEach((frequency, index) => {
-    const start = time + index * 0.035;
+    const start = time + index * STRUM_ARPEGGIO_INTERVAL;
+    const end = Math.max(start + 0.2, time + duration);
+    const hold = Math.min(start + 1.05, end - 0.1);
     const osc = ctx.createOscillator();
     const harmonic = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -374,23 +445,25 @@ function strumChord(chord, time, beats, strumGain = 1) {
     harmonic.type = "sine";
     harmonic.frequency.value = frequency * 2;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.18 * strumGain, start + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
+    gain.gain.setValueAtTime(0.13, hold);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
     harmonicGain.gain.setValueAtTime(0.0001, start);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.045 * strumGain, start + 0.02);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.7);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.16 * STRUM_HARMONIC_RATIO, start + 0.025);
+    harmonicGain.gain.setValueAtTime(0.13 * STRUM_HARMONIC_RATIO, hold);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, end);
     osc.connect(gain);
     harmonic.connect(harmonicGain);
     gain.connect(master);
     harmonicGain.connect(master);
     osc.start(start);
     harmonic.start(start);
-    osc.stop(start + duration + 0.05);
-    harmonic.stop(start + duration + 0.05);
+    osc.stop(end + 0.05);
+    harmonic.stop(end + 0.05);
   });
 }
 
-function playTone(frequency, time, duration, gain, type = "sine") {
+function playTone(frequency, time, duration, gain, type = "sine", registerAsChord = false) {
   if (!frequency) {
     return;
   }
@@ -407,6 +480,9 @@ function playTone(frequency, time, duration, gain, type = "sine") {
   gainNode.connect(ctx.destination);
   osc.start(time);
   osc.stop(time + dur + 0.05);
+  if (registerAsChord) {
+    ringingChords.push({ gain: gainNode, until: time + dur + 0.1 });
+  }
 }
 
 function metronomeClick(time, isBarHead) {
@@ -456,6 +532,7 @@ function startPlayback(fromBeat, withCountIn) {
   player.nextHitIdx = findScheduleIndex(playbackHits, fromBeat, (hit) => hit.beat);
   player.nextMelodyIdx = findScheduleIndex(song.melody || [], fromBeat, (note) => note.startBeat);
   player.activeNoteIdx = -1;
+  player.lastHitChord = null;
   startOriginalAudio();
   player.playing = true;
   player.schedTimer = window.setInterval(schedulerTick, 30);
@@ -489,10 +566,16 @@ function schedulerTick() {
     }
     if (time >= audioCtx.currentTime - 0.05) {
       const chordName = transposeChord(hit.chord, song.transpose);
+      const pattern = RHYTHM_PATTERNS[song.rhythmPattern] || RHYTHM_PATTERNS.whole;
+      // コードが切り替わる瞬間は、前のコードの余韻をカットしてから次を鳴らす
+      if (!pattern.unit || chordName !== player.lastHitChord) {
+        cutRingingChords(Math.max(time - 0.001, audioCtx.currentTime));
+      }
+      player.lastHitChord = chordName;
       if (hit.arpIndex !== null && hit.arpIndex !== undefined) {
         const frequencies = chordFrequencies(chordName);
         if (frequencies) {
-          playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain);
+          playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain, "sine", true);
         }
       } else {
         strumChord(chordName, time, hit.beats, hit.gain);
@@ -586,10 +669,14 @@ function stopPlayback() {
   setTrackTransform(player.startBeat);
   clearActiveNote();
   updatePositionLabel(player.startBeat);
+  updateStageForBeat(player.startBeat);
 }
 
 function haltPlayback() {
   player.playing = false;
+  if (audioCtx) {
+    cutRingingChords(audioCtx.currentTime);
+  }
   if (player.audioSource) {
     try {
       player.audioSource.stop();
@@ -693,11 +780,69 @@ function updateActiveNote(beat) {
     const shown = transposeChord(note.chord, song.transpose);
     el.stageChord.textContent = shown;
     el.stageBirdImg.src = characterAssetForChord(note.chord);
+    setFingeringImage(el.stageFingeringImg, shown);
     el.stageBird.classList.remove("is-pop");
     void el.stageBird.offsetWidth;
     el.stageBird.classList.add("is-pop");
   }
+  updateNextChordDisplay(index);
   renderCurrentLine(note);
+}
+
+function setFingeringImage(image, chordName) {
+  if (!image) {
+    return;
+  }
+  const asset = chordName ? fingeringAssetForChord(chordName) : null;
+  if (!asset) {
+    image.style.visibility = "hidden";
+    return;
+  }
+  image.style.visibility = "visible";
+  image.src = asset;
+}
+
+function updateNextChordDisplay(fromNoteIndex) {
+  if (!el.stageNext) {
+    return;
+  }
+  let next = null;
+  for (let index = fromNoteIndex + 1; index < positioned.notes.length; index += 1) {
+    if (positioned.notes[index].chord) {
+      next = positioned.notes[index];
+      break;
+    }
+  }
+  el.stageNext.classList.toggle("is-hidden", !next);
+  if (next) {
+    const shown = transposeChord(next.chord, song.transpose);
+    el.nextChordName.textContent = shown;
+    setFingeringImage(el.nextFingeringImg, shown);
+  }
+}
+
+// 停止中・開始位置変更時にも、その位置のコードでステージ表示を合わせる
+function updateStageForBeat(beat) {
+  let index = -1;
+  for (let i = 0; i < positioned.notes.length; i += 1) {
+    const note = positioned.notes[i];
+    if (note.chord && note.startBeat + (Number(note.beats) || 0) > beat + 1e-6) {
+      index = i;
+      break;
+    }
+  }
+  if (index < 0) {
+    el.stageChord.textContent = "-";
+    setFingeringImage(el.stageFingeringImg, null);
+    updateNextChordDisplay(positioned.notes.length);
+    return;
+  }
+  const note = positioned.notes[index];
+  const shown = transposeChord(note.chord, song.transpose);
+  el.stageChord.textContent = shown;
+  el.stageBirdImg.src = characterAssetForChord(note.chord);
+  setFingeringImage(el.stageFingeringImg, shown);
+  updateNextChordDisplay(index);
 }
 
 function clearActiveNote() {
@@ -793,6 +938,7 @@ function setStartBeat(beat) {
   if (!player.playing) {
     setTrackTransform(beat);
     updatePositionLabel(beat);
+    updateStageForBeat(beat);
   }
 }
 
@@ -928,9 +1074,9 @@ function blankSong() {
 
 function demoSong() {
   const data = blankSong();
-  data.title = "ことりのさんぽ（デモ）";
+  data.title = "よるのコドリ・スウィング（デモ）";
   data.artist = "Codori";
-  data.bpm = 96;
+  data.bpm = 122;
   data.source = DEMO_SOURCE;
   data.events = buildEventsFromSource(DEMO_SOURCE, data.defaultBeats);
   return data;
@@ -1143,6 +1289,7 @@ function setMode(mode) {
       renderLane();
     }
     updatePositionLabel(player.pausedBeat ?? player.startBeat);
+    updateStageForBeat(player.pausedBeat ?? player.startBeat);
   } else if (player.playing) {
     pausePlayback();
   }
