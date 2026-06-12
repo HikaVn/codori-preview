@@ -2,7 +2,7 @@
 // 画像OMRと違い、ベクターPDFは符頭が音楽フォントのグリフとして正確な座標で得られる。
 // 伝統的OMRパイプライン（五線検出→符頭検出→五線からの距離で音程）をベクター上で行う。
 // 参考: 伝統的OMR pipeline（staff detection → symbol recognition → pitch from staff position）。
-// 音価（音符の長さ）は符頭位置だけからは復元できないので一律にし、ピアノロールで手なおしする前提。
+// 音価は、塗り/中抜き符頭・符幹・連桁から推定（4分/8分/2分/全音符）。細部はピアノロールで手なおし。
 // musicxml.js（PDFJS_CDN等）/ import.js の後に読み込む。
 
 function pdfMul(a, b) {
@@ -25,7 +25,9 @@ function extractPageVectors(ol, OPS, pageH) {
   const glyphs = [];
   const hseg = [];
   const vseg = [];
+  const beams = [];
   let pend = [];
+  let bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
   for (let i = 0; i < ol.fnArray.length; i += 1) {
     const fn = ol.fnArray[i];
     const args = ol.argsArray[i];
@@ -51,11 +53,16 @@ function extractPageVectors(ol, OPS, pageH) {
       let k = 0;
       let cur = null;
       pend = [];
+      bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
+      const track = (p) => {
+        bbox.minx = Math.min(bbox.minx, p[0]); bbox.maxx = Math.max(bbox.maxx, p[0]);
+        bbox.miny = Math.min(bbox.miny, p[1]); bbox.maxy = Math.max(bbox.maxy, p[1]);
+      };
       for (const op of ops) {
-        if (op === OPS.moveTo) { cur = pdfApply(ctm, co[k], co[k + 1]); k += 2; }
-        else if (op === OPS.lineTo) { const p = pdfApply(ctm, co[k], co[k + 1]); k += 2; if (cur) pend.push([cur, p]); cur = p; }
-        else if (op === OPS.curveTo) { k += 6; cur = pdfApply(ctm, co[k - 2], co[k - 1]); }
-        else if (op === OPS.rectangle) { const x = co[k]; const y = co[k + 1]; const w = co[k + 2]; const h = co[k + 3]; k += 4; const a = pdfApply(ctm, x, y); const b = pdfApply(ctm, x + w, y + h); pend.push([a, [b[0], a[1]]]); pend.push([a, [a[0], b[1]]]); }
+        if (op === OPS.moveTo) { cur = pdfApply(ctm, co[k], co[k + 1]); k += 2; track(cur); }
+        else if (op === OPS.lineTo) { const p = pdfApply(ctm, co[k], co[k + 1]); k += 2; if (cur) pend.push([cur, p]); cur = p; track(p); }
+        else if (op === OPS.curveTo) { k += 6; cur = pdfApply(ctm, co[k - 2], co[k - 1]); track(cur); }
+        else if (op === OPS.rectangle) { const x = co[k]; const y = co[k + 1]; const w = co[k + 2]; const h = co[k + 3]; k += 4; const a = pdfApply(ctm, x, y); const b = pdfApply(ctm, x + w, y + h); pend.push([a, [b[0], a[1]]]); pend.push([a, [a[0], b[1]]]); track(a); track(b); }
       }
     } else if (fn === OPS.stroke || fn === OPS.eoFillStroke || fn === OPS.fill || fn === OPS.eoFill) {
       for (const [a, b] of pend) {
@@ -64,10 +71,18 @@ function extractPageVectors(ol, OPS, pageH) {
         if (dx > 12 && dy < 1.5) hseg.push({ y: pageH - (a[1] + b[1]) / 2, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
         else if (dy > 8 && dx < 1.6) vseg.push({ x: (a[0] + b[0]) / 2, y0: pageH - Math.max(a[1], b[1]), y1: pageH - Math.min(a[1], b[1]) });
       }
+      // 連桁（ビーム）候補: 横長・薄い塗り
+      if ((fn === OPS.fill || fn === OPS.eoFill) && bbox.maxx > bbox.minx) {
+        const w = bbox.maxx - bbox.minx;
+        const h = bbox.maxy - bbox.miny;
+        if (w >= 6 && w <= 40 && h >= 1 && h <= 6) {
+          beams.push({ x0: bbox.minx, x1: bbox.maxx, y: pageH - (bbox.miny + bbox.maxy) / 2 });
+        }
+      }
       pend = [];
     }
   }
-  return { glyphs, hseg, vseg };
+  return { glyphs, hseg, vseg, beams };
 }
 
 function medianOfArray(arr) {
@@ -142,25 +157,34 @@ function midiFromStaffY(y, staff) {
   return PDF_SEMI[letter] + (octave + 1) * 12;
 }
 
-// ページ単位でベクター譜を読む → メロディノート（実験的）
+// ページ単位でベクター譜を読む → メロディノート（実験的）。音価も推定する。
 function readVectorScorePage(ol, OPS, pageH, pageW) {
-  const { glyphs, hseg } = extractPageVectors(ol, OPS, pageH);
+  const { glyphs, hseg, vseg, beams } = extractPageVectors(ol, OPS, pageH);
   const staves = findStaves(hseg, pageW, pageH);
   if (!staves.length || !glyphs.length) {
     return { notes: [], staves: 0 };
   }
-  // 符頭グリフ = 縦位置の種類が最も多いコード（音楽フォントの最頻記号）
+  // 符頭グリフ: 縦位置の種類が多い上位2コード（塗り＝4分/8分、中抜き＝2分/全音符）
   const byCode = {};
   for (const g of glyphs) {
-    byCode[g.code] = byCode[g.code] || new Set();
-    byCode[g.code].add(Math.round(g.y));
+    byCode[g.code] = byCode[g.code] || { ys: new Set(), n: 0 };
+    byCode[g.code].ys.add(Math.round(g.y));
+    byCode[g.code].n += 1;
   }
-  const headCode = Object.entries(byCode).sort((a, b) => b[1].size - a[1].size)[0][0];
-  const heads = glyphs.filter((g) => String(g.code) === headCode);
+  const ranked = Object.entries(byCode).sort((a, b) => b[1].ys.size - a[1].ys.size);
+  const filledCode = ranked[0] ? ranked[0][0] : null;
+  const openCode = ranked[1] && ranked[1][1].ys.size >= 10 ? ranked[1][0] : null;
+  const filled = glyphs.filter((g) => String(g.code) === filledCode);
+  const openGlyphs = openCode ? glyphs.filter((g) => String(g.code) === openCode) : [];
+  // 中抜き候補が「臨時記号」でないか: すぐ右(2〜10px)に塗り符頭が同じYであればNG
+  const openHeads = openGlyphs.filter((o) =>
+    !filled.some((f) => Math.abs(f.y - o.y) < 3 && f.x - o.x > 1.5 && f.x - o.x < 11));
+
+  const stems = vseg.filter((v) => { const len = v.y1 - v.y0; return len > 6 && len < 40; });
+  const headList = filled.map((g) => ({ ...g, filled: true })).concat(openHeads.map((g) => ({ ...g, filled: false })));
 
   const notes = [];
-  for (const h of heads) {
-    // 最も近い五線に割り当て（中心が±2オクターブ＝加線範囲内のものだけ）
+  for (const h of headList) {
     let staff = null;
     let bestD = Infinity;
     for (const s of staves) {
@@ -169,15 +193,28 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       if (d < bestD) { bestD = d; staff = s; }
     }
     if (!staff || bestD > staff.spacing * 14) {
-      continue; // 五線から遠すぎる＝誤検出
+      continue;
     }
     const midi = midiFromStaffY(h.y, staff);
     if (midi < 36 || midi > 88) {
-      continue; // 声域外＝誤り
+      continue;
     }
-    notes.push({ x: h.x, staffTop: staff.top, midi });
+    // 符幹: 符頭のx近く（±4px）で、符頭yから上下に伸びる縦線
+    const stem = stems.find((v) => Math.abs(v.x - h.x) < 4 && v.y0 < h.y + 4 && v.y1 > h.y - 4);
+    // 連桁: 符頭xの近くで、符頭から少し離れたy（符幹の先）に横長の塗り
+    const beamed = stem && beams.some((b) =>
+      h.x >= b.x0 - 3 && h.x <= b.x1 + 3 && Math.abs(b.y - h.y) > staff.spacing * 1.5 && Math.abs(b.y - h.y) < staff.spacing * 8);
+    let beats;
+    if (!h.filled) {
+      beats = stem ? 2 : 4;           // 中抜き＋幹=2分、幹なし=全音符
+    } else if (beamed) {
+      beats = 0.5;                     // 塗り＋連桁=8分
+    } else {
+      beats = 1;                       // 塗り＋幹=4分（既定）
+    }
+    notes.push({ x: h.x, staffTop: staff.top, midi, beats });
   }
-  // 重複符頭の除去（同じ段で x がほぼ同じ＆同音＝二重検出や付点を1つに）
+  // 重複符頭の除去
   notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
   const deduped = [];
   for (const n of notes) {
@@ -190,8 +227,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   return { notes: deduped, staves: staves.length };
 }
 
-// PDF全ページのベクター譜 → 拍つきメロディ。
-// 譜段（システム）を上から順、その中はx昇順で読み、ノートを一律の音価で並べる。
+// PDF全ページのベクター譜 → 拍つきメロディ（推定した音価で並べる）。
 async function extractPdfVectorMelody(file, getDocument, OPS, onProgress) {
   const data = await file.arrayBuffer();
   const pdf = await getDocument({ data }).promise;
@@ -208,7 +244,12 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress) {
     notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
     notes.forEach((n) => ordered.push({ page: p, ...n }));
   }
-  // 読み順に1音1拍で並べる（音価はあとでピアノロール／手なおし）
-  const melody = ordered.map((n, i) => ({ startBeat: i, beats: 1, midi: n.midi }));
+  // 読み順に、推定した音価ぶんずつ累積して並べる（小節境界は手なおし前提）
+  let beat = 0;
+  const melody = ordered.map((n) => {
+    const note = { startBeat: beat, beats: n.beats || 1, midi: n.midi };
+    beat += n.beats || 1;
+    return note;
+  });
   return { melody, noteCount: ordered.length };
 }
