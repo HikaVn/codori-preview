@@ -20,11 +20,13 @@ const transcribeEl = {
   progressBar: document.querySelector("#transcribe-progress-bar"),
   progressLabel: document.querySelector("#transcribe-progress-label"),
   list: document.querySelector("#transcribe-list"),
-  status: document.querySelector("#transcribe-status")
+  status: document.querySelector("#transcribe-status"),
+  cancel: document.querySelector("#transcribe-progress-cancel")
 };
 
 const transcribeState = {
   busy: false,
+  cancelRequested: false,
   module: null,
   asr: null,
   asrModelId: null,
@@ -47,6 +49,7 @@ function setTranscribeProgress(label, ratio) {
 function hideTranscribeProgress() {
   transcribeEl.progress.classList.add("is-hidden");
   transcribeEl.progressBar.classList.remove("is-indeterminate");
+  transcribeEl.cancel?.classList.add("is-hidden");
 }
 
 async function loadTransformersModule() {
@@ -99,7 +102,9 @@ async function runTranscription() {
     return;
   }
   transcribeState.busy = true;
+  transcribeState.cancelRequested = false;
   transcribeEl.button.disabled = true;
+  transcribeEl.cancel?.classList.remove("is-hidden");
   try {
     setTranscribeProgress("文字起こしの準備中…", 0.02);
     const asr = await loadWhisperPipeline(transcribeEl.model.value);
@@ -129,6 +134,11 @@ async function runTranscription() {
         text: String(chunk.text || "").trim()
       }))
       .filter((chunk) => chunk.text);
+    if (transcribeState.cancelRequested) {
+      hideTranscribeProgress();
+      transcribeEl.status.textContent = "文字起こしをキャンセルしたよ。";
+      return;
+    }
     const chunks = cleanTranscriptChunks(rawChunks);
     transcribeState.chunks = chunks;
     renderTranscriptList();
@@ -144,7 +154,9 @@ async function runTranscription() {
     window.alert("文字起こしに失敗しちゃった。ネットワーク（モデルのダウンロード）と、対応ブラウザかどうかを確認してね。");
   } finally {
     transcribeState.busy = false;
+    transcribeEl.cancelRequested = false;
     transcribeEl.button.disabled = false;
+    transcribeEl.cancel?.classList.add("is-hidden");
   }
 }
 
@@ -294,3 +306,7 @@ if (transcribeEl.model) {
   });
 }
 transcribeEl.button?.addEventListener("click", runTranscription);
+transcribeEl.cancel?.addEventListener("click", () => {
+  transcribeState.cancelRequested = true;
+  transcribeEl.progressLabel.textContent = "キャンセル中…（モデルの処理が終わると止まるよ）";
+});

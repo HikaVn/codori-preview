@@ -1511,3 +1511,15 @@ button {
   background: linear-gradient(180deg, var(--blue), var(--green));
   min-height: 6px;
 }
+
+/* 進捗バーのキャンセルボタン行 */
+.import-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.import-progress-head p {
+  margin: 0;
+}

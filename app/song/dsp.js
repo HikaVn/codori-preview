@@ -11,6 +11,9 @@ const DSP_RATE = 22050;
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+// 長い処理のキャンセル用（shouldCancl() が true になったら投げる）
+const CANCELLED = "DSP_CANCELLED";
+
 const CHORD_TEMPLATES = (() => {
   const shapes = [
     { suffix: "", notes: [0, 4, 7], bonus: 0.02 },
@@ -152,6 +155,7 @@ function medianOf(values, from, to) {
 
 async function analyzeAudio(options) {
   const { mid, side, sampleRate, onProgress } = options;
+  const shouldCancel = options.shouldCancel || (() => false);
   const vocalSideFactor = options.vocalSideFactor ?? 1.2;
   const method = options.method || "center-repet";
   const repetStrength = options.repetStrength ?? 1.0;
@@ -203,6 +207,9 @@ async function analyzeAudio(options) {
         refMag[r * bins + k] = Math.hypot(mRe[k], mIm[k]);
       }
       if (onProgress && r % 64 === 0) {
+        if (shouldCancel()) {
+          throw CANCELLED;
+        }
         onProgress((r / refFrames) * 0.4);
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
@@ -299,6 +306,9 @@ async function analyzeAudio(options) {
     }
 
     if (onProgress && f % 64 === 0) {
+      if (shouldCancel()) {
+        throw CANCELLED;
+      }
       onProgress(progressBase + (f / frames) * progressSpan);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
@@ -585,6 +595,7 @@ function yinPitch(frame, sampleRate, minHz = 75, maxHz = 900, threshold = 0.15) 
 async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
   const clarityThreshold = options.clarityThreshold ?? 0.55;
   const rmsGate = options.rmsGate ?? 0.004;
+  const shouldCancel = options.shouldCancel || (() => false);
   const down = resampleLinear(vocal, sampleRate, 11025);
   const rate = 11025;
   const winSize = 1024;
@@ -607,6 +618,9 @@ async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
       }
     }
     if (onProgress && f % 200 === 0) {
+      if (shouldCancel()) {
+        throw CANCELLED;
+      }
       onProgress(f / frames);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
@@ -1309,6 +1323,7 @@ if (typeof module !== "undefined" && module.exports) {
     assignTimedLyricsToEvents,
     softMaskValue,
     medianOf,
+    CANCELLED,
     detectOnsets,
     foldedSemitoneError,
     scoreSingingPerformance,

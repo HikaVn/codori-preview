@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-practice-tuning-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-cancel-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -320,7 +320,10 @@
           </label>
           <button class="primary-button" id="import-analyze" type="button">解析する</button>
           <div class="import-progress is-hidden" id="import-progress">
-            <p id="import-progress-label">解析中…</p>
+            <div class="import-progress-head">
+              <p id="import-progress-label">解析中…</p>
+              <button class="ghost-button small-button is-hidden" id="import-progress-cancel" type="button">キャンセル</button>
+            </div>
             <div class="import-progress-track"><div class="import-progress-bar" id="import-progress-bar"></div></div>
           </div>
         </div>
@@ -443,7 +446,10 @@
             </div>
             <p class="hint">うまく聞き取れないとき: モデルを大きくする → 「元音源そのまま」に切り替える、の順で試してね。</p>
             <div class="import-progress is-hidden" id="transcribe-progress">
-              <p id="transcribe-progress-label">準備中…</p>
+              <div class="import-progress-head">
+                <p id="transcribe-progress-label">準備中…</p>
+                <button class="ghost-button small-button is-hidden" id="transcribe-progress-cancel" type="button">キャンセル</button>
+              </div>
               <div class="import-progress-track"><div class="import-progress-bar" id="transcribe-progress-bar"></div></div>
             </div>
             <p class="timeline-summary" id="transcribe-status"></p>
@@ -455,10 +461,10 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-practice-tuning-v1"></script>
-    <script src="./dsp.js?v=20260612-practice-tuning-v1"></script>
-    <script src="./import.js?v=20260612-practice-tuning-v1"></script>
-    <script src="./transcribe.js?v=20260612-practice-tuning-v1"></script>
-    <script src="./practice.js?v=20260612-practice-tuning-v1"></script>
+    <script src="./song.js?v=20260612-cancel-v1"></script>
+    <script src="./dsp.js?v=20260612-cancel-v1"></script>
+    <script src="./import.js?v=20260612-cancel-v1"></script>
+    <script src="./transcribe.js?v=20260612-cancel-v1"></script>
+    <script src="./practice.js?v=20260612-cancel-v1"></script>
   </body>
 </html>
