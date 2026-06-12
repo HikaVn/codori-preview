@@ -422,9 +422,10 @@ function cutRingingChords(time) {
   ringingChords = [];
 }
 
-// 音あて（コードカード）と同じ鳴らし方：0.1秒間隔のアルペジオ＋倍音0.2＋長い余韻。
-// 余韻はコード切り替え時に cutRingingChords でカットされる。
-const STRUM_ARPEGGIO_INTERVAL = 0.1;
+// 音あて（コードカード）と同じ音色（倍音0.2＋長い余韻）。
+// プレイモードでは分散和音の間隔を30msに詰めて、リズムに食い込まないようにする。
+// 余韻はコード切り替え時に cutRingingChords で全音同時にカットされる。
+const STRUM_ARPEGGIO_INTERVAL = 0.03;
 const STRUM_HARMONIC_RATIO = 0.2;
 
 function strumChord(chord, time, beats, strumGain = 1) {
