@@ -11,6 +11,9 @@ const DSP_RATE = 22050;
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+// 長い処理のキャンセル用（shouldCancl() が true になったら投げる）
+const CANCELLED = "DSP_CANCELLED";
+
 const CHORD_TEMPLATES = (() => {
   const shapes = [
     { suffix: "", notes: [0, 4, 7], bonus: 0.02 },
@@ -152,6 +155,7 @@ function medianOf(values, from, to) {
 
 async function analyzeAudio(options) {
   const { mid, side, sampleRate, onProgress } = options;
+  const shouldCancel = options.shouldCancel || (() => false);
   const vocalSideFactor = options.vocalSideFactor ?? 1.2;
   const method = options.method || "center-repet";
   const repetStrength = options.repetStrength ?? 1.0;
@@ -203,6 +207,9 @@ async function analyzeAudio(options) {
         refMag[r * bins + k] = Math.hypot(mRe[k], mIm[k]);
       }
       if (onProgress && r % 64 === 0) {
+        if (shouldCancel()) {
+          throw CANCELLED;
+        }
         onProgress((r / refFrames) * 0.4);
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
@@ -299,6 +306,9 @@ async function analyzeAudio(options) {
     }
 
     if (onProgress && f % 64 === 0) {
+      if (shouldCancel()) {
+        throw CANCELLED;
+      }
       onProgress(progressBase + (f / frames) * progressSpan);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
@@ -585,6 +595,7 @@ function yinPitch(frame, sampleRate, minHz = 75, maxHz = 900, threshold = 0.15) 
 async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
   const clarityThreshold = options.clarityThreshold ?? 0.55;
   const rmsGate = options.rmsGate ?? 0.004;
+  const shouldCancel = options.shouldCancel || (() => false);
   const down = resampleLinear(vocal, sampleRate, 11025);
   const rate = 11025;
   const winSize = 1024;
@@ -607,6 +618,9 @@ async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
       }
     }
     if (onProgress && f % 200 === 0) {
+      if (shouldCancel()) {
+        throw CANCELLED;
+      }
       onProgress(f / frames);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
@@ -701,6 +715,445 @@ function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit) {
   }
   flush(pitches.length);
   return notes;
+}
+
+// ===== 録音採点（コード練習 / 歌練習） =====
+
+// 録音波形からオンセット（弾いた瞬間）の時刻[秒]を検出する
+function detectOnsets(samples, sampleRate, options = {}) {
+  const hop = options.hop || 512;
+  const win = options.win || 1024;
+  const sensitivity = options.sensitivity ?? 1.0;
+  const frames = Math.max(0, Math.floor((samples.length - win) / hop) + 1);
+  const env = new Float32Array(frames);
+  for (let f = 0; f < frames; f += 1) {
+    let sum = 0;
+    const start = f * hop;
+    for (let i = 0; i < win; i += 1) {
+      const s = samples[start + i] || 0;
+      sum += s * s;
+    }
+    env[f] = Math.sqrt(sum / win);
+  }
+  // 立ち上がり（正の差分）を見て、適応閾値でピークを拾う
+  const flux = new Float32Array(frames);
+  for (let f = 1; f < frames; f += 1) {
+    flux[f] = Math.max(0, env[f] - env[f - 1]);
+  }
+  let mean = 0;
+  for (let f = 0; f < frames; f += 1) {
+    mean += flux[f];
+  }
+  mean /= Math.max(1, frames);
+  let variance = 0;
+  for (let f = 0; f < frames; f += 1) {
+    variance += (flux[f] - mean) ** 2;
+  }
+  const std = Math.sqrt(variance / Math.max(1, frames));
+  const threshold = mean + sensitivity * std;
+  const minGapFrames = Math.max(1, Math.round((0.08 * sampleRate) / hop));
+  const onsets = [];
+  let lastOnset = -minGapFrames;
+  for (let f = 1; f < frames - 1; f += 1) {
+    if (flux[f] > threshold && flux[f] >= flux[f - 1] && flux[f] >= flux[f + 1] && f - lastOnset >= minGapFrames) {
+      onsets.push((f * hop) / sampleRate);
+      lastOnset = f;
+    }
+  }
+  return onsets;
+}
+
+// 音程を最も近いオクターブに畳んだ誤差（半音）。オクターブ違いを許容する。
+function foldedSemitoneError(recMidi, targetMidi) {
+  let error = recMidi - targetMidi;
+  while (error > 6) {
+    error -= 12;
+  }
+  while (error < -6) {
+    error += 12;
+  }
+  return error;
+}
+
+// 歌練習の採点。recPitchBeats: [{beat, midi}]（録音から）、targetNotes: [{startBeat, beats, midi}]
+function scoreSingingPerformance(recPitchBeats, targetNotes, options = {}) {
+  const transpose = options.transpose || 0;
+  const minCoverage = options.minCoverageFrames ?? 2;
+  const pitchTolerance = options.pitchTolerance ?? 2.0; // これだけ外れると0点
+  const notes = (targetNotes || []).filter((note) => Number.isFinite(note.midi));
+  if (!notes.length) {
+    return null;
+  }
+  const perNote = [];
+  let covered = 0;
+  let scoreSum = 0;
+  let signedSum = 0;
+  let signedCount = 0;
+  notes.forEach((note) => {
+    const target = note.midi + transpose;
+    const from = note.startBeat;
+    const to = note.startBeat + (Number(note.beats) || 0);
+    const inWindow = recPitchBeats.filter((p) => p.beat >= from - 1e-9 && p.beat < to + 1e-9);
+    if (inWindow.length >= minCoverage) {
+      covered += 1;
+      const sorted = inWindow.map((p) => p.midi).sort((a, b) => a - b);
+      const recMidi = sorted[Math.floor(sorted.length / 2)];
+      const error = foldedSemitoneError(recMidi, target);
+      const noteScore = Math.max(0, 1 - Math.abs(error) / pitchTolerance);
+      scoreSum += noteScore;
+      signedSum += error;
+      signedCount += 1;
+      perNote.push({ startBeat: note.startBeat, target, recMidi, error, score: noteScore, covered: true });
+    } else {
+      perNote.push({ startBeat: note.startBeat, target, recMidi: null, error: null, score: 0, covered: false });
+    }
+  });
+  const accuracy = covered ? scoreSum / covered : 0;
+  const coverage = covered / notes.length;
+  const centsTendency = signedCount ? Math.round((signedSum / signedCount) * 100) : 0;
+  const overall = Math.round(100 * (0.7 * accuracy + 0.3 * coverage));
+  const weakNotes = perNote.filter((n) => !n.covered || n.score < 0.5);
+  return {
+    kind: "singing",
+    score: overall,
+    pitchAccuracy: Math.round(accuracy * 100),
+    coverage: Math.round(coverage * 100),
+    centsTendency,
+    perNote,
+    weakNotes,
+    noteCount: notes.length
+  };
+}
+
+function cosineSimilarity(a, b) {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom < 1e-9 ? 0 : dot / denom;
+}
+
+// コード名を根音の半音位置と構成音インターバルへ（dsp.js内で自己完結）
+const DSP_ROOT_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const DSP_QUALITY_INTERVALS = {
+  "": [0, 4, 7], maj7: [0, 4, 7, 11], M7: [0, 4, 7, 11], maj9: [0, 4, 7, 11, 14],
+  "6": [0, 4, 7, 9], "7": [0, 4, 7, 10], "9": [0, 4, 7, 10, 14], add9: [0, 4, 7, 14],
+  sus4: [0, 5, 7], sus2: [0, 2, 7], "7sus4": [0, 5, 7, 10], sus47: [0, 5, 7, 10],
+  m: [0, 3, 7], m6: [0, 3, 7, 9], m7: [0, 3, 7, 10], m9: [0, 3, 7, 10, 14],
+  mM7: [0, 3, 7, 11], mmaj7: [0, 3, 7, 11], "m7-5": [0, 3, 6, 10], m7b5: [0, 3, 6, 10],
+  dim: [0, 3, 6], dim7: [0, 3, 6, 9], aug: [0, 4, 8], aug7: [0, 4, 8, 10], "7-5": [0, 4, 6, 10]
+};
+
+function dspParseChord(chordName) {
+  const main = String(chordName || "").split("/")[0].trim();
+  const match = main.match(/^([A-G])(#|b)?(.*)$/);
+  if (!match) {
+    return null;
+  }
+  let semitone = DSP_ROOT_SEMITONES[match[1]];
+  if (match[2] === "#") {
+    semitone += 1;
+  } else if (match[2] === "b") {
+    semitone -= 1;
+  }
+  const suffix = match[3] || "";
+  let intervals = DSP_QUALITY_INTERVALS[suffix];
+  if (!intervals) {
+    // 未知のサフィックスはざっくり: マイナーか否か＋7th
+    const isMinor = /^m(?!aj)/.test(suffix);
+    intervals = isMinor ? [0, 3, 7] : [0, 4, 7];
+    if (/7/.test(suffix)) {
+      intervals = intervals.concat([/maj7|M7/.test(suffix) ? 11 : 10]);
+    }
+  }
+  return { semitone: ((semitone % 12) + 12) % 12, intervals };
+}
+
+// コード名 → 正規化した12音テンプレート（構成音=1）
+function chordTemplateVector(chordName) {
+  const parsed = dspParseChord(chordName);
+  const vec = new Float32Array(12);
+  if (!parsed) {
+    return vec;
+  }
+  parsed.intervals.forEach((interval) => {
+    vec[(parsed.semitone + interval) % 12] = 1;
+  });
+  let norm = 0;
+  for (let i = 0; i < 12; i += 1) {
+    norm += vec[i] * vec[i];
+  }
+  norm = Math.sqrt(norm);
+  if (norm > 1e-9) {
+    for (let i = 0; i < 12; i += 1) {
+      vec[i] /= norm;
+    }
+  }
+  return vec;
+}
+
+// 録音のクロマ（12音ベクトル）と期待コードを比べ、正誤と綺麗さを評価する
+// cleanness: 期待テンプレートとのコサイン類似度（高い＝余計な音/ミュートが少なく綺麗）
+// correct: 録音から最も近い和音の根音が期待と一致するか
+function scoreChordToneMatch(chromaVec, chordName) {
+  const expected = chordTemplateVector(chordName);
+  const cleanness = Math.max(0, cosineSimilarity(chromaVec, expected));
+  let bestName = null;
+  let bestSim = -Infinity;
+  for (const template of CHORD_TEMPLATES) {
+    const sim = cosineSimilarity(chromaVec, template.vector);
+    if (sim > bestSim) {
+      bestSim = sim;
+      bestName = template.name;
+    }
+  }
+  const expectedRoot = dspParseChord(chordName)?.semitone ?? null;
+  const detectedRoot = bestName ? dspParseChord(bestName)?.semitone ?? null : null;
+  const correct = expectedRoot !== null && expectedRoot === detectedRoot;
+  return { cleanness, correct, detectedName: bestName };
+}
+
+// コード練習の採点。onsetBeats: number[]（録音から）、chordEvents: [{startBeat, chord}]
+// options.segmentChroma: starts と同じ並びの 12音ベクトル配列（録音の和音ごとのクロマ）。
+// あれば「正誤」「綺麗さ」も加味して採点する。
+function scoreChordPerformance(onsetBeats, chordEvents, options = {}) {
+  const tolerance = options.toleranceBeats ?? 0.5;
+  const starts = (chordEvents || []).filter((event) => event.chord);
+  if (!starts.length) {
+    return null;
+  }
+  const segmentChroma = options.segmentChroma || null;
+  // キャリブレーションで得た「理想の響き」の綺麗さを100%基準にする（ウクレレの減衰・個体差を吸収）
+  const cleannessRef = options.cleannessReference && options.cleannessReference > 0.2
+    ? options.cleannessReference
+    : 1;
+  const onsets = [...onsetBeats].sort((a, b) => a - b);
+  const perChord = [];
+  let matched = 0;
+  let absErrSum = 0;
+  let signedSum = 0;
+  let correctCount = 0;
+  let cleanSum = 0;
+  let toneCount = 0;
+  starts.forEach((event, index) => {
+    let best = null;
+    let bestDelta = Infinity;
+    for (const onset of onsets) {
+      const delta = onset - event.startBeat;
+      if (Math.abs(delta) < Math.abs(bestDelta) && Math.abs(delta) <= tolerance) {
+        bestDelta = delta;
+        best = onset;
+      }
+    }
+    const detail = { startBeat: event.startBeat, chord: event.chord, error: null, matched: false };
+    if (best !== null) {
+      matched += 1;
+      absErrSum += Math.abs(bestDelta);
+      signedSum += bestDelta;
+      detail.error = bestDelta;
+      detail.matched = true;
+    }
+    if (segmentChroma && segmentChroma[index]) {
+      const tone = scoreChordToneMatch(segmentChroma[index], event.chord);
+      const cleanNorm = Math.min(1, tone.cleanness / cleannessRef);
+      detail.correct = tone.correct;
+      detail.cleanness = Math.round(cleanNorm * 100);
+      detail.detectedName = tone.detectedName;
+      toneCount += 1;
+      if (tone.correct) {
+        correctCount += 1;
+      }
+      cleanSum += cleanNorm;
+    }
+    perChord.push(detail);
+  });
+  const coverage = matched / starts.length;
+  const meanAbsErr = matched ? absErrSum / matched : tolerance;
+  const tightness = Math.max(0, 1 - meanAbsErr / tolerance);
+  const rushDrag = matched ? signedSum / matched : 0; // 負=走り(早い) / 正=もたり(遅い)
+
+  let overall;
+  const result = {
+    kind: "chord",
+    coverage: Math.round(coverage * 100),
+    timing: Math.round(tightness * 100),
+    rushDrag: Math.round(rushDrag * 100) / 100,
+    perChord,
+    chordCount: starts.length
+  };
+  if (toneCount > 0) {
+    const correctness = correctCount / toneCount;
+    const cleanness = cleanSum / toneCount;
+    result.correctness = Math.round(correctness * 100);
+    result.cleanness = Math.round(cleanness * 100);
+    // タイミング(出てるか/合ってるか) 0.4 ＋ 正誤 0.35 ＋ 綺麗さ 0.25
+    overall = Math.round(100 * (0.2 * coverage + 0.2 * tightness + 0.35 * correctness + 0.25 * cleanness));
+    result.weakChords = perChord.filter((c) => !c.matched || c.correct === false || (c.cleanness ?? 100) < 55);
+  } else {
+    overall = Math.round(100 * (0.5 * coverage + 0.5 * tightness));
+    result.weakChords = perChord.filter((c) => !c.matched);
+  }
+  result.score = overall;
+  return result;
+}
+
+// キャリブレーション: 基準コードを綺麗に弾いた録音から「理想の響き」を測る。
+// ウクレレは減衰音なので、各ストロークの立ち上がり後・減衰しきる前のクロマで綺麗さを測り、
+// プレイヤー/楽器ごとの達成可能な綺麗さ(refCleanness)と減衰時間(decaySec)を得る。
+function analyzeCalibration(samples, sampleRate, chordName, options = {}) {
+  const onsets = detectOnsets(samples, sampleRate, { sensitivity: options.sensitivity ?? 1.0 });
+  if (!onsets.length) {
+    return null;
+  }
+  const template = chordTemplateVector(chordName);
+  const hop = DSP_HOP;
+  const { chroma, frames, frameRate } = computeChroma(samples, sampleRate, {
+    minHz: options.minHz ?? 180,
+    maxHz: options.maxHz ?? 3500
+  });
+  // 各オンセット後 0.05〜0.5秒のクロマで綺麗さ、エネルギー減衰で減衰時間を測る
+  const cleanVals = [];
+  const decayVals = [];
+  onsets.forEach((onsetSec) => {
+    const fromF = Math.floor((onsetSec + 0.05) * frameRate);
+    const toF = Math.min(frames, Math.floor((onsetSec + 0.5) * frameRate));
+    const vec = new Float32Array(12);
+    for (let f = fromF; f < toF; f += 1) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vec[pc] += chroma[f * 12 + pc];
+      }
+    }
+    let norm = 0;
+    for (let pc = 0; pc < 12; pc += 1) {
+      norm += vec[pc] * vec[pc];
+    }
+    norm = Math.sqrt(norm);
+    if (norm > 1e-9) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vec[pc] /= norm;
+      }
+      cleanVals.push(Math.max(0, cosineSimilarity(vec, template)));
+    }
+    // 減衰: オンセット直後のピークエネルギーが15%まで落ちる時間
+    const peakF = Math.floor((onsetSec + 0.03) * frameRate);
+    let peak = 0;
+    const winSamp = 1024;
+    const energyAt = (frameIdx) => {
+      const s = frameIdx * hop;
+      let e = 0;
+      for (let i = 0; i < winSamp; i += 1) {
+        const v = samples[s + i] || 0;
+        e += v * v;
+      }
+      return Math.sqrt(e / winSamp);
+    };
+    peak = energyAt(peakF);
+    if (peak > 1e-5) {
+      for (let f = peakF; f < frames; f += 1) {
+        if (energyAt(f) < peak * 0.15) {
+          decayVals.push((f - peakF) * hop / sampleRate);
+          break;
+        }
+      }
+    }
+  });
+  if (!cleanVals.length) {
+    return null;
+  }
+  const sortedClean = [...cleanVals].sort((a, b) => a - b);
+  const sortedDecay = [...decayVals].sort((a, b) => a - b);
+  return {
+    chord: chordName,
+    refCleanness: sortedClean[Math.floor(sortedClean.length / 2)],
+    decaySec: sortedDecay.length ? sortedDecay[Math.floor(sortedDecay.length / 2)] : 0.8,
+    strums: onsets.length,
+    createdAt: new Date().toISOString()
+  };
+}
+
+// 任意の波形から12音クロマのスペクトログラムを作る（録音の和音採点用）
+function computeChroma(samples, sampleRate, options = {}) {
+  const minHz = options.minHz ?? 70;
+  const maxHz = options.maxHz ?? 3000;
+  const size = DSP_FFT_SIZE;
+  const hop = DSP_HOP;
+  const win = hannWindow(size);
+  const frames = Math.max(0, Math.floor((samples.length - size) / hop) + 1);
+  const half = size / 2;
+  const binHz = sampleRate / size;
+  const chroma = new Float32Array(frames * 12);
+  const re = new Float32Array(size);
+  const im = new Float32Array(size);
+  for (let f = 0; f < frames; f += 1) {
+    const start = f * hop;
+    for (let i = 0; i < size; i += 1) {
+      re[i] = (samples[start + i] || 0) * win[i];
+      im[i] = 0;
+    }
+    fftInPlace(re, im);
+    for (let k = 0; k <= half; k += 1) {
+      const freq = k * binHz;
+      if (freq < minHz || freq > maxHz) {
+        continue;
+      }
+      const mag = Math.hypot(re[k], im[k]);
+      const pc = ((Math.round(midiFromFrequency(freq)) % 12) + 12) % 12;
+      chroma[f * 12 + pc] += mag;
+    }
+  }
+  return { chroma, frames, frameRate: sampleRate / hop };
+}
+
+// クロマスペクトログラムから、各コード区間の平均クロマ（正規化）を作る
+function segmentChromaVectors(chroma, frames, frameRate, chordEvents, beatToSec) {
+  return (chordEvents || []).map((event) => {
+    const fromSec = beatToSec(event.startBeat);
+    const toSec = beatToSec(event.startBeat + (Number(event.beats) || 1));
+    const from = Math.max(0, Math.floor(fromSec * frameRate));
+    const to = Math.min(frames, Math.ceil(toSec * frameRate));
+    const vec = new Float32Array(12);
+    for (let f = from; f < to; f += 1) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vec[pc] += chroma[f * 12 + pc];
+      }
+    }
+    let norm = 0;
+    for (let pc = 0; pc < 12; pc += 1) {
+      norm += vec[pc] * vec[pc];
+    }
+    norm = Math.sqrt(norm);
+    if (norm > 1e-9) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vec[pc] /= norm;
+      }
+    }
+    return norm > 1e-9 ? vec : null;
+  });
+}
+
+// 弱かった項目を、直前のセクション名でグループ化する（アドバイス用）
+function weakSectionsFor(weakItems, sections) {
+  const ordered = [...(sections || [])].sort((a, b) => a.startBeat - b.startBeat);
+  const counts = new Map();
+  weakItems.forEach((item) => {
+    let label = "はじめのほう";
+    for (const section of ordered) {
+      if (section.startBeat <= item.startBeat + 1e-9) {
+        label = section.label;
+      } else {
+        break;
+      }
+    }
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 // ===== 解析結果 → 譜面 =====
@@ -870,6 +1323,18 @@ if (typeof module !== "undefined" && module.exports) {
     assignTimedLyricsToEvents,
     softMaskValue,
     medianOf,
+    CANCELLED,
+    detectOnsets,
+    foldedSemitoneError,
+    scoreSingingPerformance,
+    scoreChordPerformance,
+    scoreChordToneMatch,
+    chordTemplateVector,
+    cosineSimilarity,
+    computeChroma,
+    segmentChromaVectors,
+    analyzeCalibration,
+    weakSectionsFor,
     CHORD_TEMPLATES,
     NOTE_NAMES
   };

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-chroma-tuning-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-kotoba-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -21,6 +21,10 @@
           <button class="mode-tab" type="button" id="tab-play">
             <span>プレイ</span>
             <small>自動伴奏で歌う</small>
+          </button>
+          <button class="mode-tab" type="button" id="tab-practice">
+            <span>れんしゅう</span>
+            <small>録音して採点</small>
           </button>
           <button class="mode-tab" type="button" id="tab-import">
             <span>取り込み</span>
@@ -174,6 +178,106 @@
           <div class="current-line" id="current-line">再生すると、いまの歌詞がここに出るよ。</div>
         </div>
       </section>
+      <!-- ===== れんしゅう（録音採点） ===== -->
+      <section class="song-view" id="practice-view" aria-label="れんしゅうモード">
+        <div class="panel practice-head">
+          <div class="practice-mode-switch" role="tablist" aria-label="練習の種類">
+            <button class="practice-mode-button is-active" type="button" data-practice-mode="chord">コード練習</button>
+            <button class="practice-mode-button" type="button" data-practice-mode="singing">歌練習</button>
+          </div>
+          <p class="practice-song">れんしゅうする曲: <strong id="practice-song-name">-</strong></p>
+        </div>
+
+        <div class="panel calibration-panel" id="calibration-panel">
+          <div class="editor-head">
+            <h2>キャリブレーション（理想の響き）</h2>
+          </div>
+          <p class="hint">
+            ウクレレは音がだんだん小さくなる楽器だよ。きみのウクレレで<b>いちばん綺麗に弾けた響き</b>を「100点の見本」として覚えておくと、採点がぴったりになるよ。<br>
+            静かな場所で、表示のコードをメトロノームに合わせて4回、綺麗に弾いてね。
+          </p>
+          <div class="import-settings">
+            <label>基準コード
+              <input id="calibration-chord" type="text" value="C" style="width:90px">
+            </label>
+            <button class="primary-button" id="calibration-record" type="button">理想の響きを録音</button>
+          </div>
+          <p class="timeline-summary" id="calibration-status"></p>
+        </div>
+
+        <div class="panel practice-stage-panel">
+          <div class="practice-stage">
+            <div class="practice-bird">
+              <img id="practice-bird-img" src="../../assets/app/characters/action-candidate-integrated-v3/action-major.png" alt="こどり先生">
+              <div class="practice-count is-hidden" id="practice-count">4</div>
+            </div>
+            <div class="practice-transport">
+              <p class="practice-status" id="practice-status">弾いたコードを録音して、タイミング・正しさ・響きの綺麗さを見るよ。</p>
+              <div class="practice-buttons">
+                <button class="primary-button practice-record-button" id="practice-record" type="button">● 録音してれんしゅう</button>
+                <button class="ghost-button is-hidden" id="practice-stop" type="button">■ ストップ</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="practice-result is-hidden" id="practice-result">
+            <div class="result-score">
+              <div class="result-number" id="practice-score">0</div>
+              <div class="result-stars" id="practice-stars">☆☆☆☆☆</div>
+            </div>
+            <div class="result-metrics" id="practice-metrics"></div>
+            <div class="result-advice" id="practice-advice"></div>
+          </div>
+        </div>
+
+        <div class="panel practice-records-panel">
+          <div class="editor-head">
+            <h2>れんしゅうの記録</h2>
+          </div>
+          <div id="practice-records"></div>
+        </div>
+
+        <details class="panel debug-block" id="practice-tuning">
+          <summary>採点の調整（上級）</summary>
+          <p class="hint">
+            採点が厳しすぎる / 甘すぎると感じたら調整してね。動かすと、いまの結果がその場で採点しなおされるよ（記録には増えない）。
+          </p>
+          <div class="import-settings">
+            <label>甘さ⇔厳しさ
+              <span class="tune-row">
+                <input id="tune-strictness" type="range" min="0.6" max="1.6" step="0.1" value="1.0">
+                <span id="tune-strictness-val">1.0</span>
+              </span>
+            </label>
+            <label>コードのタイミング許容(拍)
+              <span class="tune-row">
+                <input id="tune-chord-tol" type="range" min="0.15" max="1.0" step="0.05" value="0.5">
+                <span id="tune-chord-tol-val">0.50</span>
+              </span>
+            </label>
+            <label>オンセット感度
+              <span class="tune-row">
+                <input id="tune-onset" type="range" min="0.3" max="2.5" step="0.1" value="1.0">
+                <span id="tune-onset-val">1.0</span>
+              </span>
+            </label>
+            <label>歌の音程許容(半音)
+              <span class="tune-row">
+                <input id="tune-pitch-tol" type="range" min="1.0" max="3.0" step="0.25" value="2.0">
+                <span id="tune-pitch-tol-val">2.0</span>
+              </span>
+            </label>
+          </div>
+          <p class="hint">
+            「オンセット感度」は数字が小さいほど弱いストロークも拾う（拾いすぎたら上げる）。「音程許容」は大きいほど甘い。
+          </p>
+          <div class="import-settings">
+            <button class="ghost-button" id="practice-rescore" type="button">いまの設定で採点しなおす</button>
+            <button class="ghost-button" id="tune-reset" type="button">標準に戻す</button>
+          </div>
+        </details>
+      </section>
+
       <!-- ===== 取り込みモード ===== -->
       <section class="song-view" id="import-view" aria-label="取り込みモード">
         <div class="panel import-panel">
@@ -216,7 +320,10 @@
           </label>
           <button class="primary-button" id="import-analyze" type="button">解析する</button>
           <div class="import-progress is-hidden" id="import-progress">
-            <p id="import-progress-label">解析中…</p>
+            <div class="import-progress-head">
+              <p id="import-progress-label">解析中…</p>
+              <button class="ghost-button small-button is-hidden" id="import-progress-cancel" type="button">キャンセル</button>
+            </div>
             <div class="import-progress-track"><div class="import-progress-bar" id="import-progress-bar"></div></div>
           </div>
         </div>
@@ -337,9 +444,12 @@
               </label>
               <button class="primary-button" id="transcribe-button" type="button">文字起こしする</button>
             </div>
-            <p class="hint">うまく聞き取れないとき: モデルを大きくする → 「元音源そのまま」に切り替える、の順で試してね。</p>
+            <p class="hint">うまく聞き取れないとき: モデルを大きくする（日本語なら「kotoba日本語特化」がおすすめ）→ 「元音源そのまま」に切り替える、の順で試してね。kotobaは重いので初回DLに時間がかかるよ。読み込めない環境では自動でsmallに切り替わるよ。</p>
             <div class="import-progress is-hidden" id="transcribe-progress">
-              <p id="transcribe-progress-label">準備中…</p>
+              <div class="import-progress-head">
+                <p id="transcribe-progress-label">準備中…</p>
+                <button class="ghost-button small-button is-hidden" id="transcribe-progress-cancel" type="button">キャンセル</button>
+              </div>
               <div class="import-progress-track"><div class="import-progress-bar" id="transcribe-progress-bar"></div></div>
             </div>
             <p class="timeline-summary" id="transcribe-status"></p>
@@ -351,9 +461,10 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-chroma-tuning-v1"></script>
-    <script src="./dsp.js?v=20260612-chroma-tuning-v1"></script>
-    <script src="./import.js?v=20260612-chroma-tuning-v1"></script>
-    <script src="./transcribe.js?v=20260612-chroma-tuning-v1"></script>
+    <script src="./song.js?v=20260612-kotoba-v1"></script>
+    <script src="./dsp.js?v=20260612-kotoba-v1"></script>
+    <script src="./import.js?v=20260612-kotoba-v1"></script>
+    <script src="./transcribe.js?v=20260612-kotoba-v1"></script>
+    <script src="./practice.js?v=20260612-kotoba-v1"></script>
   </body>
 </html>

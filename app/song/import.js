@@ -14,6 +14,7 @@ const importEl = {
   progress: document.querySelector("#import-progress"),
   progressBar: document.querySelector("#import-progress-bar"),
   progressLabel: document.querySelector("#import-progress-label"),
+  progressCancel: document.querySelector("#import-progress-cancel"),
   result: document.querySelector("#import-result"),
   bpm: document.querySelector("#import-bpm"),
   offset: document.querySelector("#import-offset"),
@@ -79,7 +80,8 @@ const importState = {
   vocalBuffer: null,
   previewSource: null,
   previewKind: null,
-  busy: false
+  busy: false,
+  cancelRequested: false
 };
 
 const IMPORT_RATE = 22050;
@@ -157,7 +159,9 @@ async function runImportAnalysis() {
     return;
   }
   importState.busy = true;
+  importState.cancelRequested = false;
   importEl.analyzeButton.disabled = true;
+  importEl.progressCancel?.classList.remove("is-hidden");
   importEl.result.classList.add("is-hidden");
   stopImportPreview();
 
@@ -188,6 +192,7 @@ async function runImportAnalysis() {
       chromaMinHz: importTuning.chromaMinHz,
       chromaMaxHz: importTuning.chromaMaxHz,
       chromaLogCompress: importTuning.chromaLogCompress,
+      shouldCancel: () => importState.cancelRequested,
       onProgress: (ratio) => setImportProgress("ボーカルと伴奏を分けてる…", 0.05 + ratio * 0.6)
     });
 
@@ -200,7 +205,7 @@ async function runImportAnalysis() {
       analysis.vocal,
       IMPORT_RATE,
       (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.22),
-      { clarityThreshold: importTuning.clarityThreshold }
+      { clarityThreshold: importTuning.clarityThreshold, shouldCancel: () => importState.cancelRequested }
     );
     analysis.pitches = melody.pitches;
     analysis.pitchFrameRate = melody.frameRate;
@@ -221,11 +226,17 @@ async function runImportAnalysis() {
     }
   } catch (error) {
     hideImportProgress();
-    console.warn("import analysis failed", error);
-    window.alert("解析に失敗しちゃった。別のファイルで試してみてね。");
+    if (error === CANCELLED) {
+      importEl.summary && (importEl.summary.textContent = "");
+    } else {
+      console.warn("import analysis failed", error);
+      window.alert("解析に失敗しちゃった。別のファイルで試してみてね。");
+    }
   } finally {
     importState.busy = false;
+    importState.cancelRequested = false;
     importEl.analyzeButton.disabled = false;
+    importEl.progressCancel?.classList.add("is-hidden");
   }
 }
 
@@ -407,20 +418,27 @@ async function reanalyzeMelodyOnly() {
     return;
   }
   importState.busy = true;
+  importState.cancelRequested = false;
+  importEl.progressCancel?.classList.remove("is-hidden");
   try {
     setImportProgress("メロディを聞き取りなおしてる…", 0.2);
     const melody = await trackMelody(
       importState.analysis.vocal,
       IMPORT_RATE,
       (ratio) => setImportProgress("メロディを聞き取りなおしてる…", 0.2 + ratio * 0.75),
-      { clarityThreshold: importTuning.clarityThreshold }
+      { clarityThreshold: importTuning.clarityThreshold, shouldCancel: () => importState.cancelRequested }
     );
     importState.analysis.pitches = melody.pitches;
     importState.analysis.pitchFrameRate = melody.frameRate;
     hideImportProgress();
     refreshImportPreview();
+  } catch (error) {
+    hideImportProgress();
+    if (error !== CANCELLED) { console.warn("melody reanalyze failed", error); }
   } finally {
     importState.busy = false;
+    importState.cancelRequested = false;
+    importEl.progressCancel?.classList.add("is-hidden");
   }
 }
 
@@ -429,7 +447,9 @@ async function reanalyzeFull() {
     return;
   }
   importState.busy = true;
+  importState.cancelRequested = false;
   importEl.analyzeButton.disabled = true;
+  importEl.progressCancel?.classList.remove("is-hidden");
   try {
     const { mid, side } = importState.midSide;
     const analysis = await analyzeAudio({
@@ -442,6 +462,7 @@ async function reanalyzeFull() {
       chromaMinHz: importTuning.chromaMinHz,
       chromaMaxHz: importTuning.chromaMaxHz,
       chromaLogCompress: importTuning.chromaLogCompress,
+      shouldCancel: () => importState.cancelRequested,
       onProgress: (ratio) => setImportProgress("分離からやりなおしてる…", ratio * 0.7)
     });
     setImportProgress("メロディを聞き取ってる…", 0.72);
@@ -458,9 +479,16 @@ async function reanalyzeFull() {
     importState.vocalBuffer = audioBufferFromArray(analysis.vocal, IMPORT_RATE);
     hideImportProgress();
     refreshImportPreview();
+  } catch (error) {
+    hideImportProgress();
+    if (error !== CANCELLED) {
+      console.warn("reanalyze failed", error);
+    }
   } finally {
     importState.busy = false;
+    importState.cancelRequested = false;
     importEl.analyzeButton.disabled = false;
+    importEl.progressCancel?.classList.add("is-hidden");
   }
 }
 
@@ -698,6 +726,10 @@ importEl.tuneRepet?.addEventListener("input", () => {
 importEl.reanalyzeMelody?.addEventListener("click", reanalyzeMelodyOnly);
 importEl.reanalyzeFull?.addEventListener("click", reanalyzeFull);
 importEl.exportDebug?.addEventListener("click", exportDebugJson);
+importEl.progressCancel?.addEventListener("click", () => {
+  importState.cancelRequested = true;
+  importEl.progressLabel.textContent = "キャンセル中…";
+});
 document.querySelector("#import-debug")?.addEventListener("toggle", () => {
   if (importState.analysis) {
     drawDebugCanvases(buildImportScore());

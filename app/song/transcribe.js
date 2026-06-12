@@ -7,9 +7,15 @@
 const TRANSFORMERS_CDN_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.0/dist/transformers.min.js";
 const WHISPER_RATE = 16000;
 const WHISPER_MODELS = {
-  tiny: { label: "tiny（約40MB・はやい）", ids: ["onnx-community/whisper-tiny", "Xenova/whisper-tiny"] },
-  base: { label: "base（約80MB・バランス）", ids: ["onnx-community/whisper-base", "Xenova/whisper-base"] },
-  small: { label: "small（約250MB・高精度）", ids: ["onnx-community/whisper-small", "Xenova/whisper-small"] }
+  tiny: { label: "tiny（約40MB・はやい）", ids: ["onnx-community/whisper-tiny", "Xenova/whisper-tiny"], fallback: null },
+  base: { label: "base（約80MB・バランス）", ids: ["onnx-community/whisper-base", "Xenova/whisper-base"], fallback: "tiny" },
+  small: { label: "small（約250MB・高精度）", ids: ["onnx-community/whisper-small", "Xenova/whisper-small"], fallback: "base" },
+  // 日本語特化（large-v3を日本語向けに蒸留）。多言語smallより日本語が得意な見込み。重い＆環境により未提供のことがあるのでsmallへフォールバック。
+  kotoba: {
+    label: "kotoba日本語特化（重い・約300MB+）",
+    ids: ["onnx-community/kotoba-whisper-v2.0-ONNX", "onnx-community/kotoba-whisper-v1.0-ONNX", "Xenova/kotoba-whisper-v1.0"],
+    fallback: "small"
+  }
 };
 
 const transcribeEl = {
@@ -20,11 +26,16 @@ const transcribeEl = {
   progressBar: document.querySelector("#transcribe-progress-bar"),
   progressLabel: document.querySelector("#transcribe-progress-label"),
   list: document.querySelector("#transcribe-list"),
-  status: document.querySelector("#transcribe-status")
+  status: document.querySelector("#transcribe-status"),
+  cancel: document.querySelector("#transcribe-progress-cancel")
 };
+
+// 日本語認識を強制しているので、日本語文字を含まない行はハルシネーション扱いで弾く
+let transcribeRequireJapanese = true;
 
 const transcribeState = {
   busy: false,
+  cancelRequested: false,
   module: null,
   asr: null,
   asrModelId: null,
@@ -47,6 +58,7 @@ function setTranscribeProgress(label, ratio) {
 function hideTranscribeProgress() {
   transcribeEl.progress.classList.add("is-hidden");
   transcribeEl.progressBar.classList.remove("is-indeterminate");
+  transcribeEl.cancel?.classList.add("is-hidden");
 }
 
 async function loadTransformersModule() {
@@ -81,11 +93,17 @@ async function loadWhisperPipeline(modelKey) {
         });
         transcribeState.asr = asr;
         transcribeState.asrModelId = wanted;
+        transcribeState.activeModelKey = modelKey;
         return asr;
       } catch (error) {
         lastError = error;
       }
     }
+  }
+  // このモデルの全IDで失敗 → 軽い既存モデルへ自動フォールバック
+  if (spec.fallback && WHISPER_MODELS[spec.fallback]) {
+    setTranscribeProgress(`「${spec.label}」を読み込めなかった。${WHISPER_MODELS[spec.fallback].label}に切り替えるね…`, null);
+    return loadWhisperPipeline(spec.fallback);
   }
   throw lastError || new Error("Whisper model load failed");
 }
@@ -99,7 +117,9 @@ async function runTranscription() {
     return;
   }
   transcribeState.busy = true;
+  transcribeState.cancelRequested = false;
   transcribeEl.button.disabled = true;
+  transcribeEl.cancel?.classList.remove("is-hidden");
   try {
     setTranscribeProgress("文字起こしの準備中…", 0.02);
     const asr = await loadWhisperPipeline(transcribeEl.model.value);
@@ -129,14 +149,21 @@ async function runTranscription() {
         text: String(chunk.text || "").trim()
       }))
       .filter((chunk) => chunk.text);
+    if (transcribeState.cancelRequested) {
+      hideTranscribeProgress();
+      transcribeEl.status.textContent = "文字起こしをキャンセルしたよ。";
+      return;
+    }
     const chunks = cleanTranscriptChunks(rawChunks);
     transcribeState.chunks = chunks;
     renderTranscriptList();
     hideTranscribeProgress();
     const dropped = rawChunks.length - chunks.length;
     transcribeEl.status.textContent = chunks.length
-      ? `${chunks.length}行を聞き取ったよ。${dropped > 0 ? `（あやしい繰り返し${dropped}件を除いた）` : ""}下で手なおしして、「譜面にする」とタイミングで割り付ける。`
-      : "歌詞を聞き取れなかった。モデルをbase/smallに変える、認識する音を切り替える、はっきり歌っている区間で試す、を試してみてね。";
+      ? `${chunks.length}行を聞き取ったよ。${dropped > 0 ? `（あやしい行を${dropped}件除いた）` : ""}下で手なおしして、「譜面にする」とタイミングで割り付ける。`
+      : (dropped > 0
+        ? "聞き取れたのは、英語のゴミや繰り返しばかりだったので全部除いたよ。分離ボーカルがはっきりしないと崩れやすいんだ。モデルをsmallにする・「認識する音」を切り替える・声がはっきりした区間で試してみてね。"
+        : "歌詞を聞き取れなかった。モデルをbase/smallに変える、認識する音を切り替える、はっきり歌っている区間で試す、を試してみてね。");
   } catch (error) {
     console.warn("transcription failed", error);
     hideTranscribeProgress();
@@ -144,7 +171,9 @@ async function runTranscription() {
     window.alert("文字起こしに失敗しちゃった。ネットワーク（モデルのダウンロード）と、対応ブラウザかどうかを確認してね。");
   } finally {
     transcribeState.busy = false;
+    transcribeEl.cancelRequested = false;
     transcribeEl.button.disabled = false;
+    transcribeEl.cancel?.classList.add("is-hidden");
   }
 }
 
@@ -212,6 +241,18 @@ const SCRIPT_PATTERNS = {
   devanagari: /[ऀ-ॿ]/
 };
 
+// Whisperが無音・伴奏だけの区間でよく出す「定番の幻聴」フレーズ（正規化して比較）
+const HALLUCINATION_PHRASES = [
+  "thankyou", "thanksforwatching", "pleasesubscribe", "thanksforwatchingvideos",
+  "subtitlesbytheamaraorgcommunity", "subscribe", "thankyouforwatching",
+  "ご視聴ありがとうございました", "ご視聴ありがとうございます", "おわり", "終わり",
+  "チャンネル登録お願いします", "最後までご視聴いただきありがとうございました"
+];
+
+function normalizeForCompare(text) {
+  return text.toLowerCase().replace(/[\s。、.,!?！？・…]/g, "");
+}
+
 function isGibberish(text) {
   const chars = Array.from(text.replace(/\s/g, ""));
   if (chars.length < 2) {
@@ -222,13 +263,21 @@ function isGibberish(text) {
   if (unique / chars.length < 0.25 && chars.length > 6) {
     return true;
   }
+  const normalized = normalizeForCompare(text);
+  if (HALLUCINATION_PHRASES.some((phrase) => normalized === phrase || normalized.includes(phrase))) {
+    return true;
+  }
   // 文字体系の数を数える。正常な歌詞は日本語＋英語くらいで2系統まで。
-  // キリル・ハングル・アラビア等が混ざって3系統以上になるのはWhisperの暴走。
   const scripts = Object.keys(SCRIPT_PATTERNS).filter((name) => SCRIPT_PATTERNS[name].test(text));
   if (scripts.length >= 3) {
     return true;
   }
-  // 日本語の曲なのに、日本語も英語も含まない（キリル/ハングル/アラビア等だけ）チャンクは捨てる
+  // 日本語の曲なのに日本語文字を1つも含まない行は、ほぼ確実にハルシネーション（英語のゴミなど）。
+  // ※ 日本語認識を強制しているため。英語まじりの歌詞は、貼り付け歌詞での割り付けを使ってね。
+  if (transcribeRequireJapanese && !scripts.includes("japanese")) {
+    return true;
+  }
+  // 日本語も英語も含まない（キリル/ハングル/アラビア等だけ）チャンクは捨てる
   if (!scripts.includes("japanese") && !scripts.includes("latin") && scripts.length > 0) {
     return true;
   }
@@ -294,3 +343,7 @@ if (transcribeEl.model) {
   });
 }
 transcribeEl.button?.addEventListener("click", runTranscription);
+transcribeEl.cancel?.addEventListener("click", () => {
+  transcribeState.cancelRequested = true;
+  transcribeEl.progressLabel.textContent = "キャンセル中…（モデルの処理が終わると止まるよ）";
+});
