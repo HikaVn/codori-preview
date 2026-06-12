@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-key-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-pdfflow-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -47,11 +47,12 @@
             <button class="ghost-button" id="export-song" type="button">JSON書き出し</button>
             <button class="ghost-button" id="import-song-button" type="button">JSON読み込み</button>
             <input type="file" id="import-song" accept="application/json,.json" hidden>
-            <button class="ghost-button" id="import-musicxml-button" type="button">楽譜読み込み（MusicXML）</button>
+            <button class="ghost-button" id="import-musicxml-button" type="button">楽譜（MusicXML）読み込み</button>
             <input type="file" id="import-musicxml" accept=".xml,.musicxml,.mxl,application/xml" hidden>
-            <button class="ghost-button" id="import-pdf-button" type="button">PDFから歌詞</button>
+            <button class="ghost-button" id="import-pdf-button" type="button">PDF楽譜（歌詞・メロディ・コード）</button>
             <input type="file" id="import-pdf" accept="application/pdf,.pdf" hidden>
           </div>
+          <p class="library-dnd-hint">MusicXML / PDF / 音源ファイルをここにドラッグ＆ドロップしてもOK。読み込むと取り込み画面で手なおしできるよ。</p>
         </div>
 
         <div class="panel meta-panel">
@@ -510,14 +511,14 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-key-v1"></script>
-    <script src="./dsp.js?v=20260612-key-v1"></script>
-    <script src="./pianoroll.js?v=20260612-key-v1"></script>
-    <script src="./musicxml.js?v=20260612-key-v1"></script>
-    <script src="./pdfscore.js?v=20260612-key-v1"></script>
-    <script src="./import.js?v=20260612-key-v1"></script>
-    <script src="./fileimport.js?v=20260612-key-v1"></script>
-    <script src="./transcribe.js?v=20260612-key-v1"></script>
-    <script src="./practice.js?v=20260612-key-v1"></script>
+    <script src="./song.js?v=20260612-pdfflow-v1"></script>
+    <script src="./dsp.js?v=20260612-pdfflow-v1"></script>
+    <script src="./pianoroll.js?v=20260612-pdfflow-v1"></script>
+    <script src="./musicxml.js?v=20260612-pdfflow-v1"></script>
+    <script src="./pdfscore.js?v=20260612-pdfflow-v1"></script>
+    <script src="./import.js?v=20260612-pdfflow-v1"></script>
+    <script src="./fileimport.js?v=20260612-pdfflow-v1"></script>
+    <script src="./transcribe.js?v=20260612-pdfflow-v1"></script>
+    <script src="./practice.js?v=20260612-pdfflow-v1"></script>
   </body>
 </html>

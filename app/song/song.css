@@ -1740,3 +1740,24 @@ button {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* ライブラリパネルへのファイルD&D */
+.library-panel {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.library-dnd-hint {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.library-panel.is-dragover {
+  outline: 2px dashed var(--blue);
+  outline-offset: -4px;
+  background: #eef4fb;
+}
