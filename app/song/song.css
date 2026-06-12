@@ -899,10 +899,39 @@ button {
   flex-wrap: wrap;
 }
 
+.import-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 16px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  background: #fbfdff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.import-dropzone-hint {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .import-file-name {
   color: var(--muted);
   font-size: 13px;
   font-weight: 900;
+}
+
+/* ドラッグ中はパネル全体をハイライト */
+#import-view.is-dragover .import-dropzone {
+  border-color: var(--blue);
+  background: #eef4fb;
+}
+
+#import-view.is-dragover {
+  position: relative;
 }
 
 .import-settings {

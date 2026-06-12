@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-repet-separation-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-dnd-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -185,9 +185,10 @@
             ボーカルと伴奏を分けてから、伴奏でコード、ボーカルでメロディを聞き取る。すべてブラウザの中だけで処理して、音源はどこにも送信しないよ。<br>
             ※ 自分で権利を持っている音源・権利処理済みの音源で使ってね。歌詞は解析後に自動文字起こし（Whisper）もできるし、下の欄に貼り付けてもOK。
           </p>
-          <div class="import-file-row">
+          <div class="import-dropzone" id="import-dropzone">
             <button class="primary-button" id="import-file-button" type="button">音源ファイルを選ぶ</button>
             <input type="file" id="import-file" accept="audio/*" hidden>
+            <span class="import-dropzone-hint">またはここにファイルをドラッグ＆ドロップ</span>
             <span class="import-file-name" id="import-file-name">まだ選んでないよ</span>
           </div>
           <div class="import-settings">
@@ -329,9 +330,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-repet-separation-v1"></script>
-    <script src="./dsp.js?v=20260612-repet-separation-v1"></script>
-    <script src="./import.js?v=20260612-repet-separation-v1"></script>
-    <script src="./transcribe.js?v=20260612-repet-separation-v1"></script>
+    <script src="./song.js?v=20260612-dnd-v1"></script>
+    <script src="./dsp.js?v=20260612-dnd-v1"></script>
+    <script src="./import.js?v=20260612-dnd-v1"></script>
+    <script src="./transcribe.js?v=20260612-dnd-v1"></script>
   </body>
 </html>
