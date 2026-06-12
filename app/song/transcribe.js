@@ -35,14 +35,18 @@ function setTranscribeProgress(label, ratio) {
   transcribeEl.progress.classList.remove("is-hidden");
   transcribeEl.progressLabel.textContent = label;
   if (ratio === null) {
-    transcribeEl.progressBar.style.width = "100%";
+    // 進捗が読めない区間（モデル実行中）は、満タンにせず流れるアニメーションで「処理中」を示す
+    transcribeEl.progressBar.classList.add("is-indeterminate");
+    transcribeEl.progressBar.style.width = "";
     return;
   }
+  transcribeEl.progressBar.classList.remove("is-indeterminate");
   transcribeEl.progressBar.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 }
 
 function hideTranscribeProgress() {
   transcribeEl.progress.classList.add("is-hidden");
+  transcribeEl.progressBar.classList.remove("is-indeterminate");
 }
 
 async function loadTransformersModule() {
