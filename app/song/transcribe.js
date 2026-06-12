@@ -24,6 +24,9 @@ const transcribeEl = {
   cancel: document.querySelector("#transcribe-progress-cancel")
 };
 
+// 日本語認識を強制しているので、日本語文字を含まない行はハルシネーション扱いで弾く
+let transcribeRequireJapanese = true;
+
 const transcribeState = {
   busy: false,
   cancelRequested: false,
@@ -145,8 +148,10 @@ async function runTranscription() {
     hideTranscribeProgress();
     const dropped = rawChunks.length - chunks.length;
     transcribeEl.status.textContent = chunks.length
-      ? `${chunks.length}行を聞き取ったよ。${dropped > 0 ? `（あやしい繰り返し${dropped}件を除いた）` : ""}下で手なおしして、「譜面にする」とタイミングで割り付ける。`
-      : "歌詞を聞き取れなかった。モデルをbase/smallに変える、認識する音を切り替える、はっきり歌っている区間で試す、を試してみてね。";
+      ? `${chunks.length}行を聞き取ったよ。${dropped > 0 ? `（あやしい行を${dropped}件除いた）` : ""}下で手なおしして、「譜面にする」とタイミングで割り付ける。`
+      : (dropped > 0
+        ? "聞き取れたのは、英語のゴミや繰り返しばかりだったので全部除いたよ。分離ボーカルがはっきりしないと崩れやすいんだ。モデルをsmallにする・「認識する音」を切り替える・声がはっきりした区間で試してみてね。"
+        : "歌詞を聞き取れなかった。モデルをbase/smallに変える、認識する音を切り替える、はっきり歌っている区間で試す、を試してみてね。");
   } catch (error) {
     console.warn("transcription failed", error);
     hideTranscribeProgress();
@@ -224,6 +229,18 @@ const SCRIPT_PATTERNS = {
   devanagari: /[ऀ-ॿ]/
 };
 
+// Whisperが無音・伴奏だけの区間でよく出す「定番の幻聴」フレーズ（正規化して比較）
+const HALLUCINATION_PHRASES = [
+  "thankyou", "thanksforwatching", "pleasesubscribe", "thanksforwatchingvideos",
+  "subtitlesbytheamaraorgcommunity", "subscribe", "thankyouforwatching",
+  "ご視聴ありがとうございました", "ご視聴ありがとうございます", "おわり", "終わり",
+  "チャンネル登録お願いします", "最後までご視聴いただきありがとうございました"
+];
+
+function normalizeForCompare(text) {
+  return text.toLowerCase().replace(/[\s。、.,!?！？・…]/g, "");
+}
+
 function isGibberish(text) {
   const chars = Array.from(text.replace(/\s/g, ""));
   if (chars.length < 2) {
@@ -234,13 +251,21 @@ function isGibberish(text) {
   if (unique / chars.length < 0.25 && chars.length > 6) {
     return true;
   }
+  const normalized = normalizeForCompare(text);
+  if (HALLUCINATION_PHRASES.some((phrase) => normalized === phrase || normalized.includes(phrase))) {
+    return true;
+  }
   // 文字体系の数を数える。正常な歌詞は日本語＋英語くらいで2系統まで。
-  // キリル・ハングル・アラビア等が混ざって3系統以上になるのはWhisperの暴走。
   const scripts = Object.keys(SCRIPT_PATTERNS).filter((name) => SCRIPT_PATTERNS[name].test(text));
   if (scripts.length >= 3) {
     return true;
   }
-  // 日本語の曲なのに、日本語も英語も含まない（キリル/ハングル/アラビア等だけ）チャンクは捨てる
+  // 日本語の曲なのに日本語文字を1つも含まない行は、ほぼ確実にハルシネーション（英語のゴミなど）。
+  // ※ 日本語認識を強制しているため。英語まじりの歌詞は、貼り付け歌詞での割り付けを使ってね。
+  if (transcribeRequireJapanese && !scripts.includes("japanese")) {
+    return true;
+  }
+  // 日本語も英語も含まない（キリル/ハングル/アラビア等だけ）チャンクは捨てる
   if (!scripts.includes("japanese") && !scripts.includes("latin") && scripts.length > 0) {
     return true;
   }
