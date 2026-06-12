@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-kotoba-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-import-edit-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -340,6 +340,14 @@
             <label>1拍目のオフセット（秒）
               <input id="import-offset" type="number" min="0" step="0.01">
             </label>
+            <label>拍子
+              <select id="import-beats-per-bar">
+                <option value="4" selected>4/4</option>
+                <option value="3">3/4</option>
+                <option value="2">2/4</option>
+                <option value="6">6/8</option>
+              </select>
+            </label>
           </div>
           <div class="import-preview-buttons">
             <span class="import-preview-caption">きいてみる:</span>
@@ -347,7 +355,10 @@
             <button class="ghost-button" id="preview-inst" type="button">伴奏だけ</button>
             <button class="ghost-button" id="preview-vocal" type="button">ボーカルだけ</button>
           </div>
-          <div class="import-chord-preview" id="import-chord-preview"></div>
+          <p class="hint">
+            BPM・オフセット・拍子を変えるとコードを検出しなおすよ。下のリストで、小節-拍を見ながら<b>コード名と拍数を手なおし</b>できる（譜面にする前の最終チェック）。
+          </p>
+          <div class="import-chord-editor" id="import-chord-editor"></div>
 
           <details class="debug-block" id="import-debug">
             <summary>解析チューニング＆デバッグ（上級）</summary>
@@ -461,10 +472,10 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-kotoba-v1"></script>
-    <script src="./dsp.js?v=20260612-kotoba-v1"></script>
-    <script src="./import.js?v=20260612-kotoba-v1"></script>
-    <script src="./transcribe.js?v=20260612-kotoba-v1"></script>
-    <script src="./practice.js?v=20260612-kotoba-v1"></script>
+    <script src="./song.js?v=20260612-import-edit-v1"></script>
+    <script src="./dsp.js?v=20260612-import-edit-v1"></script>
+    <script src="./import.js?v=20260612-import-edit-v1"></script>
+    <script src="./transcribe.js?v=20260612-import-edit-v1"></script>
+    <script src="./practice.js?v=20260612-import-edit-v1"></script>
   </body>
 </html>

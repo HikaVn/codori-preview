@@ -20,6 +20,8 @@ const importEl = {
   offset: document.querySelector("#import-offset"),
   summary: document.querySelector("#import-summary"),
   chordPreview: document.querySelector("#import-chord-preview"),
+  chordEditor: document.querySelector("#import-chord-editor"),
+  beatsPerBar: document.querySelector("#import-beats-per-bar"),
   previewOriginal: document.querySelector("#preview-original"),
   previewInst: document.querySelector("#preview-inst"),
   previewVocal: document.querySelector("#preview-vocal"),
@@ -57,7 +59,8 @@ const importTuning = {
   chromaPreset: "auto",
   chromaMinHz: 60,
   chromaMaxHz: 5000,
-  chromaLogCompress: false
+  chromaLogCompress: false,
+  beatsPerBar: 4
 };
 
 // コード解析の音域プリセット（楽器ごとに和音が見えやすい帯域へ絞る）
@@ -75,6 +78,7 @@ const importState = {
   originalBuffer: null,
   midSide: null, // 再解析用に保持
   tempoCandidates: [],
+  workingScore: null,
   analysis: null,
   instBuffer: null,
   vocalBuffer: null,
@@ -250,31 +254,84 @@ function buildImportScore() {
   return buildScoreFromAnalysis(importState.analysis, {
     bpm,
     beatOffsetSec,
-    beatsPerBar: 4,
+    beatsPerBar: importTuning.beatsPerBar,
     quantUnit: importQuantUnit(),
     changePenalty: importTuning.changePenalty
   });
+}
+
+// イベントの startBeat を beats から振り直す（手なおし後の位置を保つ）
+function recomputeStartBeats(events) {
+  let beat = 0;
+  events.forEach((event) => {
+    event.startBeat = beat;
+    if (event.type === "chord") {
+      beat += Number(event.beats) || 0;
+    }
+  });
+  return beat;
 }
 
 function refreshImportPreview() {
   const score = buildImportScore();
   if (!score) {
     importEl.summary.textContent = "解析結果から譜面を作れなかった。BPMやオフセットを調整してみてね。";
-    importEl.chordPreview.innerHTML = "";
+    if (importEl.chordEditor) {
+      importEl.chordEditor.innerHTML = "";
+    }
     importEl.convertButton.disabled = true;
     return;
   }
   importEl.convertButton.disabled = false;
-  const chordSegments = score.events.filter((event) => event.type === "chord" && event.chord);
-  importEl.summary.textContent =
-    `全${score.bars}小節 / コード${chordSegments.length}個 / メロディ${score.melody.length}音を見つけたよ。`;
-  importEl.chordPreview.innerHTML = chordSegments
-    .slice(0, 32)
-    .map((event) => `<span class="chord-chip">${escapeHtml(event.chord)}<small>${event.beats}拍</small></span>`)
-    .join("")
-    + (chordSegments.length > 32 ? `<span class="chord-chip chord-chip--more">…ほか${chordSegments.length - 32}個</span>` : "");
+  // 検出しなおしたので、編集中のスコアを置き換える
+  importState.workingScore = score;
+  renderChordEditor();
   renderBpmCandidates();
   drawDebugCanvases(score);
+}
+
+// 検出済みコードを、小節-拍つきで手なおしできる表として描く
+function renderChordEditor() {
+  const score = importState.workingScore;
+  if (!score || !importEl.chordEditor) {
+    return;
+  }
+  const beatsPerBar = importTuning.beatsPerBar;
+  const totalBeats = recomputeStartBeats(score.events);
+  const chordEvents = score.events.filter((event) => event.type === "chord");
+  const bars = Math.ceil(totalBeats / beatsPerBar) || 1;
+  importEl.summary.textContent =
+    `全${bars}小節 / コード${chordEvents.filter((e) => e.chord).length}個 / メロディ${score.melody.length}音。コード名・拍数を手なおしできるよ。`;
+
+  importEl.chordEditor.innerHTML = "";
+  let runBeat = 0;
+  chordEvents.forEach((event) => {
+    const bar = Math.floor(runBeat / beatsPerBar) + 1;
+    const beatInBar = (runBeat % beatsPerBar) + 1;
+    runBeat += Number(event.beats) || 0;
+    const row = document.createElement("div");
+    row.className = "chord-edit-row";
+    row.innerHTML = `
+      <span class="chord-edit-pos">${bar}-${Number.isInteger(beatInBar) ? beatInBar : beatInBar.toFixed(1)}</span>
+      <input class="chord-edit-name" type="text" value="${escapeAttr(event.chord || "")}" placeholder="(なし)" aria-label="コード">
+      <input class="chord-edit-beats" type="number" min="0.25" max="32" step="0.25" value="${event.beats}" aria-label="拍数">
+      <button class="chord-edit-del" type="button" title="削除">✕</button>`;
+    row.querySelector(".chord-edit-name").addEventListener("input", (ev) => {
+      event.chord = ev.target.value.trim() || null;
+    });
+    row.querySelector(".chord-edit-beats").addEventListener("change", (ev) => {
+      event.beats = Math.max(0.25, Number(ev.target.value) || 0.25);
+      renderChordEditor();
+    });
+    row.querySelector(".chord-edit-del").addEventListener("click", () => {
+      const idx = score.events.indexOf(event);
+      if (idx >= 0) {
+        score.events.splice(idx, 1);
+        renderChordEditor();
+      }
+    });
+    importEl.chordEditor.appendChild(row);
+  });
 }
 
 // ===== チューニング＆デバッグ =====
@@ -571,11 +628,12 @@ function toggleImportPreview(kind, button) {
 }
 
 function convertImportToSong() {
-  const score = buildImportScore();
+  const score = importState.workingScore || buildImportScore();
   if (!score) {
     window.alert("譜面を作れなかった。BPMやオフセットを調整してみてね。");
     return;
   }
+  recomputeStartBeats(score.events);
   stopImportPreview();
   const bpm = Math.max(40, Math.min(240, Number(importEl.bpm.value) || 100));
   // 文字起こし結果があればタイムスタンプで割り付け、なければ貼り付け歌詞をN小節ごとに仮割り付け
@@ -590,7 +648,7 @@ function convertImportToSong() {
     assignLyricsToEvents(
       score.events,
       importEl.lyrics.value,
-      4,
+      importTuning.beatsPerBar,
       Number(importEl.barsPerLine.value) || 2
     );
   }
@@ -599,7 +657,7 @@ function convertImportToSong() {
       title: `${importState.fileName}（取り込み）`,
       artist: "",
       bpm: Math.round(bpm * 10) / 10,
-      beatsPerBar: 4,
+      beatsPerBar: importTuning.beatsPerBar,
       defaultBeats: 2,
       transpose: 0,
       source: "",
@@ -660,6 +718,10 @@ importEl.analyzeButton?.addEventListener("click", runImportAnalysis);
 importEl.bpm?.addEventListener("change", refreshImportPreview);
 importEl.offset?.addEventListener("change", refreshImportPreview);
 importEl.quantize?.addEventListener("change", refreshImportPreview);
+importEl.beatsPerBar?.addEventListener("change", () => {
+  importTuning.beatsPerBar = Number(importEl.beatsPerBar.value) || 4;
+  refreshImportPreview();
+});
 importEl.previewOriginal?.addEventListener("click", () => toggleImportPreview("original", importEl.previewOriginal));
 importEl.previewInst?.addEventListener("click", () => toggleImportPreview("inst", importEl.previewInst));
 importEl.previewVocal?.addEventListener("click", () => toggleImportPreview("vocal", importEl.previewVocal));
