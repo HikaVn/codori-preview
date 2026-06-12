@@ -107,22 +107,32 @@ async function runTranscription() {
       task: "transcribe",
       chunk_length_s: 30,
       stride_length_s: 5,
-      return_timestamps: true
+      return_timestamps: true,
+      // ハルシネーション（繰り返し暴走・多言語の混入）を抑える生成設定
+      condition_on_previous_text: false,
+      no_repeat_ngram_size: 3,
+      repetition_penalty: 1.25,
+      compression_ratio_threshold: 2.4,
+      logprob_threshold: -1.0,
+      no_speech_threshold: 0.6,
+      temperature: [0, 0.2, 0.4, 0.6, 0.8]
     });
 
-    const chunks = (output.chunks || [])
+    const rawChunks = (output.chunks || [])
       .map((chunk) => ({
         start: Number(chunk.timestamp?.[0]) || 0,
         end: Number(chunk.timestamp?.[1]) || 0,
         text: String(chunk.text || "").trim()
       }))
       .filter((chunk) => chunk.text);
+    const chunks = cleanTranscriptChunks(rawChunks);
     transcribeState.chunks = chunks;
     renderTranscriptList();
     hideTranscribeProgress();
+    const dropped = rawChunks.length - chunks.length;
     transcribeEl.status.textContent = chunks.length
-      ? `${chunks.length}行を聞き取ったよ。下で手なおしして、「譜面にする」とタイミングで割り付ける。`
-      : "歌詞を聞き取れなかった。モデルをbase/smallに変えるか、ボーカルがはっきりした曲で試してみてね。";
+      ? `${chunks.length}行を聞き取ったよ。${dropped > 0 ? `（あやしい繰り返し${dropped}件を除いた）` : ""}下で手なおしして、「譜面にする」とタイミングで割り付ける。`
+      : "歌詞を聞き取れなかった。モデルをbase/smallに変える、認識する音を切り替える、はっきり歌っている区間で試す、を試してみてね。";
   } catch (error) {
     console.warn("transcription failed", error);
     hideTranscribeProgress();
@@ -154,6 +164,71 @@ function prepareTranscriptionAudio() {
     }
   }
   return audio;
+}
+
+// Whisperのハルシネーション後始末：
+// 1) チャンク内の繰り返し（「ABABAB…」）を1回に畳む
+// 2) 直前チャンクと同一テキストの連続を捨てる
+// 3) 日本語/英語としての体をなさない多言語サラダのチャンクを捨てる
+function cleanTranscriptChunks(chunks) {
+  const cleaned = [];
+  let prevText = null;
+  for (const chunk of chunks) {
+    const text = collapseRepeats(chunk.text);
+    if (!text || text === prevText) {
+      continue;
+    }
+    if (isGibberish(text)) {
+      continue;
+    }
+    cleaned.push({ ...chunk, text });
+    prevText = text;
+  }
+  return cleaned;
+}
+
+// 「そらそらそらそら」→「そら」、「LaLaLa」→「La」、語/句の即時反復をまとめる
+function collapseRepeats(text) {
+  let out = text;
+  // 句（スペース区切り）の反復
+  out = out.replace(/(.+?)(?:\s+\1){2,}/g, "$1");
+  // 文字単位の長い反復（2〜8文字の塊が3回以上）
+  out = out.replace(/(.{1,8}?)\1{3,}/g, "$1$1");
+  return out.trim();
+}
+
+const SCRIPT_PATTERNS = {
+  japanese: /[぀-ヿ㐀-鿿]/,
+  latin: /[A-Za-z]/,
+  cyrillic: /[Ѐ-ӿ]/,
+  hangul: /[가-힣ᄀ-ᇿ]/,
+  arabic: /[؀-ۿ]/,
+  thai: /[฀-๿]/,
+  greek: /[Ͱ-Ͽ]/,
+  devanagari: /[ऀ-ॿ]/
+};
+
+function isGibberish(text) {
+  const chars = Array.from(text.replace(/\s/g, ""));
+  if (chars.length < 2) {
+    return true;
+  }
+  // ユニーク文字率が極端に低い（同じ文字の繰り返し）
+  const unique = new Set(chars).size;
+  if (unique / chars.length < 0.25 && chars.length > 6) {
+    return true;
+  }
+  // 文字体系の数を数える。正常な歌詞は日本語＋英語くらいで2系統まで。
+  // キリル・ハングル・アラビア等が混ざって3系統以上になるのはWhisperの暴走。
+  const scripts = Object.keys(SCRIPT_PATTERNS).filter((name) => SCRIPT_PATTERNS[name].test(text));
+  if (scripts.length >= 3) {
+    return true;
+  }
+  // 日本語の曲なのに、日本語も英語も含まない（キリル/ハングル/アラビア等だけ）チャンクは捨てる
+  if (!scripts.includes("japanese") && !scripts.includes("latin") && scripts.length > 0) {
+    return true;
+  }
+  return false;
 }
 
 function renderTranscriptList() {
