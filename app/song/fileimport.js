@@ -80,18 +80,26 @@ fileImportEl.pdfInput?.addEventListener("change", async (event) => {
   try {
     const text = await extractPdfLyrics(file);
     const parsed = parseScoreText(text);
-    // PDFは音符が取れないので、コードと歌詞・テンポだけ流し込む
-    if (parsed.chords.length) {
+    // ベクターPDFなら符頭（音楽フォントのグリフ）から音符を推定（実験的）
+    let vectorMelody = [];
+    try {
+      const lib = await loadPdfjs();
+      const res = await extractPdfVectorMelody(file, lib.getDocument.bind(lib), lib.OPS);
+      vectorMelody = res.melody || [];
+    } catch (e) {
+      console.warn("vector note read failed", e);
+    }
+    if (parsed.chords.length || vectorMelody.length) {
       applyParsedScore({
         title: parsed.title,
         bpm: parsed.bpm,
         beatsPerBar: 4,
-        melody: [],
+        melody: vectorMelody,
         chordEvents: parsed.chords.map((c, i) => ({ startBeat: i, chord: c })),
         words: [],
         lyricLines: parsed.lyricLines
       }, "PDF譜面");
-      window.alert(`PDFから読み込んだよ（コード${parsed.chords.length}・歌詞${parsed.lyricLines.length}行${parsed.bpm ? "・♩=" + parsed.bpm : ""}）。音符は画像なので取れないけど、コードと歌詞は取り込んだよ。`);
+      window.alert(`PDFから読み込んだよ（コード${parsed.chords.length}・音符${vectorMelody.length}（実験的・要手なおし）・歌詞${parsed.lyricLines.length}行${parsed.bpm ? "・♩=" + parsed.bpm : ""}）。音符はピアノロールで直してね。`);
     } else if (parsed.lyricLines.length) {
       if (importEl.melodyLyrics) importEl.melodyLyrics.value = parsed.lyricLines.join("\n");
       importEl.melodyBlock && (importEl.melodyBlock.open = true);
