@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-practice-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-practice-tuning-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -236,6 +236,46 @@
           </div>
           <div id="practice-records"></div>
         </div>
+
+        <details class="panel debug-block" id="practice-tuning">
+          <summary>採点の調整（上級）</summary>
+          <p class="hint">
+            採点が厳しすぎる / 甘すぎると感じたら調整してね。動かすと、いまの結果がその場で採点しなおされるよ（記録には増えない）。
+          </p>
+          <div class="import-settings">
+            <label>甘さ⇔厳しさ
+              <span class="tune-row">
+                <input id="tune-strictness" type="range" min="0.6" max="1.6" step="0.1" value="1.0">
+                <span id="tune-strictness-val">1.0</span>
+              </span>
+            </label>
+            <label>コードのタイミング許容(拍)
+              <span class="tune-row">
+                <input id="tune-chord-tol" type="range" min="0.15" max="1.0" step="0.05" value="0.5">
+                <span id="tune-chord-tol-val">0.50</span>
+              </span>
+            </label>
+            <label>オンセット感度
+              <span class="tune-row">
+                <input id="tune-onset" type="range" min="0.3" max="2.5" step="0.1" value="1.0">
+                <span id="tune-onset-val">1.0</span>
+              </span>
+            </label>
+            <label>歌の音程許容(半音)
+              <span class="tune-row">
+                <input id="tune-pitch-tol" type="range" min="1.0" max="3.0" step="0.25" value="2.0">
+                <span id="tune-pitch-tol-val">2.0</span>
+              </span>
+            </label>
+          </div>
+          <p class="hint">
+            「オンセット感度」は数字が小さいほど弱いストロークも拾う（拾いすぎたら上げる）。「音程許容」は大きいほど甘い。
+          </p>
+          <div class="import-settings">
+            <button class="ghost-button" id="practice-rescore" type="button">いまの設定で採点しなおす</button>
+            <button class="ghost-button" id="tune-reset" type="button">標準に戻す</button>
+          </div>
+        </details>
       </section>
 
       <!-- ===== 取り込みモード ===== -->
@@ -415,10 +455,10 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-practice-v1"></script>
-    <script src="./dsp.js?v=20260612-practice-v1"></script>
-    <script src="./import.js?v=20260612-practice-v1"></script>
-    <script src="./transcribe.js?v=20260612-practice-v1"></script>
-    <script src="./practice.js?v=20260612-practice-v1"></script>
+    <script src="./song.js?v=20260612-practice-tuning-v1"></script>
+    <script src="./dsp.js?v=20260612-practice-tuning-v1"></script>
+    <script src="./import.js?v=20260612-practice-tuning-v1"></script>
+    <script src="./transcribe.js?v=20260612-practice-tuning-v1"></script>
+    <script src="./practice.js?v=20260612-practice-tuning-v1"></script>
   </body>
 </html>

@@ -7,6 +7,31 @@
 
 const PRACTICE_STORAGE_KEY = "codori.songPractice.records.v1";
 const CALIBRATION_STORAGE_KEY = "codori.songPractice.calibration.v1";
+const PRACTICE_TUNING_KEY = "codori.songPractice.tuning.v1";
+
+// 採点の調整パラメータ（調整パネルから変更・localStorage保存）
+const practiceTuning = {
+  chordTolerance: 0.5, // コードのタイミング許容（拍）
+  onsetSensitivity: 1.0, // オンセット検出の感度（小さいほど拾いやすい）
+  pitchTolerance: 2.0, // 歌の音程許容（半音、これで0点になる）
+  strictness: 1.0 // 全体の甘さ/厳しさ（1.0=標準、>1で厳しい）
+};
+
+function loadTuning() {
+  try {
+    Object.assign(practiceTuning, JSON.parse(localStorage.getItem(PRACTICE_TUNING_KEY)) || {});
+  } catch (error) {
+    // 既定のまま
+  }
+}
+
+function saveTuning() {
+  try {
+    localStorage.setItem(PRACTICE_TUNING_KEY, JSON.stringify(practiceTuning));
+  } catch (error) {
+    // ignore
+  }
+}
 
 const practiceEl = {
   tab: document.querySelector("#tab-practice"),
@@ -27,7 +52,17 @@ const practiceEl = {
   scoreStars: document.querySelector("#practice-stars"),
   metrics: document.querySelector("#practice-metrics"),
   advice: document.querySelector("#practice-advice"),
-  records: document.querySelector("#practice-records")
+  records: document.querySelector("#practice-records"),
+  tuneChordTol: document.querySelector("#tune-chord-tol"),
+  tuneChordTolVal: document.querySelector("#tune-chord-tol-val"),
+  tuneOnset: document.querySelector("#tune-onset"),
+  tuneOnsetVal: document.querySelector("#tune-onset-val"),
+  tunePitchTol: document.querySelector("#tune-pitch-tol"),
+  tunePitchTolVal: document.querySelector("#tune-pitch-tol-val"),
+  tuneStrictness: document.querySelector("#tune-strictness"),
+  tuneStrictnessVal: document.querySelector("#tune-strictness-val"),
+  rescoreButton: document.querySelector("#practice-rescore"),
+  tuneReset: document.querySelector("#tune-reset")
 };
 
 const BIRD_BASE = "../../assets/app/characters/action-candidate-integrated-v3/";
@@ -36,6 +71,7 @@ let practiceMode = "chord"; // "chord" | "singing"
 let practiceRecorder = null; // { stream, source, processor, chunks, recStartCtx }
 let practiceTransport = null; // { rafId, timer, endBeat, t0, beat0CtxTime, spb }
 let practiceBusy = false;
+let lastTake = null; // { recording, snapshot, mode } 再採点用
 
 // ===== 記録・キャリブレーションの保存 =====
 
@@ -253,21 +289,23 @@ function manualStop() {
 
 let practiceTransportSnapshot = null;
 
-function analyzeTake(recording) {
-  // トランスポートの時刻情報は finishTake で stopTransport される前にスナップ済み
-  const snap = practiceTransportSnapshot;
+function analyzeTake(recording, snapshot, mode, saveToRecords = true) {
+  const snap = snapshot || practiceTransportSnapshot;
+  const takeMode = mode || practiceMode;
   if (!snap) {
     practiceEl.status.textContent = "採点に必要な情報が取れなかった。もう一度ためしてみよう。";
     return;
   }
+  lastTake = { recording, snapshot: snap, mode: takeMode };
   const { samples, recStartCtx, sampleRate } = recording;
   const spb = snap.spb;
   const beat0CtxTime = snap.beat0CtxTime;
   const recTimeToBeat = (sec) => ((recStartCtx + sec) - beat0CtxTime) / spb;
   const beatToRec = (beat) => (beat0CtxTime - recStartCtx) + beat * spb;
+  // 厳しさ: タイミング許容と音程許容を縮める/広げる
+  const strict = practiceTuning.strictness || 1.0;
 
-  let result;
-  if (practiceMode === "singing") {
+  if (takeMode === "singing") {
     const melody = trackMelody(samples, sampleRate, null, { clarityThreshold: 0.5 });
     Promise.resolve(melody).then((mel) => {
       const recPitchBeats = [];
@@ -276,15 +314,18 @@ function analyzeTake(recording) {
           recPitchBeats.push({ beat: recTimeToBeat(f / mel.frameRate), midi });
         }
       });
-      result = scoreSingingPerformance(recPitchBeats, song.melody, { transpose: song.transpose || 0 });
-      presentResult(result);
+      const result = scoreSingingPerformance(recPitchBeats, song.melody, {
+        transpose: song.transpose || 0,
+        pitchTolerance: practiceTuning.pitchTolerance / strict
+      });
+      presentResult(result, saveToRecords);
     });
     return;
   }
 
   // コード練習
   const calibration = loadCalibration();
-  const onsetSec = detectOnsets(samples, sampleRate, { sensitivity: calibration?.onsetSensitivity ?? 1.0 });
+  const onsetSec = detectOnsets(samples, sampleRate, { sensitivity: practiceTuning.onsetSensitivity });
   const onsetBeats = onsetSec.map(recTimeToBeat);
   const { chroma, frames, frameRate } = computeChroma(samples, sampleRate, { minHz: 180, maxHz: 3500 });
   const decayBeats = calibration?.decaySec ? calibration.decaySec / spb : 1.0;
@@ -298,14 +339,24 @@ function analyzeTake(recording) {
     startBeat: event.startBeat,
     chord: transposeChord(event.chord, song.transpose)
   }));
-  result = scoreChordPerformance(onsetBeats, scoreEvents, {
+  const result = scoreChordPerformance(onsetBeats, scoreEvents, {
     segmentChroma: segChroma,
-    cleannessReference: calibration?.refCleanness
+    cleannessReference: calibration?.refCleanness,
+    toleranceBeats: practiceTuning.chordTolerance / strict
   });
-  presentResult(result);
+  presentResult(result, saveToRecords);
 }
 
-function presentResult(result) {
+// 調整値を変えて、最後のテイクを採点し直す（記録は増やさない）
+function rescoreLastTake() {
+  if (!lastTake) {
+    return;
+  }
+  practiceEl.status.textContent = "採点しなおし中…";
+  window.setTimeout(() => analyzeTake(lastTake.recording, lastTake.snapshot, lastTake.mode, false), 20);
+}
+
+function presentResult(result, saveToRecords = true) {
   if (!result) {
     practiceEl.status.textContent = "うまく採点できなかった。もう一度ゆっくりためしてみよう。";
     return;
@@ -339,14 +390,16 @@ function presentResult(result) {
     ${advice.tips.map((t) => `<p class="advice-tip">💡 ${escapeHtml(t)}</p>`).join("")}
   `;
 
-  saveRecord({
-    songId: song?.id || "current",
-    songTitle: song?.title || "",
-    mode: practiceMode,
-    score: result.score,
-    at: new Date().toISOString()
-  });
-  renderRecords();
+  if (saveToRecords) {
+    saveRecord({
+      songId: song?.id || "current",
+      songTitle: song?.title || "",
+      mode: practiceMode,
+      score: result.score,
+      at: new Date().toISOString()
+    });
+    renderRecords();
+  }
 }
 
 function starsFor(score) {
@@ -589,6 +642,49 @@ practiceEl.recordButton?.addEventListener("click", () => {
 });
 practiceEl.stopButton?.addEventListener("click", manualStop);
 practiceEl.calibButton?.addEventListener("click", startCalibration);
+
+// ===== 採点の調整 =====
+
+function syncTuningInputs() {
+  if (!practiceEl.tuneChordTol) {
+    return;
+  }
+  practiceEl.tuneChordTol.value = String(practiceTuning.chordTolerance);
+  practiceEl.tuneChordTolVal.textContent = practiceTuning.chordTolerance.toFixed(2);
+  practiceEl.tuneOnset.value = String(practiceTuning.onsetSensitivity);
+  practiceEl.tuneOnsetVal.textContent = practiceTuning.onsetSensitivity.toFixed(1);
+  practiceEl.tunePitchTol.value = String(practiceTuning.pitchTolerance);
+  practiceEl.tunePitchTolVal.textContent = practiceTuning.pitchTolerance.toFixed(1);
+  practiceEl.tuneStrictness.value = String(practiceTuning.strictness);
+  practiceEl.tuneStrictnessVal.textContent = practiceTuning.strictness.toFixed(1);
+}
+
+function bindTuning(input, label, key, digits) {
+  input?.addEventListener("input", () => {
+    practiceTuning[key] = Number(input.value);
+    label.textContent = Number(input.value).toFixed(digits);
+    saveTuning();
+    if (lastTake) {
+      rescoreLastTake();
+    }
+  });
+}
+
+loadTuning();
+syncTuningInputs();
+bindTuning(practiceEl.tuneChordTol, practiceEl.tuneChordTolVal, "chordTolerance", 2);
+bindTuning(practiceEl.tuneOnset, practiceEl.tuneOnsetVal, "onsetSensitivity", 1);
+bindTuning(practiceEl.tunePitchTol, practiceEl.tunePitchTolVal, "pitchTolerance", 1);
+bindTuning(practiceEl.tuneStrictness, practiceEl.tuneStrictnessVal, "strictness", 1);
+practiceEl.rescoreButton?.addEventListener("click", rescoreLastTake);
+practiceEl.tuneReset?.addEventListener("click", () => {
+  Object.assign(practiceTuning, { chordTolerance: 0.5, onsetSensitivity: 1.0, pitchTolerance: 2.0, strictness: 1.0 });
+  saveTuning();
+  syncTuningInputs();
+  if (lastTake) {
+    rescoreLastTake();
+  }
+});
 
 if (practiceEl.calibChord) {
   // 曲の最初のコード or C を初期値にする

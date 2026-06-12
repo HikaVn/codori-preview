@@ -765,6 +765,7 @@ function foldedSemitoneError(recMidi, targetMidi) {
 function scoreSingingPerformance(recPitchBeats, targetNotes, options = {}) {
   const transpose = options.transpose || 0;
   const minCoverage = options.minCoverageFrames ?? 2;
+  const pitchTolerance = options.pitchTolerance ?? 2.0; // これだけ外れると0点
   const notes = (targetNotes || []).filter((note) => Number.isFinite(note.midi));
   if (!notes.length) {
     return null;
@@ -784,7 +785,7 @@ function scoreSingingPerformance(recPitchBeats, targetNotes, options = {}) {
       const sorted = inWindow.map((p) => p.midi).sort((a, b) => a - b);
       const recMidi = sorted[Math.floor(sorted.length / 2)];
       const error = foldedSemitoneError(recMidi, target);
-      const noteScore = Math.max(0, 1 - Math.abs(error) / 2);
+      const noteScore = Math.max(0, 1 - Math.abs(error) / pitchTolerance);
       scoreSum += noteScore;
       signedSum += error;
       signedCount += 1;
