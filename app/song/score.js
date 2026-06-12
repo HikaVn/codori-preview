@@ -13,7 +13,8 @@ const scoreState = {
   events: [],       // [{type:'section'|'chord', chord, beats, ...}]
   melody: [],       // [{startBeat, beats, midi, origMidi, lyric}]
   lyricLines: [],
-  pianoRoll: null
+  pianoRoll: null,
+  notation: null
 };
 
 const scoreEl = {
@@ -33,6 +34,7 @@ const scoreEl = {
   beatsPerBar: document.querySelector("#score-beats-per-bar"),
   playMelody: document.querySelector("#score-play-melody"),
   chordEditor: document.querySelector("#score-chord-editor"),
+  notationCanvas: document.querySelector("#score-notation"),
   canvas: document.querySelector("#score-pianoroll"),
   noteTable: document.querySelector("#score-note-table"),
   lyrics: document.querySelector("#score-lyrics"),
@@ -117,8 +119,30 @@ function renderScore() {
   const chordCount = scoreState.events.filter((e) => e.type === "chord" && e.chord).length;
   scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行`;
   renderScoreChordEditor();
+  syncScoreNotation();
   syncScorePianoRoll();
   renderScoreNoteTable();
+}
+
+// --- 五線譜（読み取り再現・クリックで修正） ---
+function syncScoreNotation() {
+  if (!scoreEl.notationCanvas || typeof createScoreNotation !== "function") return;
+  if (!scoreState.notation) {
+    scoreState.notation = createScoreNotation(scoreEl.notationCanvas, {
+      beatsPerBar: scoreState.beatsPerBar,
+      onChange: () => { afterNoteEdit(); },
+      onSelect: (note) => { renderScoreNoteTable(); scrollScoreNoteIntoView(note); }
+    });
+  }
+  scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar });
+}
+
+function scrollScoreNoteIntoView(note) {
+  const sorted = [...scoreState.melody].sort((a, b) => a.startBeat - b.startBeat);
+  const index = sorted.indexOf(note);
+  if (index < 0) return;
+  const row = scoreEl.noteTable.children[index];
+  row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // --- コード編集表 ---
@@ -153,7 +177,10 @@ function syncScorePianoRoll() {
   if (!scoreState.pianoRoll) {
     scoreState.pianoRoll = createPianoRoll(scoreEl.canvas, {
       ...opts,
-      onChange: () => { renderScoreNoteTable(); }
+      onChange: () => {
+        scoreState.notation?.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar });
+        renderScoreNoteTable();
+      }
     });
   }
   scoreState.pianoRoll.setMelody(scoreState.melody, opts);
@@ -168,8 +195,9 @@ function renderScoreNoteTable() {
     const bar = Math.floor(note.startBeat / beatsPerBar) + 1;
     const beatInBar = (note.startBeat % beatsPerBar) + 1;
     const changed = Number.isFinite(note.origMidi) && note.origMidi !== note.midi;
+    const selected = scoreState.notation?.getSelected() === note;
     const row = document.createElement("div");
-    row.className = "score-note-row" + (changed ? " is-changed" : "");
+    row.className = "score-note-row" + (changed ? " is-changed" : "") + (selected ? " is-selected" : "");
     row.innerHTML = `
       <span class="score-note-idx">${index + 1}</span>
       <span class="score-note-pos">${bar}-${Number.isInteger(beatInBar) ? beatInBar : beatInBar.toFixed(1)}</span>
@@ -185,12 +213,19 @@ function renderScoreNoteTable() {
       if (m !== null) { note.midi = m; }
       afterNoteEdit();
     });
+    // 行クリック → 五線譜側でも選択（入力・ボタン操作は除く）
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button, input")) return;
+      scoreState.notation?.select(note);
+      renderScoreNoteTable();
+    });
     scoreEl.noteTable.appendChild(row);
   });
 }
 
 function afterNoteEdit() {
   scoreState.pianoRoll?.setMelody(scoreState.melody, { bpm: Number(scoreEl.bpm.value) || 100, beatsPerBar: scoreState.beatsPerBar });
+  scoreState.notation?.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar });
   renderScoreNoteTable();
 }
 
