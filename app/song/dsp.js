@@ -566,8 +566,90 @@ function beatChromaVectors(chroma, frames, frameRate, bpm, beatOffsetSec, beatCo
   return vectors;
 }
 
+// Krumhansl-Kessler のキープロファイル（長調・短調）。クロマと相関してキーを推定する。
+const KK_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const KK_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+
+function correlate(a, b) {
+  let ma = 0;
+  let mb = 0;
+  for (let i = 0; i < 12; i += 1) { ma += a[i]; mb += b[i]; }
+  ma /= 12; mb /= 12;
+  let num = 0;
+  let da = 0;
+  let db = 0;
+  for (let i = 0; i < 12; i += 1) {
+    const x = a[i] - ma;
+    const y = b[i] - mb;
+    num += x * y;
+    da += x * x;
+    db += y * y;
+  }
+  const denom = Math.sqrt(da * db);
+  return denom < 1e-9 ? 0 : num / denom;
+}
+
+// 拍クロマ全体からキー（主音＋長短）を推定
+function estimateKey(beatVectors) {
+  const chroma = new Float32Array(12);
+  for (const v of beatVectors) {
+    for (let pc = 0; pc < 12; pc += 1) {
+      chroma[pc] += v[pc];
+    }
+  }
+  let best = { tonic: 0, mode: "major", score: -Infinity };
+  const rotated = new Float32Array(12);
+  for (let tonic = 0; tonic < 12; tonic += 1) {
+    for (const [mode, profile] of [["major", KK_MAJOR], ["minor", KK_MINOR]]) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        rotated[pc] = profile[((pc - tonic) % 12 + 12) % 12];
+      }
+      const c = correlate(chroma, rotated);
+      if (c > best.score) {
+        best = { tonic, mode, score: c };
+      }
+    }
+  }
+  return best;
+}
+
+// キーのダイアトニックコードに加点するテンプレート別ボーナスを作る
+function buildKeyBonuses(key, strength = 0.06) {
+  const labels = CHORD_TEMPLATES;
+  // 長調/短調のダイアトニック度数（半音）と、その度数で自然なコード種別
+  const scale = key.mode === "major"
+    ? [0, 2, 4, 5, 7, 9, 11]
+    : [0, 2, 3, 5, 7, 8, 10];
+  const scaleSet = new Set(scale.map((d) => (key.tonic + d) % 12));
+  // 度数→自然な品質（簡易）
+  const majorQualities = ["", "m", "m", "", "7", "m", "dim"];
+  const minorQualities = ["m", "dim", "", "m", "m", "", ""];
+  const qualByPc = {};
+  scale.forEach((d, i) => {
+    qualByPc[(key.tonic + d) % 12] = key.mode === "major" ? majorQualities[i] : minorQualities[i];
+  });
+  const bonuses = new Float32Array(labels.length);
+  labels.forEach((label, idx) => {
+    const parsed = dspParseChord(label.name);
+    if (!parsed) {
+      return;
+    }
+    if (scaleSet.has(parsed.semitone)) {
+      bonuses[idx] += strength; // 根音がスケール内
+      const expected = qualByPc[parsed.semitone];
+      const suffix = label.name.replace(/^[A-G][#b]?/, "");
+      // 期待する品質（または近い7th系）なら追加加点
+      if (suffix === expected || (expected === "" && /^(maj7|7|6|add9)?$/.test(suffix)) || (expected === "m" && /^m(7|6)?$/.test(suffix)) || (expected === "7" && /^7?$/.test(suffix))) {
+        bonuses[idx] += strength * 0.7;
+      }
+    }
+  });
+  return bonuses;
+}
+
 // 拍ごとのクロマに対して、テンプレート相関＋切り替えペナルティの動的計画法でコード列を推定
-function detectChordsFromChroma(beatVectors, changePenalty = 0.1) {
+// keyBonuses: 各テンプレートへの加点（キーのダイアトニックコード優先用、任意）
+function detectChordsFromChroma(beatVectors, changePenalty = 0.1, keyBonuses = null) {
   const labels = CHORD_TEMPLATES;
   const states = labels.length + 1; // 最後は「無音/不明」
   const beats = beatVectors.length;
@@ -594,7 +676,7 @@ function detectChordsFromChroma(beatVectors, changePenalty = 0.1) {
         for (let pc = 0; pc < 12; pc += 1) {
           dot += vector[pc] * labels[s].vector[pc];
         }
-        emit = dot + labels[s].bonus;
+        emit = dot + labels[s].bonus + (keyBonuses ? keyBonuses[s] : 0);
       }
       if (beat === 0) {
         score[s] = emit;
@@ -1306,7 +1388,15 @@ function buildScoreFromAnalysis(analysis, options) {
     return null;
   }
 
-  let labels = detectChordsFromChroma(beatVectors, options.changePenalty ?? 0.1);
+  // キー推定＋ダイアトニック優先（keyStrength=0で無効）
+  const keyStrength = options.keyStrength ?? 0.06;
+  let estimatedKey = null;
+  let keyBonuses = null;
+  if (keyStrength > 0) {
+    estimatedKey = estimateKey(beatVectors);
+    keyBonuses = buildKeyBonuses(estimatedKey, keyStrength);
+  }
+  let labels = detectChordsFromChroma(beatVectors, options.changePenalty ?? 0.1, keyBonuses);
   const shift = estimateDownbeatShift(labels, beatsPerBar);
   // 小節頭が途中から始まる場合は、先頭を切らずに無音拍を足して1小節目に収める
   const pad = shift === 0 ? 0 : beatsPerBar - shift;
@@ -1361,7 +1451,8 @@ function buildScoreFromAnalysis(analysis, options) {
     beatCount: labels.length,
     beatLabels: labels,
     bars: Math.ceil(labels.length / beatsPerBar),
-    audioOffsetSec: scoreStartSec
+    audioOffsetSec: scoreStartSec,
+    key: estimatedKey
   };
 }
 
@@ -1571,6 +1662,8 @@ if (typeof module !== "undefined" && module.exports) {
     beatChromaVectors,
     beatChromaVectorsFromBeatTimes,
     detectChordsFromChroma,
+    estimateKey,
+    buildKeyBonuses,
     estimateDownbeatShift,
     mergeBeatLabels,
     yinPitch,

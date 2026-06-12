@@ -35,6 +35,8 @@ const importEl = {
   tuneVocalVal: document.querySelector("#tune-vocal-val"),
   tuneClarity: document.querySelector("#tune-clarity"),
   tuneClarityVal: document.querySelector("#tune-clarity-val"),
+  tuneKey: document.querySelector("#tune-key"),
+  tuneKeyVal: document.querySelector("#tune-key-val"),
   separationMethod: document.querySelector("#separation-method"),
   chromaPreset: document.querySelector("#chroma-preset"),
   chromaMinHz: document.querySelector("#chroma-min"),
@@ -72,7 +74,8 @@ const importTuning = {
   chromaMinHz: 60,
   chromaMaxHz: 5000,
   chromaLogCompress: false,
-  beatsPerBar: 4
+  beatsPerBar: 4,
+  keyStrength: 0.06
 };
 
 // コード解析の音域プリセット（楽器ごとに和音が見えやすい帯域へ絞る）
@@ -102,6 +105,7 @@ const importState = {
   cancelRequested: false
 };
 
+const KEY_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const IMPORT_RATE = 22050;
 const IMPORT_MAX_SECONDS = 360;
 
@@ -275,6 +279,7 @@ function buildImportScore() {
     beatsPerBar: importTuning.beatsPerBar,
     quantUnit: importQuantUnit(),
     changePenalty: importTuning.changePenalty,
+    keyStrength: importTuning.keyStrength,
     // 検出した実拍の位置に従う（テンポはBPMとして再生に使う）。BPM/オフセットを手で変えたら一様グリッドに戻す。
     beatTimes: importState.useBeatTimes === false ? null : importState.beatTimes
   });
@@ -396,8 +401,9 @@ function renderChordEditor() {
   const totalBeats = recomputeStartBeats(score.events);
   const chordEvents = score.events.filter((event) => event.type === "chord");
   const bars = Math.ceil(totalBeats / beatsPerBar) || 1;
+  const keyLabel = score.key ? `${KEY_NAMES[score.key.tonic]}${score.key.mode === "minor" ? "m（短調）" : "（長調）"}` : "?";
   importEl.summary.textContent =
-    `全${bars}小節 / コード${chordEvents.filter((e) => e.chord).length}個 / メロディ${score.melody.length}音。コード名・拍数を手なおしできるよ。`;
+    `全${bars}小節 / コード${chordEvents.filter((e) => e.chord).length}個 / メロディ${score.melody.length}音 / 推定キー: ${keyLabel}。コード名・拍数を手なおしできるよ。`;
 
   importEl.chordEditor.innerHTML = "";
   let runBeat = 0;
@@ -886,6 +892,11 @@ if (importEl.chromaPreset) {
 importEl.tuneRepet?.addEventListener("input", () => {
   importTuning.repetStrength = Number(importEl.tuneRepet.value);
   importEl.tuneRepetVal.textContent = importTuning.repetStrength.toFixed(1);
+});
+importEl.tuneKey?.addEventListener("input", () => {
+  importTuning.keyStrength = Number(importEl.tuneKey.value);
+  importEl.tuneKeyVal.textContent = importTuning.keyStrength.toFixed(2);
+  refreshImportPreview();
 });
 importEl.reanalyzeMelody?.addEventListener("click", reanalyzeMelodyOnly);
 importEl.reanalyzeFull?.addEventListener("click", reanalyzeFull);
