@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-lane-layout-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-stage-next-v2">
   </head>
   <body>
     <main class="song-shell">
@@ -154,9 +154,16 @@
             <div class="stage-bird" id="stage-bird">
               <img id="stage-bird-img" src="../../assets/app/characters/action-candidate-integrated-v3/action-major.png" alt="いまのコードのCodori">
             </div>
-            <div class="stage-chord" id="stage-chord">-</div>
-            <div class="stage-fingering">
-              <img id="stage-fingering-img" alt="いまのコードのウクレレ運指" style="visibility:hidden">
+            <div class="stage-info">
+              <div class="stage-chord" id="stage-chord">-</div>
+              <div class="stage-fingering">
+                <img id="stage-fingering-img" alt="いまのコードのウクレレ運指" style="visibility:hidden">
+              </div>
+              <div class="stage-next is-hidden" id="stage-next">
+                <span class="stage-next-label">つぎ</span>
+                <span class="stage-next-name" id="next-chord-name">-</span>
+                <img id="next-fingering-img" alt="つぎのコードのウクレレ運指">
+              </div>
             </div>
           </div>
           <div class="lane" id="lane">
@@ -256,9 +263,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-lane-layout-v1"></script>
-    <script src="./dsp.js?v=20260612-lane-layout-v1"></script>
-    <script src="./import.js?v=20260612-lane-layout-v1"></script>
-    <script src="./transcribe.js?v=20260612-lane-layout-v1"></script>
+    <script src="./song.js?v=20260612-stage-next-v2"></script>
+    <script src="./dsp.js?v=20260612-stage-next-v2"></script>
+    <script src="./import.js?v=20260612-stage-next-v2"></script>
+    <script src="./transcribe.js?v=20260612-stage-next-v2"></script>
   </body>
 </html>
