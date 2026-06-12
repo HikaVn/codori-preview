@@ -1761,3 +1761,115 @@ button {
   outline-offset: -4px;
   background: #eef4fb;
 }
+
+/* ===== 楽譜とりこみ（専用画面） ===== */
+.score-load-panel.is-dragover {
+  outline: 2px dashed var(--blue);
+  outline-offset: -4px;
+  background: #eef4fb;
+}
+
+.small-note {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.score-load-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.score-load-status {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.score-subhead {
+  margin: 16px 0 6px;
+  font-size: 15px;
+  color: var(--blue);
+}
+
+#score-lyrics {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.score-convert {
+  margin-top: 14px;
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* 音符↔音 対応表 */
+.score-note-table {
+  display: grid;
+  gap: 3px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.score-note-row {
+  display: grid;
+  grid-template-columns: 32px 48px 64px 30px 72px 30px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.score-note-row:nth-child(odd) {
+  background: #f4f8fb;
+}
+
+.score-note-row.is-changed {
+  background: #fdf6e7;
+}
+
+.score-note-idx,
+.score-note-pos,
+.score-note-orig {
+  font-family: var(--font-code);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.score-note-name {
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-code);
+  font-weight: 900;
+  color: var(--blue);
+  text-align: center;
+}
+
+.score-note-step {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.score-note-step:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.score-note-lyric {
+  font-weight: 900;
+  font-size: 13px;
+}

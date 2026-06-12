@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-pdfflow-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-scoretab-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -30,6 +30,10 @@
             <span>取り込み</span>
             <small>音源から解析</small>
           </button>
+          <button class="mode-tab" type="button" id="tab-score">
+            <span>楽譜とりこみ</span>
+            <small>MusicXML / PDF</small>
+          </button>
         </nav>
       </header>
 
@@ -47,12 +51,8 @@
             <button class="ghost-button" id="export-song" type="button">JSON書き出し</button>
             <button class="ghost-button" id="import-song-button" type="button">JSON読み込み</button>
             <input type="file" id="import-song" accept="application/json,.json" hidden>
-            <button class="ghost-button" id="import-musicxml-button" type="button">楽譜（MusicXML）読み込み</button>
-            <input type="file" id="import-musicxml" accept=".xml,.musicxml,.mxl,application/xml" hidden>
-            <button class="ghost-button" id="import-pdf-button" type="button">PDF楽譜（歌詞・メロディ・コード）</button>
-            <input type="file" id="import-pdf" accept="application/pdf,.pdf" hidden>
           </div>
-          <p class="library-dnd-hint">MusicXML / PDF / 音源ファイルをここにドラッグ＆ドロップしてもOK。読み込むと取り込み画面で手なおしできるよ。</p>
+          <p class="library-dnd-hint">MusicXML / PDF 楽譜は上の「楽譜とりこみ」タブから。音源は「取り込み」タブからどうぞ。</p>
         </div>
 
         <div class="panel meta-panel">
@@ -510,15 +510,83 @@
           <button class="primary-button" id="import-convert" type="button">譜面にする</button>
         </div>
       </section>
+
+      <!-- ===== 楽譜とりこみ（MusicXML / PDF） ===== -->
+      <section class="song-view" id="score-view" aria-label="楽譜とりこみ">
+        <div class="panel score-load-panel" id="score-dropzone">
+          <div class="editor-head">
+            <h2>楽譜ファイルから取り込み</h2>
+            <span class="small-note">音源の取り込みとは別だよ</span>
+          </div>
+          <p class="hint">
+            MuseScore / Sibelius / Finale 等で書き出した <b>MusicXML</b>、または <b>PDF楽譜</b> を読み込むと、メロディ・歌詞・コードを取り込むよ。<br>
+            ファイルを選ぶか、ここにドラッグ＆ドロップしてね。（PDFは音符を実験的に推定。下の表とピアノロールで直せる）
+          </p>
+          <div class="score-load-buttons">
+            <button class="primary-button" id="score-musicxml-button" type="button">MusicXMLを選ぶ</button>
+            <input type="file" id="score-musicxml" accept=".xml,.musicxml,.mxl,application/xml" hidden>
+            <button class="primary-button" id="score-pdf-button" type="button">PDF楽譜を選ぶ</button>
+            <input type="file" id="score-pdf" accept="application/pdf,.pdf" hidden>
+            <span class="score-load-status" id="score-load-status">まだ読み込んでないよ</span>
+          </div>
+          <div class="import-progress is-hidden" id="score-progress">
+            <p id="score-progress-label">読み込み中…</p>
+            <div class="import-progress-track"><div class="import-progress-bar is-indeterminate" id="score-progress-bar"></div></div>
+          </div>
+        </div>
+
+        <div class="panel score-result is-hidden" id="score-result">
+          <div class="editor-head">
+            <h2>取り込み結果</h2>
+            <p class="timeline-summary" id="score-summary"></p>
+          </div>
+          <div class="import-settings">
+            <label>BPM
+              <input id="score-bpm" type="number" min="40" max="240" step="0.1">
+            </label>
+            <label>拍子
+              <select id="score-beats-per-bar">
+                <option value="4" selected>4/4</option>
+                <option value="3">3/4</option>
+                <option value="2">2/4</option>
+                <option value="6">6/8</option>
+              </select>
+            </label>
+            <button class="ghost-button" id="score-play-melody" type="button">▶ メロディを聞く</button>
+          </div>
+
+          <h3 class="score-subhead">コード</h3>
+          <div class="import-chord-editor" id="score-chord-editor"></div>
+
+          <h3 class="score-subhead">メロディ（ピアノロールで手なおし）</h3>
+          <div class="pianoroll-wrap">
+            <canvas id="score-pianoroll" class="pianoroll-canvas"></canvas>
+          </div>
+
+          <h3 class="score-subhead">音符 ↔ 音 の対応（手動で直せる）</h3>
+          <p class="hint">PDFの推定がずれていたら、音符ごとに音を直してね。±で半音、欄に音名（例 A4）を直接入れてもOK。直すとピアノロールも連動するよ。</p>
+          <div class="score-note-table" id="score-note-table"></div>
+
+          <h3 class="score-subhead">歌詞</h3>
+          <textarea id="score-lyrics" rows="4" spellcheck="false" placeholder="歌詞（単語を空白で区切る）"></textarea>
+          <div class="import-settings">
+            <button class="ghost-button" id="score-to-hiragana" type="button">漢字・カナ→ひらがな</button>
+            <button class="primary-button" id="score-fit-lyrics" type="button">歌詞を音にはめる</button>
+            <span class="timeline-summary" id="score-lyrics-summary"></span>
+          </div>
+
+          <button class="primary-button score-convert" id="score-convert" type="button">この内容で譜面にする</button>
+        </div>
+      </section>
     </main>
-    <script src="./song.js?v=20260612-pdfflow-v1"></script>
-    <script src="./dsp.js?v=20260612-pdfflow-v1"></script>
-    <script src="./pianoroll.js?v=20260612-pdfflow-v1"></script>
-    <script src="./musicxml.js?v=20260612-pdfflow-v1"></script>
-    <script src="./pdfscore.js?v=20260612-pdfflow-v1"></script>
-    <script src="./import.js?v=20260612-pdfflow-v1"></script>
-    <script src="./fileimport.js?v=20260612-pdfflow-v1"></script>
-    <script src="./transcribe.js?v=20260612-pdfflow-v1"></script>
-    <script src="./practice.js?v=20260612-pdfflow-v1"></script>
+    <script src="./song.js?v=20260612-scoretab-v1"></script>
+    <script src="./dsp.js?v=20260612-scoretab-v1"></script>
+    <script src="./pianoroll.js?v=20260612-scoretab-v1"></script>
+    <script src="./musicxml.js?v=20260612-scoretab-v1"></script>
+    <script src="./pdfscore.js?v=20260612-scoretab-v1"></script>
+    <script src="./import.js?v=20260612-scoretab-v1"></script>
+    <script src="./transcribe.js?v=20260612-scoretab-v1"></script>
+    <script src="./score.js?v=20260612-scoretab-v1"></script>
+    <script src="./practice.js?v=20260612-scoretab-v1"></script>
   </body>
 </html>
