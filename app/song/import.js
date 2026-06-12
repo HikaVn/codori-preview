@@ -46,8 +46,20 @@ const importEl = {
   reanalyzeFull: document.querySelector("#reanalyze-full"),
   exportDebug: document.querySelector("#export-debug"),
   debugFlux: document.querySelector("#debug-flux"),
-  debugMelody: document.querySelector("#debug-melody")
+  debugMelody: document.querySelector("#debug-melody"),
+  melodyBlock: document.querySelector("#import-melody-block"),
+  melodyCanvas: document.querySelector("#melody-pianoroll"),
+  melodyPlay: document.querySelector("#melody-play"),
+  melodyClear: document.querySelector("#melody-clear"),
+  melodyLyrics: document.querySelector("#melody-lyrics"),
+  melodyGroupWords: document.querySelector("#melody-group-words"),
+  melodyFitLyrics: document.querySelector("#melody-fit-lyrics"),
+  melodyWordsSummary: document.querySelector("#melody-words-summary"),
+  melodyWordChips: document.querySelector("#melody-word-chips")
 };
+
+let pianoRoll = null;
+let importWordEvents = null; // 単語わりつけの結果（譜面化時に歌詞へ）
 
 // 解析チューニングのパラメータ（デバッグパネルから変更できる）
 const importTuning = {
@@ -78,6 +90,8 @@ const importState = {
   originalBuffer: null,
   midSide: null, // 再解析用に保持
   tempoCandidates: [],
+  beatTimes: null,
+  useBeatTimes: true,
   workingScore: null,
   analysis: null,
   instBuffer: null,
@@ -203,6 +217,10 @@ async function runImportAnalysis() {
     setImportProgress("テンポと拍をさがしてる…", 0.68);
     const tempo = estimateTempo(analysis.flux, analysis.frameRate);
     importState.tempoCandidates = tempo.candidates || [];
+    importState.beatTimes = trackBeats(
+      analysis.flux, analysis.frameRate, tempo.bpm, tempo.beatOffsetSec,
+      analysis.frames / analysis.frameRate
+    );
 
     setImportProgress("メロディを聞き取ってる…", 0.72);
     const melody = await trackMelody(
@@ -256,7 +274,9 @@ function buildImportScore() {
     beatOffsetSec,
     beatsPerBar: importTuning.beatsPerBar,
     quantUnit: importQuantUnit(),
-    changePenalty: importTuning.changePenalty
+    changePenalty: importTuning.changePenalty,
+    // 検出した実拍の位置に従う（テンポはBPMとして再生に使う）。BPM/オフセットを手で変えたら一様グリッドに戻す。
+    beatTimes: importState.useBeatTimes === false ? null : importState.beatTimes
   });
 }
 
@@ -286,8 +306,84 @@ function refreshImportPreview() {
   // 検出しなおしたので、編集中のスコアを置き換える
   importState.workingScore = score;
   renderChordEditor();
+  syncPianoRoll();
   renderBpmCandidates();
   drawDebugCanvases(score);
+}
+
+// ===== ピアノロール（メロディ手なおし）＋単語わりつけ =====
+
+function syncPianoRoll() {
+  const score = importState.workingScore;
+  if (!importEl.melodyCanvas || !score) {
+    return;
+  }
+  const bpm = Math.max(40, Math.min(240, Number(importEl.bpm.value) || 100));
+  const opts = { bpm, beatsPerBar: importTuning.beatsPerBar, quantUnit: importQuantUnit() };
+  if (!pianoRoll) {
+    pianoRoll = createPianoRoll(importEl.melodyCanvas, {
+      ...opts,
+      onChange: (melody) => {
+        score.melody = melody;
+        importWordEvents = null; // メロディが変わったら単語わりつけはやりなおし
+      }
+    });
+  }
+  pianoRoll.setMelody(score.melody, opts);
+}
+
+function groupWordsToMelody() {
+  const score = importState.workingScore;
+  if (!score || !score.melody.length) {
+    importEl.melodyWordsSummary.textContent = "先にメロディが必要だよ。";
+    return;
+  }
+  const text = importEl.melodyLyrics.value;
+  const { wordEvents, noteLyrics } = groupLyricsToMelody(text, score.melody);
+  // ノートに歌詞（モーラ）を乗せる
+  const sorted = [...score.melody].sort((a, b) => a.startBeat - b.startBeat);
+  sorted.forEach((note, i) => { note.lyric = noteLyrics[i] || ""; });
+  importWordEvents = wordEvents;
+  pianoRoll?.render();
+  importEl.melodyWordsSummary.textContent = `${wordEvents.length}単語をボーカルのタイミングにわりつけたよ。`;
+  importEl.melodyWordChips.innerHTML = wordEvents
+    .map((w) => `<span class="word-chip">${escapeHtml(w.text)}<small>${formatBeatPos(w.startBeat)}</small></span>`)
+    .join("");
+}
+
+function fitLyricsToMelodyUI() {
+  const score = importState.workingScore;
+  if (!score || !score.melody.length) {
+    importEl.melodyWordsSummary.textContent = "先にメロディが必要だよ。";
+    return;
+  }
+  const lines = importEl.melodyLyrics.value.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) {
+    importEl.melodyWordsSummary.textContent = "歌詞を1行ずつ入れてね。";
+    return;
+  }
+  const result = fitLyricsToMelody(lines, score.melody);
+  const sorted = [...score.melody].sort((a, b) => a.startBeat - b.startBeat);
+  sorted.forEach((note) => { note.lyric = ""; });
+  result.noteAssignments.forEach((a) => {
+    if (sorted[a.noteIndex]) {
+      sorted[a.noteIndex].lyric = a.text;
+    }
+  });
+  importWordEvents = result.lineEvents; // 行＝歌詞イベント（ボーカルのタイミング）
+  pianoRoll?.render();
+  importEl.melodyWordsSummary.textContent =
+    `音にはめたよ（${result.stats.notes}音 / ${result.stats.morae}文字、のばし${result.stats.melisma}・つめ${result.stats.crammed}）。`;
+  importEl.melodyWordChips.innerHTML = result.lineEvents
+    .map((w) => `<span class="word-chip">${escapeHtml(w.text)}<small>${formatBeatPos(w.startBeat)}</small></span>`)
+    .join("");
+}
+
+function formatBeatPos(beat) {
+  const bpb = importTuning.beatsPerBar;
+  const bar = Math.floor(beat / bpb) + 1;
+  const b = (beat % bpb) + 1;
+  return `${bar}-${Number.isInteger(b) ? b : b.toFixed(1)}`;
 }
 
 // 検出済みコードを、小節-拍つきで手なおしできる表として描く
@@ -534,6 +630,9 @@ async function reanalyzeFull() {
     importState.analysis = analysis;
     importState.instBuffer = audioBufferFromArray(analysis.inst, IMPORT_RATE);
     importState.vocalBuffer = audioBufferFromArray(analysis.vocal, IMPORT_RATE);
+    const reTempo = estimateTempo(analysis.flux, analysis.frameRate);
+    importState.beatTimes = trackBeats(analysis.flux, analysis.frameRate, reTempo.bpm, reTempo.beatOffsetSec, analysis.frames / analysis.frameRate);
+    importState.useBeatTimes = true;
     hideImportProgress();
     refreshImportPreview();
   } catch (error) {
@@ -638,7 +737,10 @@ function convertImportToSong() {
   const bpm = Math.max(40, Math.min(240, Number(importEl.bpm.value) || 100));
   // 文字起こし結果があればタイムスタンプで割り付け、なければ貼り付け歌詞をN小節ごとに仮割り付け
   const transcript = typeof getTranscriptChunks === "function" ? getTranscriptChunks() : [];
-  if (transcript.length) {
+  if (importWordEvents && importWordEvents.length) {
+    // ピアノロールで単語わりつけした結果を、ボーカルのタイミングで歌詞にする
+    assignTimedLyricsToEvents(score.events, importWordEvents.map((w) => ({ startBeat: w.startBeat, text: w.text })));
+  } else if (transcript.length) {
     const timedLines = transcript.map((chunk) => ({
       startBeat: Math.max(0, ((chunk.start - score.audioOffsetSec) * bpm) / 60),
       text: chunk.text
@@ -715,8 +817,8 @@ if (importDropZone) {
   });
 }
 importEl.analyzeButton?.addEventListener("click", runImportAnalysis);
-importEl.bpm?.addEventListener("change", refreshImportPreview);
-importEl.offset?.addEventListener("change", refreshImportPreview);
+importEl.bpm?.addEventListener("change", () => { importState.useBeatTimes = false; refreshImportPreview(); });
+importEl.offset?.addEventListener("change", () => { importState.useBeatTimes = false; refreshImportPreview(); });
 importEl.quantize?.addEventListener("change", refreshImportPreview);
 importEl.beatsPerBar?.addEventListener("change", () => {
   importTuning.beatsPerBar = Number(importEl.beatsPerBar.value) || 4;
@@ -788,6 +890,23 @@ importEl.tuneRepet?.addEventListener("input", () => {
 importEl.reanalyzeMelody?.addEventListener("click", reanalyzeMelodyOnly);
 importEl.reanalyzeFull?.addEventListener("click", reanalyzeFull);
 importEl.exportDebug?.addEventListener("click", exportDebugJson);
+importEl.melodyPlay?.addEventListener("click", () => pianoRoll?.play());
+importEl.melodyClear?.addEventListener("click", () => {
+  if (importState.workingScore) {
+    importState.workingScore.melody = [];
+    importWordEvents = null;
+    importEl.melodyWordChips.innerHTML = "";
+    importEl.melodyWordsSummary.textContent = "";
+    syncPianoRoll();
+  }
+});
+importEl.melodyGroupWords?.addEventListener("click", groupWordsToMelody);
+importEl.melodyFitLyrics?.addEventListener("click", fitLyricsToMelodyUI);
+importEl.melodyBlock?.addEventListener("toggle", () => {
+  if (importEl.melodyBlock.open) {
+    syncPianoRoll();
+  }
+});
 importEl.progressCancel?.addEventListener("click", () => {
   importState.cancelRequested = true;
   importEl.progressLabel.textContent = "キャンセル中…";
