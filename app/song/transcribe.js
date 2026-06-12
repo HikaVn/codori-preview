@@ -7,9 +7,15 @@
 const TRANSFORMERS_CDN_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.0/dist/transformers.min.js";
 const WHISPER_RATE = 16000;
 const WHISPER_MODELS = {
-  tiny: { label: "tiny（約40MB・はやい）", ids: ["onnx-community/whisper-tiny", "Xenova/whisper-tiny"] },
-  base: { label: "base（約80MB・バランス）", ids: ["onnx-community/whisper-base", "Xenova/whisper-base"] },
-  small: { label: "small（約250MB・高精度）", ids: ["onnx-community/whisper-small", "Xenova/whisper-small"] }
+  tiny: { label: "tiny（約40MB・はやい）", ids: ["onnx-community/whisper-tiny", "Xenova/whisper-tiny"], fallback: null },
+  base: { label: "base（約80MB・バランス）", ids: ["onnx-community/whisper-base", "Xenova/whisper-base"], fallback: "tiny" },
+  small: { label: "small（約250MB・高精度）", ids: ["onnx-community/whisper-small", "Xenova/whisper-small"], fallback: "base" },
+  // 日本語特化（large-v3を日本語向けに蒸留）。多言語smallより日本語が得意な見込み。重い＆環境により未提供のことがあるのでsmallへフォールバック。
+  kotoba: {
+    label: "kotoba日本語特化（重い・約300MB+）",
+    ids: ["onnx-community/kotoba-whisper-v2.0-ONNX", "onnx-community/kotoba-whisper-v1.0-ONNX", "Xenova/kotoba-whisper-v1.0"],
+    fallback: "small"
+  }
 };
 
 const transcribeEl = {
@@ -87,11 +93,17 @@ async function loadWhisperPipeline(modelKey) {
         });
         transcribeState.asr = asr;
         transcribeState.asrModelId = wanted;
+        transcribeState.activeModelKey = modelKey;
         return asr;
       } catch (error) {
         lastError = error;
       }
     }
+  }
+  // このモデルの全IDで失敗 → 軽い既存モデルへ自動フォールバック
+  if (spec.fallback && WHISPER_MODELS[spec.fallback]) {
+    setTranscribeProgress(`「${spec.label}」を読み込めなかった。${WHISPER_MODELS[spec.fallback].label}に切り替えるね…`, null);
+    return loadWhisperPipeline(spec.fallback);
   }
   throw lastError || new Error("Whisper model load failed");
 }
