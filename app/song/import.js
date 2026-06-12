@@ -89,6 +89,8 @@ const importState = {
   originalBuffer: null,
   midSide: null, // 再解析用に保持
   tempoCandidates: [],
+  beatTimes: null,
+  useBeatTimes: true,
   workingScore: null,
   analysis: null,
   instBuffer: null,
@@ -214,6 +216,10 @@ async function runImportAnalysis() {
     setImportProgress("テンポと拍をさがしてる…", 0.68);
     const tempo = estimateTempo(analysis.flux, analysis.frameRate);
     importState.tempoCandidates = tempo.candidates || [];
+    importState.beatTimes = trackBeats(
+      analysis.flux, analysis.frameRate, tempo.bpm, tempo.beatOffsetSec,
+      analysis.frames / analysis.frameRate
+    );
 
     setImportProgress("メロディを聞き取ってる…", 0.72);
     const melody = await trackMelody(
@@ -267,7 +273,9 @@ function buildImportScore() {
     beatOffsetSec,
     beatsPerBar: importTuning.beatsPerBar,
     quantUnit: importQuantUnit(),
-    changePenalty: importTuning.changePenalty
+    changePenalty: importTuning.changePenalty,
+    // 検出した実拍の位置に従う（テンポはBPMとして再生に使う）。BPM/オフセットを手で変えたら一様グリッドに戻す。
+    beatTimes: importState.useBeatTimes === false ? null : importState.beatTimes
   });
 }
 
@@ -593,6 +601,9 @@ async function reanalyzeFull() {
     importState.analysis = analysis;
     importState.instBuffer = audioBufferFromArray(analysis.inst, IMPORT_RATE);
     importState.vocalBuffer = audioBufferFromArray(analysis.vocal, IMPORT_RATE);
+    const reTempo = estimateTempo(analysis.flux, analysis.frameRate);
+    importState.beatTimes = trackBeats(analysis.flux, analysis.frameRate, reTempo.bpm, reTempo.beatOffsetSec, analysis.frames / analysis.frameRate);
+    importState.useBeatTimes = true;
     hideImportProgress();
     refreshImportPreview();
   } catch (error) {
@@ -777,8 +788,8 @@ if (importDropZone) {
   });
 }
 importEl.analyzeButton?.addEventListener("click", runImportAnalysis);
-importEl.bpm?.addEventListener("change", refreshImportPreview);
-importEl.offset?.addEventListener("change", refreshImportPreview);
+importEl.bpm?.addEventListener("change", () => { importState.useBeatTimes = false; refreshImportPreview(); });
+importEl.offset?.addEventListener("change", () => { importState.useBeatTimes = false; refreshImportPreview(); });
 importEl.quantize?.addEventListener("change", refreshImportPreview);
 importEl.beatsPerBar?.addEventListener("change", () => {
   importTuning.beatsPerBar = Number(importEl.beatsPerBar.value) || 4;

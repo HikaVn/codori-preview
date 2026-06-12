@@ -422,6 +422,120 @@ function estimateTempo(flux, frameRate) {
   return { bpm, beatOffsetSec: bestPhase / frameRate, candidates };
 }
 
+// フラックス（オンセット強度）の山＝音の出だしの時刻[秒]を拾う
+function fluxOnsetTimes(flux, frameRate) {
+  const smoothed = new Float32Array(flux.length);
+  for (let i = 0; i < flux.length; i += 1) {
+    smoothed[i] = (flux[i - 1] || 0) * 0.25 + flux[i] * 0.5 + (flux[i + 1] || 0) * 0.25;
+  }
+  let mean = 0;
+  for (let i = 0; i < smoothed.length; i += 1) {
+    mean += smoothed[i];
+  }
+  mean /= Math.max(1, smoothed.length);
+  let variance = 0;
+  for (let i = 0; i < smoothed.length; i += 1) {
+    variance += (smoothed[i] - mean) ** 2;
+  }
+  const std = Math.sqrt(variance / Math.max(1, smoothed.length));
+  const threshold = mean + 0.4 * std;
+  const onsets = [];
+  for (let i = 1; i < smoothed.length - 1; i += 1) {
+    if (smoothed[i] > threshold && smoothed[i] >= smoothed[i - 1] && smoothed[i] >= smoothed[i + 1]) {
+      onsets.push(i / frameRate);
+    }
+  }
+  return onsets;
+}
+
+// ビートトラッキング: テンポの周期で拍を予測しつつ、近くのオンセットへスナップする。
+// テンポが多少ゆれても実際の拍位置に追従した「拍の時刻列」を返す（拍iの開始＝beatTimes[i]）。
+function trackBeats(flux, frameRate, bpm, beatOffsetSec, durationSec) {
+  const period = 60 / bpm;
+  const tol = period * 0.18;
+  const onsets = fluxOnsetTimes(flux, frameRate);
+  const total = durationSec ?? flux.length / frameRate;
+  const beatTimes = [];
+  let predicted = beatOffsetSec;
+  let guard = 0;
+  while (predicted < total + period && guard < 100000) {
+    guard += 1;
+    let best = null;
+    let bestD = tol;
+    for (const onset of onsets) {
+      const d = Math.abs(onset - predicted);
+      if (d < bestD) {
+        bestD = d;
+        best = onset;
+      }
+    }
+    const beatT = best != null ? best : predicted;
+    // 直前の拍より後ろを保証（スナップで逆転しないように）
+    const safeT = beatTimes.length ? Math.max(beatT, beatTimes[beatTimes.length - 1] + period * 0.5) : beatT;
+    beatTimes.push(safeT);
+    predicted = safeT + period;
+  }
+  return beatTimes;
+}
+
+// 拍の時刻列から「秒→拍（連続値）」へ変換する関数を作る。範囲外は端の間隔で外挿。
+function makeSecToBeat(beatTimes) {
+  if (!beatTimes || beatTimes.length < 2) {
+    return (sec) => sec;
+  }
+  const last = beatTimes.length - 1;
+  return (sec) => {
+    if (sec <= beatTimes[0]) {
+      const span = beatTimes[1] - beatTimes[0];
+      return (sec - beatTimes[0]) / (span || 1);
+    }
+    if (sec >= beatTimes[last]) {
+      const span = beatTimes[last] - beatTimes[last - 1];
+      return last + (sec - beatTimes[last]) / (span || 1);
+    }
+    // 二分探索
+    let lo = 0;
+    let hi = last;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (beatTimes[mid] <= sec) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    const span = beatTimes[lo + 1] - beatTimes[lo];
+    return lo + (sec - beatTimes[lo]) / (span || 1);
+  };
+}
+
+// 拍の時刻列ベースで、各拍のクロマ（伴奏の和音）を集める
+function beatChromaVectorsFromBeatTimes(chroma, frames, frameRate, beatTimes) {
+  const vectors = [];
+  for (let beat = 0; beat + 1 < beatTimes.length; beat += 1) {
+    const from = Math.max(0, Math.round(beatTimes[beat] * frameRate));
+    const to = Math.min(frames, Math.round(beatTimes[beat + 1] * frameRate));
+    const vector = new Float32Array(12);
+    for (let f = from; f < to; f += 1) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vector[pc] += chroma[f * 12 + pc];
+      }
+    }
+    let norm = 0;
+    for (let pc = 0; pc < 12; pc += 1) {
+      norm += vector[pc] * vector[pc];
+    }
+    norm = Math.sqrt(norm);
+    if (norm > 1e-9) {
+      for (let pc = 0; pc < 12; pc += 1) {
+        vector[pc] /= norm;
+      }
+    }
+    vectors.push(vector);
+  }
+  return vectors;
+}
+
 // ===== コード =====
 
 function beatChromaVectors(chroma, frames, frameRate, bpm, beatOffsetSec, beatCount) {
@@ -661,9 +775,12 @@ function minQuantUnit(unit) {
 }
 
 // ピッチフレーム列 → クオンタイズ済みノート列
-function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit) {
+// options.secToBeat があれば、秒→拍の変換にそれを使う（検出した実拍の位置に従う）。
+function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit, options = {}) {
   const notes = [];
   const minFrames = Math.max(2, Math.round(0.06 * frameRate));
+  // 秒→拍。実拍ベースの変換が渡されればそれを、なければ一様テンポで。
+  const secToBeat = options.secToBeat || ((sec) => ((sec - beat0Sec) * bpm) / 60);
   let runStart = -1;
   let runValues = [];
 
@@ -677,8 +794,8 @@ function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit) {
     const midi = Math.round(sorted[Math.floor(sorted.length / 2)]);
     const startSec = runStart / frameRate;
     const endSec = endFrame / frameRate;
-    const startBeat = quantizeBeat(((startSec - beat0Sec) * bpm) / 60, quantUnit);
-    const rawBeats = ((endSec - startSec) * bpm) / 60;
+    const startBeat = quantizeBeat(secToBeat(startSec), quantUnit);
+    const rawBeats = Math.max(0, secToBeat(endSec) - secToBeat(startSec));
     const beats = Math.max(minQuantUnit(quantUnit), quantizeBeat(rawBeats, quantUnit));
     if (startBeat >= 0 && midi >= 40 && midi <= 96) {
       const last = notes[notes.length - 1];
@@ -1164,14 +1281,31 @@ function buildScoreFromAnalysis(analysis, options) {
   const beatsPerBar = options.beatsPerBar || 4;
   const quantUnit = options.quantUnit || 0.25;
   const durationSec = analysis.frames / analysis.frameRate;
-  const beatCount = Math.max(0, Math.floor(((durationSec - beatOffsetSec) * bpm) / 60));
-  if (beatCount < beatsPerBar) {
+  // 検出した実拍の時刻列（あれば）に従う。なければ一様テンポのグリッド。
+  const useBeatTimes = Array.isArray(options.beatTimes) && options.beatTimes.length >= beatsPerBar + 1;
+  const period = 60 / bpm;
+
+  let beatVectors;
+  let secToBeatRaw; // 秒→「検出済み拍インデックス（連続値）」
+  if (useBeatTimes) {
+    beatVectors = beatChromaVectorsFromBeatTimes(
+      analysis.chroma, analysis.frames, analysis.frameRate, options.beatTimes
+    );
+    secToBeatRaw = makeSecToBeat(options.beatTimes);
+  } else {
+    const beatCount = Math.max(0, Math.floor(((durationSec - beatOffsetSec) * bpm) / 60));
+    if (beatCount < beatsPerBar) {
+      return null;
+    }
+    beatVectors = beatChromaVectors(
+      analysis.chroma, analysis.frames, analysis.frameRate, bpm, beatOffsetSec, beatCount
+    );
+    secToBeatRaw = (sec) => ((sec - beatOffsetSec) * bpm) / 60;
+  }
+  if (beatVectors.length < beatsPerBar) {
     return null;
   }
 
-  const beatVectors = beatChromaVectors(
-    analysis.chroma, analysis.frames, analysis.frameRate, bpm, beatOffsetSec, beatCount
-  );
   let labels = detectChordsFromChroma(beatVectors, options.changePenalty ?? 0.1);
   const shift = estimateDownbeatShift(labels, beatsPerBar);
   // 小節頭が途中から始まる場合は、先頭を切らずに無音拍を足して1小節目に収める
@@ -1179,9 +1313,8 @@ function buildScoreFromAnalysis(analysis, options) {
   if (pad) {
     labels = new Array(pad).fill(null).concat(labels);
   }
-  const beat0Sec = beatOffsetSec - (pad * 60) / bpm;
 
-  // 先頭と末尾の「不明」を削る（先頭の分はオフセットに足す）
+  // 先頭と末尾の「不明」を削る
   let lead = 0;
   while (lead < labels.length && labels[lead] === null) {
     lead += 1;
@@ -1193,7 +1326,14 @@ function buildScoreFromAnalysis(analysis, options) {
     tail -= 1;
   }
   labels = labels.slice(0, tail);
-  const scoreStartSec = beat0Sec + (lead * 60) / bpm;
+
+  // 出力の拍0 ＝ 検出済み拍インデックス (lead - pad)。秒→出力拍 の変換を作る。
+  const beatShift = lead - pad;
+  const secToOutputBeat = (sec) => secToBeatRaw(sec) - beatShift;
+  // audioOffset（元音源と一緒に再生する用）: 出力拍0の時刻
+  const scoreStartSec = useBeatTimes
+    ? (options.beatTimes[Math.max(0, Math.min(options.beatTimes.length - 1, beatShift))] ?? beatOffsetSec)
+    : beatOffsetSec + (lead * period) - (pad * period);
 
   const segments = mergeBeatLabels(labels);
   const events = [{ type: "section", label: "取り込み", beats: 0, lineIndex: 0 }];
@@ -1210,8 +1350,9 @@ function buildScoreFromAnalysis(analysis, options) {
   let melody = [];
   if (analysis.pitches) {
     melody = melodyNotesFromPitches(
-      analysis.pitches, analysis.pitchFrameRate, bpm, scoreStartSec, quantUnit
-    ).filter((note) => note.startBeat < labels.length);
+      analysis.pitches, analysis.pitchFrameRate, bpm, scoreStartSec, quantUnit,
+      { secToBeat: secToOutputBeat }
+    ).filter((note) => note.startBeat >= -1e-9 && note.startBeat < labels.length);
   }
 
   return {
@@ -1361,7 +1502,11 @@ if (typeof module !== "undefined" && module.exports) {
     midiFromFrequency,
     analyzeAudio,
     estimateTempo,
+    trackBeats,
+    fluxOnsetTimes,
+    makeSecToBeat,
     beatChromaVectors,
+    beatChromaVectorsFromBeatTimes,
     detectChordsFromChroma,
     estimateDownbeatShift,
     mergeBeatLabels,
