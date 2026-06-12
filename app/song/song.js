@@ -49,6 +49,17 @@ const QUALITY_INTERVALS = {
   "7-5": [0, 4, 6, 10]
 };
 
+// 伴奏のリズムパターン（小節内のステップごとのアクセント）
+// 解析で取り込んだリズムも、ここのプリセットでいつでも置き換えられる
+const RHYTHM_PATTERNS = {
+  whole: { label: "コードのあたまだけ", unit: null },
+  four: { label: "4つ打ち", unit: 1, accents: [1, 0.7, 0.85, 0.7] },
+  eight: { label: "8ビート", unit: 0.5, accents: [1, 0, 0.7, 0.55, 0.9, 0.55, 0.7, 0.55] },
+  sixteen: { label: "16ビート", unit: 0.25, accents: [1, 0, 0.5, 0.4, 0.8, 0.4, 0.5, 0, 0.9, 0, 0.5, 0.4, 0.8, 0.4, 0.6, 0.4] },
+  arpeggio: { label: "アルペジオ", unit: 0.5, accents: [1, 0.7, 0.7, 0.7, 0.85, 0.7, 0.7, 0.7], arp: true },
+  none: { label: "伴奏なし（元音源だけ）", unit: null, silent: true }
+};
+
 const DEMO_SOURCE = `[まえ奏]
 [C]　[G7]　[C]　[C7]
 
@@ -70,6 +81,8 @@ let library = loadLibrary();
 let pxPerBeat = 110;
 let laneDirty = true;
 let audioCtx = null;
+let playbackHits = [];
+let importedAudio = null; // 取り込みモードの音源 { buffer, offsetSec, name }（セッション中のみ）
 
 const player = {
   playing: false,
@@ -79,9 +92,11 @@ const player = {
   startBeat: 0,
   pausedBeat: null,
   nextTick: 0,
-  nextEventIdx: 0,
+  nextHitIdx: 0,
+  nextMelodyIdx: 0,
   schedTimer: null,
   rafId: null,
+  audioSource: null,
   activeNoteIdx: -1
 };
 
@@ -120,6 +135,11 @@ const el = {
   metronomeToggle: document.querySelector("#metronome-toggle"),
   countinToggle: document.querySelector("#countin-toggle"),
   loopToggle: document.querySelector("#loop-toggle"),
+  rhythmPattern: document.querySelector("#rhythm-pattern"),
+  melodyGuideToggle: document.querySelector("#melody-guide-toggle"),
+  originalToggle: document.querySelector("#original-toggle"),
+  tabImport: document.querySelector("#tab-import"),
+  importView: document.querySelector("#import-view"),
   laneWrap: document.querySelector("#lane-wrap"),
   lane: document.querySelector("#lane"),
   laneTrack: document.querySelector("#lane-track"),
@@ -332,14 +352,14 @@ function ensureAudioContext() {
   return audioCtx;
 }
 
-function strumChord(chord, time, beats) {
+function strumChord(chord, time, beats, strumGain = 1) {
   const frequencies = chordFrequencies(chord);
   if (!frequencies) {
     return;
   }
   const ctx = audioCtx;
-  const secPerBeat = 60 / song.bpm;
-  const duration = Math.min(Math.max(beats * secPerBeat, 0.6), 2.4);
+  const secPerBeatNow = 60 / song.bpm;
+  const duration = Math.min(Math.max(beats * secPerBeatNow, 0.35), 2.4);
   const master = ctx.createGain();
   master.gain.value = 0.16;
   master.connect(ctx.destination);
@@ -354,10 +374,10 @@ function strumChord(chord, time, beats) {
     harmonic.type = "sine";
     harmonic.frequency.value = frequency * 2;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.18 * strumGain, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     harmonicGain.gain.setValueAtTime(0.0001, start);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.045, start + 0.02);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.045 * strumGain, start + 0.02);
     harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.7);
     osc.connect(gain);
     harmonic.connect(harmonicGain);
@@ -368,6 +388,25 @@ function strumChord(chord, time, beats) {
     osc.stop(start + duration + 0.05);
     harmonic.stop(start + duration + 0.05);
   });
+}
+
+function playTone(frequency, time, duration, gain, type = "sine") {
+  if (!frequency) {
+    return;
+  }
+  const ctx = audioCtx;
+  const osc = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = frequency;
+  const dur = Math.max(0.12, duration);
+  gainNode.gain.setValueAtTime(0.0001, time);
+  gainNode.gain.exponentialRampToValueAtTime(gain, time + 0.015);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+  osc.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  osc.start(time);
+  osc.stop(time + dur + 0.05);
 }
 
 function metronomeClick(time, isBarHead) {
@@ -413,11 +452,11 @@ function startPlayback(fromBeat, withCountIn) {
   player.anchorBeat = fromBeat - countIn;
   player.anchorTime = ctx.currentTime + 0.12;
   player.nextTick = Math.ceil(player.anchorBeat - 0.001);
-  player.nextEventIdx = positioned.chordEvents.findIndex((event) => event.startBeat >= fromBeat - 0.001);
-  if (player.nextEventIdx < 0) {
-    player.nextEventIdx = positioned.chordEvents.length;
-  }
+  playbackHits = buildPlaybackHits();
+  player.nextHitIdx = findScheduleIndex(playbackHits, fromBeat, (hit) => hit.beat);
+  player.nextMelodyIdx = findScheduleIndex(song.melody || [], fromBeat, (note) => note.startBeat);
   player.activeNoteIdx = -1;
+  startOriginalAudio();
   player.playing = true;
   player.schedTimer = window.setInterval(schedulerTick, 30);
   player.rafId = window.requestAnimationFrame(frame);
@@ -442,17 +481,98 @@ function schedulerTick() {
     }
     player.nextTick += 1;
   }
-  while (player.nextEventIdx < positioned.chordEvents.length) {
-    const event = positioned.chordEvents[player.nextEventIdx];
-    const time = beatToTime(event.startBeat);
+  while (player.nextHitIdx < playbackHits.length) {
+    const hit = playbackHits[player.nextHitIdx];
+    const time = beatToTime(hit.beat);
     if (time >= horizon) {
       break;
     }
     if (time >= audioCtx.currentTime - 0.05) {
-      strumChord(transposeChord(event.chord, song.transpose), time, event.beats);
+      const chordName = transposeChord(hit.chord, song.transpose);
+      if (hit.arpIndex !== null && hit.arpIndex !== undefined) {
+        const frequencies = chordFrequencies(chordName);
+        if (frequencies) {
+          playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain);
+        }
+      } else {
+        strumChord(chordName, time, hit.beats, hit.gain);
+      }
     }
-    player.nextEventIdx += 1;
+    player.nextHitIdx += 1;
   }
+  if (el.melodyGuideToggle?.checked && Array.isArray(song.melody)) {
+    while (player.nextMelodyIdx < song.melody.length) {
+      const note = song.melody[player.nextMelodyIdx];
+      const time = beatToTime(note.startBeat);
+      if (time >= horizon) {
+        break;
+      }
+      if (time >= audioCtx.currentTime - 0.05) {
+        playTone(midiToFrequency(note.midi + (song.transpose || 0)), time, note.beats * secPerBeat() * 0.95, 0.12, "triangle");
+      }
+      player.nextMelodyIdx += 1;
+    }
+  }
+}
+
+function findScheduleIndex(items, fromBeat, beatOf) {
+  const index = items.findIndex((item) => beatOf(item) >= fromBeat - 0.001);
+  return index < 0 ? items.length : index;
+}
+
+// 伴奏パターンに沿って、コードイベントを実際のストラム時刻に展開する
+function buildPlaybackHits() {
+  const pattern = RHYTHM_PATTERNS[song.rhythmPattern] || RHYTHM_PATTERNS.whole;
+  const hits = [];
+  if (pattern.silent) {
+    return hits;
+  }
+  const beatsPerBar = Number(song.beatsPerBar);
+  positioned.chordEvents.forEach((event) => {
+    if (!pattern.unit) {
+      hits.push({ beat: event.startBeat, chord: event.chord, gain: 1, beats: event.beats, arpIndex: null });
+      return;
+    }
+    const unit = pattern.unit;
+    let arpIndex = 0;
+    let beat = Math.ceil(event.startBeat / unit - 1e-6) * unit;
+    for (; beat < event.startBeat + event.beats - 1e-6; beat += unit) {
+      const stepInBar = Math.round((((beat % beatsPerBar) + beatsPerBar) % beatsPerBar) / unit);
+      const accent = pattern.accents[stepInBar % pattern.accents.length];
+      if (accent <= 0) {
+        continue;
+      }
+      hits.push({
+        beat,
+        chord: event.chord,
+        gain: accent,
+        beats: unit * 1.8,
+        arpIndex: pattern.arp ? arpIndex++ : null
+      });
+    }
+  });
+  return hits;
+}
+
+// 取り込んだ元音源を、拍グリッドに同期させて再生する
+function startOriginalAudio() {
+  if (!importedAudio || !el.originalToggle?.checked) {
+    return;
+  }
+  const ctx = audioCtx;
+  const source = ctx.createBufferSource();
+  source.buffer = importedAudio.buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.9;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  const posAtAnchor = importedAudio.offsetSec + player.anchorBeat * secPerBeat();
+  if (posAtAnchor >= 0) {
+    source.start(player.anchorTime, posAtAnchor);
+  } else {
+    source.start(player.anchorTime - posAtAnchor, 0);
+  }
+  player.audioSource = source;
 }
 
 function pausePlayback() {
@@ -470,6 +590,14 @@ function stopPlayback() {
 
 function haltPlayback() {
   player.playing = false;
+  if (player.audioSource) {
+    try {
+      player.audioSource.stop();
+    } catch (error) {
+      // 既に停止済みなら何もしない
+    }
+    player.audioSource = null;
+  }
   if (player.schedTimer) {
     window.clearInterval(player.schedTimer);
     player.schedTimer = null;
@@ -635,6 +763,19 @@ function renderLane() {
     }
   });
 
+  // 取り込んだメロディは、レーン上部に小さな音程バーで表示する
+  if (Array.isArray(song.melody) && song.melody.length) {
+    const midis = song.melody.map((note) => note.midi);
+    const minMidi = Math.min(...midis);
+    const span = Math.max(1, Math.max(...midis) - minMidi);
+    song.melody.forEach((note) => {
+      const x = offset + note.startBeat * pxPerBeat;
+      const width = Math.max(4, note.beats * pxPerBeat - 2);
+      const y = 6 + (1 - (note.midi - minMidi) / span) * 26;
+      html += `<div class="melody-dot" style="left:${x}px;top:${y}px;width:${width}px"></div>`;
+    });
+  }
+
   el.laneTrack.style.width = `${trackWidth}px`;
   el.laneTrack.innerHTML = html;
   setTrackTransform(player.pausedBeat ?? player.startBeat);
@@ -779,6 +920,8 @@ function blankSong() {
     transpose: 0,
     source: "",
     events: [],
+    melody: [],
+    rhythmPattern: "whole",
     updatedAt: null
   };
 }
@@ -836,6 +979,8 @@ function serializeSong() {
         lineIndex: event.lineIndex
       };
     }),
+    melody: (song.melody || []).map((note) => ({ ...note })),
+    rhythmPattern: song.rhythmPattern || "whole",
     updatedAt: new Date().toISOString()
   };
 }
@@ -962,6 +1107,7 @@ function syncInputsFromSong() {
   el.sourceInput.value = song.source || "";
   el.transposeLabel.textContent = String(song.transpose || 0);
   renderSongSelect();
+  syncPlayExtras();
 }
 
 function syncMetaFromInputs() {
@@ -983,13 +1129,16 @@ function clampNumber(value, min, max, fallback) {
 
 function setMode(mode) {
   const isPlay = mode === "play";
-  el.tabEdit.classList.toggle("is-active", !isPlay);
+  el.tabEdit.classList.toggle("is-active", mode === "edit");
   el.tabPlay.classList.toggle("is-active", isPlay);
-  el.editView.classList.toggle("is-active", !isPlay);
+  el.tabImport?.classList.toggle("is-active", mode === "import");
+  el.editView.classList.toggle("is-active", mode === "edit");
   el.playView.classList.toggle("is-active", isPlay);
+  el.importView?.classList.toggle("is-active", mode === "import");
   if (isPlay) {
     syncMetaFromInputs();
     el.playBpm.value = song.bpm;
+    syncPlayExtras();
     if (laneDirty) {
       renderLane();
     }
@@ -997,6 +1146,42 @@ function setMode(mode) {
   } else if (player.playing) {
     pausePlayback();
   }
+}
+
+function syncPlayExtras() {
+  if (el.rhythmPattern) {
+    el.rhythmPattern.value = RHYTHM_PATTERNS[song.rhythmPattern] ? song.rhythmPattern : "whole";
+  }
+  if (el.melodyGuideToggle) {
+    const hasMelody = Array.isArray(song.melody) && song.melody.length > 0;
+    el.melodyGuideToggle.disabled = !hasMelody;
+    if (!hasMelody) {
+      el.melodyGuideToggle.checked = false;
+    }
+  }
+  if (el.originalToggle) {
+    el.originalToggle.disabled = !importedAudio;
+    if (!importedAudio) {
+      el.originalToggle.checked = false;
+    }
+  }
+}
+
+// 取り込みモード（import.js）からの受け口
+function applyImportedSong(data, audioInfo) {
+  if (player.playing) {
+    haltPlayback();
+  }
+  song = { ...blankSong(), ...data };
+  song.events = (data.events || []).map((event) => ({ ...event }));
+  song.melody = (data.melody || []).map((note) => ({ ...note }));
+  importedAudio = audioInfo || null;
+  player.startBeat = 0;
+  player.pausedBeat = null;
+  laneDirty = true;
+  syncInputsFromSong();
+  syncPlayExtras();
+  renderTimeline();
 }
 
 function setTranspose(next) {
@@ -1041,6 +1226,7 @@ function escapeAttr(text) {
 
 el.tabEdit.addEventListener("click", () => setMode("edit"));
 el.tabPlay.addEventListener("click", () => setMode("play"));
+el.tabImport?.addEventListener("click", () => setMode("import"));
 
 el.buildEvents.addEventListener("click", () => {
   syncMetaFromInputs();
@@ -1071,6 +1257,28 @@ el.noteSpeed.addEventListener("input", (event) => {
   renderLane();
   if (player.playing) {
     setTrackTransform(currentBeat());
+  }
+});
+
+el.rhythmPattern?.addEventListener("change", () => {
+  song.rhythmPattern = el.rhythmPattern.value;
+  if (player.playing) {
+    playbackHits = buildPlaybackHits();
+    player.nextHitIdx = findScheduleIndex(playbackHits, currentBeat(), (hit) => hit.beat);
+  }
+});
+
+el.melodyGuideToggle?.addEventListener("change", () => {
+  if (player.playing) {
+    player.nextMelodyIdx = findScheduleIndex(song.melody || [], currentBeat(), (note) => note.startBeat);
+  }
+});
+
+el.originalToggle?.addEventListener("change", () => {
+  if (player.playing) {
+    const beat = Math.max(currentBeat(), player.startBeat);
+    haltPlayback();
+    startPlayback(beat, false);
   }
 });
 
@@ -1132,6 +1340,15 @@ el.sourceInput.addEventListener("input", () => {
 // ===== 初期化 =====
 
 function init() {
+  if (el.rhythmPattern) {
+    el.rhythmPattern.innerHTML = "";
+    Object.entries(RHYTHM_PATTERNS).forEach(([key, pattern]) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = pattern.label;
+      el.rhythmPattern.appendChild(option);
+    });
+  }
   if (library.lastId && library.songs[library.lastId]) {
     song = { ...blankSong(), ...library.songs[library.lastId] };
     song.events = (song.events || []).map((event) => ({ ...event }));
