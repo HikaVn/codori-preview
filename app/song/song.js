@@ -1406,12 +1406,16 @@ function clampNumber(value, min, max, fallback) {
 
 function setMode(mode) {
   const isPlay = mode === "play";
+  const tabPractice = document.querySelector("#tab-practice");
+  const practiceView = document.querySelector("#practice-view");
   el.tabEdit.classList.toggle("is-active", mode === "edit");
   el.tabPlay.classList.toggle("is-active", isPlay);
   el.tabImport?.classList.toggle("is-active", mode === "import");
+  tabPractice?.classList.toggle("is-active", mode === "practice");
   el.editView.classList.toggle("is-active", mode === "edit");
   el.playView.classList.toggle("is-active", isPlay);
   el.importView?.classList.toggle("is-active", mode === "import");
+  practiceView?.classList.toggle("is-active", mode === "practice");
   if (isPlay) {
     syncMetaFromInputs();
     el.playBpm.value = song.bpm;

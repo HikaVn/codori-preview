@@ -1276,3 +1276,238 @@ button {
     grid-template-columns: 32px 44px minmax(64px, 90px) minmax(0, 1fr) 58px auto;
   }
 }
+
+/* ===== れんしゅう（録音採点） ===== */
+
+.practice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.practice-mode-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.practice-mode-button {
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.practice-mode-button.is-active {
+  border-color: var(--blue);
+  background: #eef4fb;
+  color: var(--blue);
+}
+
+.practice-song {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.practice-song strong {
+  color: var(--ink);
+}
+
+.calibration-panel.is-hidden {
+  display: none;
+}
+
+.practice-stage {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.practice-bird {
+  position: relative;
+  width: 140px;
+  height: 150px;
+  display: grid;
+  place-items: end center;
+  flex: none;
+}
+
+.practice-bird img {
+  max-width: 100%;
+  max-height: 100%;
+  transition: transform 0.08s ease-out;
+}
+
+.practice-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-code);
+  font-size: 72px;
+  font-weight: 900;
+  color: rgba(30, 90, 168, 0.6);
+}
+
+.practice-transport {
+  flex: 1;
+  min-width: 220px;
+  display: grid;
+  gap: 12px;
+}
+
+.practice-status {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.practice-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.practice-record-button {
+  min-width: 200px;
+  font-size: 16px;
+}
+
+.practice-result {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+  display: grid;
+  gap: 14px;
+}
+
+.result-score {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.result-number {
+  font-family: var(--font-code);
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--blue);
+  line-height: 1;
+}
+
+.result-number::after {
+  content: "点";
+  font-size: 22px;
+  margin-left: 4px;
+  color: var(--muted);
+}
+
+.result-stars {
+  font-size: 26px;
+}
+
+.result-metrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.metric-chip {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfdff;
+  min-width: 96px;
+}
+
+.metric-chip span {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.metric-chip strong {
+  font-family: var(--font-code);
+  font-size: 20px;
+  color: var(--blue);
+}
+
+.result-advice {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f4f8fb;
+  display: grid;
+  gap: 6px;
+}
+
+.advice-headline {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--blue-dark);
+}
+
+.advice-point,
+.advice-tip {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 700;
+}
+
+.advice-tip {
+  color: var(--green);
+}
+
+.records-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.records-summary {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.records-summary strong {
+  color: var(--blue);
+  font-family: var(--font-code);
+  font-size: 18px;
+}
+
+.record-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 90px;
+  padding: 6px;
+  border-radius: 10px;
+  background: #fbfdff;
+  border: 1px solid var(--line);
+}
+
+.record-bar {
+  flex: 1;
+  max-width: 36px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, var(--blue), var(--green));
+  min-height: 6px;
+}
