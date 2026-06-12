@@ -176,9 +176,6 @@ const el = {
   stageChord: document.querySelector("#stage-chord"),
   stageFingering: document.querySelector(".stage-fingering"),
   stageFingeringImg: document.querySelector("#stage-fingering-img"),
-  stageNext: document.querySelector("#stage-next"),
-  nextChordName: document.querySelector("#next-chord-name"),
-  nextFingeringImg: document.querySelector("#next-fingering-img"),
   currentLine: document.querySelector("#current-line")
 };
 
@@ -839,7 +836,6 @@ function updateActiveNote(beat) {
       el.stageFingering.classList.add("is-pop");
     }
   }
-  updateNextChordDisplay(index);
   renderCurrentLine(note);
 }
 
@@ -856,50 +852,12 @@ function setFingeringImage(image, chordName) {
   image.src = asset;
 }
 
-function updateNextChordDisplay(fromNoteIndex) {
-  if (!el.stageNext) {
-    return;
-  }
-  let next = null;
-  for (let index = fromNoteIndex + 1; index < positioned.notes.length; index += 1) {
-    if (positioned.notes[index].chord) {
-      next = positioned.notes[index];
-      break;
-    }
-  }
-  el.stageNext.classList.toggle("is-hidden", !next);
-  if (next) {
-    const shown = transposeChord(next.chord, song.transpose);
-    const key = `${shown}:${next.index}`;
-    if (el.stageNext.dataset.chordKey !== key) {
-      el.stageNext.dataset.chordKey = key;
-      // 新しい「つぎ」は右からスライドインして予告する
-      el.stageNext.classList.remove("is-swap");
-      void el.stageNext.offsetWidth;
-      el.stageNext.classList.add("is-swap");
-    }
-    el.nextChordName.textContent = shown;
-    setFingeringImage(el.nextFingeringImg, shown);
-  } else {
-    delete el.stageNext.dataset.chordKey;
-  }
-}
-
-// 次のコードへの「接近度」を毎フレーム更新して、切り替えを予感させる
+// 次のコードノートを残り1拍から光らせて、切り替えを予感させる
 function updateAnticipation(beat) {
-  if (!el.stageNext) {
-    return;
-  }
-  let prevStart = null;
   let next = null;
   for (let i = 0; i < positioned.notes.length; i += 1) {
     const note = positioned.notes[i];
-    if (!note.chord) {
-      continue;
-    }
-    if (note.startBeat <= beat + 1e-6) {
-      prevStart = note.startBeat;
-    } else {
+    if (note.chord && note.startBeat > beat + 1e-6) {
       next = note;
       break;
     }
@@ -908,14 +866,7 @@ function updateAnticipation(beat) {
     clearAnticipation();
     return;
   }
-  const span = Math.max(0.5, next.startBeat - (prevStart ?? next.startBeat - Number(song.beatsPerBar)));
-  const remaining = next.startBeat - beat;
-  const progress = Math.max(0, Math.min(1, 1 - remaining / span));
-  el.stageNext.style.setProperty("--next-progress", progress.toFixed(3));
-  const imminent = remaining <= 1;
-  el.stageNext.classList.toggle("is-imminent", imminent);
-
-  // レーン上の次ノートも、残り1拍から光らせる
+  const imminent = next.startBeat - beat <= 1;
   const upcomingKey = imminent ? next.index : -1;
   if (player.upcomingKey !== upcomingKey) {
     player.upcomingKey = upcomingKey;
@@ -931,8 +882,6 @@ function updateAnticipation(beat) {
 }
 
 function clearAnticipation() {
-  el.stageNext?.classList.remove("is-imminent");
-  el.stageNext?.style.setProperty("--next-progress", "0");
   if (player.upcomingNoteEl) {
     player.upcomingNoteEl.classList.remove("is-upcoming");
   }
@@ -953,7 +902,6 @@ function updateStageForBeat(beat) {
   if (index < 0) {
     el.stageChord.textContent = "-";
     setFingeringImage(el.stageFingeringImg, null);
-    updateNextChordDisplay(positioned.notes.length);
     return;
   }
   const note = positioned.notes[index];
@@ -961,7 +909,6 @@ function updateStageForBeat(beat) {
   el.stageChord.textContent = shown;
   el.stageBirdImg.src = characterAssetForChord(note.chord);
   setFingeringImage(el.stageFingeringImg, shown);
-  updateNextChordDisplay(index);
 }
 
 function clearActiveNote() {
@@ -1013,8 +960,12 @@ function renderLane() {
     const isStart = Math.abs(note.startBeat - player.startBeat) < 0.001;
     if (note.chord) {
       const shown = transposeChord(note.chord, song.transpose);
+      const fingering = fingeringAssetForChord(shown);
       html += `<div class="note${isStart ? " is-start" : ""}" data-index="${note.index}" data-beat="${note.startBeat}" style="left:${x}px;width:${width}px">`
+        + `<div class="note-top">`
         + `<div class="note-bird"><img src="${characterAssetForChord(note.chord)}" alt="" loading="lazy" style="animation-delay:-${(order % 6) * 0.4}s"></div>`
+        + (fingering ? `<img class="note-fingering" src="${fingering}" alt="" loading="lazy">` : "")
+        + `</div>`
         + `<div class="note-chord">${escapeHtml(shown)}</div>`
         + `<div class="note-lyric">${escapeHtml(note.lyric || "")}</div>`
         + `</div>`;

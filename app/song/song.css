@@ -476,9 +476,6 @@ button {
   max-height: calc(30vh - 12px);
 }
 
-.lane-wrap.is-fullscreen .stage-next img {
-  max-height: calc(30vh - 40px);
-}
 
 .lane-wrap.is-fullscreen .lane {
   flex: 1;
@@ -488,6 +485,10 @@ button {
 
 .lane-wrap.is-fullscreen .note-bird {
   width: 110px;
+  height: 130px;
+}
+
+.lane-wrap.is-fullscreen .note-fingering {
   height: 130px;
 }
 
@@ -589,84 +590,7 @@ button {
   100% { transform: scale(1); }
 }
 
-.stage-next {
-  --next-progress: 0;
-  position: absolute;
-  right: 14px;
-  top: 4px;
-  bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: 0.7;
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
 
-/* 次のコードまでの接近度バー（コードが近づくほど伸びて金色になる） */
-.stage-next::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -7px;
-  height: 4px;
-  width: calc(var(--next-progress, 0) * 100%);
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(216, 155, 43, 0.25), var(--gold));
-  transition: width 0.1s linear;
-}
-
-/* 残り1拍：パネルが少し前に出て、拍に合わせて脈動する */
-.stage-next.is-imminent {
-  opacity: 1;
-  transform: scale(1.08);
-}
-
-.stage-next.is-imminent .stage-next-name {
-  color: var(--gold);
-}
-
-.stage-next.is-imminent img {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(216, 155, 43, 0.18);
-  animation: next-pulse var(--beat-duration, 0.5s) ease-in-out infinite;
-}
-
-@keyframes next-pulse {
-  0%, 100% { transform: scale(1); }
-  40% { transform: scale(1.06); }
-}
-
-/* 新しい「つぎ」が決まった瞬間は右からスライドイン */
-.stage-next.is-swap {
-  animation: next-swap 0.35s ease-out;
-}
-
-@keyframes next-swap {
-  0% { transform: translateX(22px); opacity: 0; }
-  100% { transform: translateX(0); }
-}
-
-.stage-next-label {
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--muted);
-  writing-mode: vertical-rl;
-}
-
-.stage-next-name {
-  font-family: var(--font-code);
-  font-size: 22px;
-  font-weight: 900;
-  color: var(--muted);
-}
-
-.stage-next img {
-  height: 100%;
-  max-height: 118px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
-}
 
 .lane {
   position: relative;
@@ -751,6 +675,22 @@ button {
   font-weight: 900;
   display: block;
   white-space: nowrap;
+}
+
+.note-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.note-fingering {
+  height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  flex: none;
 }
 
 .note-bird {
@@ -1125,9 +1065,6 @@ button {
     max-height: 100px;
   }
 
-  .stage-next {
-    display: none;
-  }
 
   .lane {
     height: 190px;
@@ -1135,6 +1072,10 @@ button {
 
   .note-bird {
     width: 56px;
+    height: 66px;
+  }
+
+  .note-fingering {
     height: 66px;
   }
 
