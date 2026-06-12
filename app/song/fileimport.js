@@ -54,29 +54,28 @@ function applyParsedScore(parsed, sourceLabel) {
   renderChordEditor();
   syncPianoRoll();
   if (importEl.melodyBlock) importEl.melodyBlock.open = true;
+  // 編集UIは取り込みタブにあるので、そこへ自動で移動して見えるようにする
+  if (typeof setMode === "function") {
+    setMode("import");
+  }
+  importEl.result.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-fileImportEl.musicxmlButton?.addEventListener("click", () => fileImportEl.musicxmlInput.click());
-fileImportEl.musicxmlInput?.addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  event.target.value = "";
-  if (!file) return;
+// ===== ファイル種別ごとの読み込み（ボタン / ドラッグ＆ドロップ 共通） =====
+
+async function handleMusicXmlFile(file) {
   try {
     const parsed = await loadMusicXmlFile(file);
     if (!parsed) throw new Error("empty");
     applyParsedScore(parsed, "楽譜");
-    window.alert(`MusicXMLを読み込んだよ（コード${parsed.chordEvents.length}・音符${parsed.melody.length}・歌詞${parsed.words.length}語）。取り込み画面で手なおしして「譜面にする」。`);
+    window.alert(`MusicXMLを読み込んだよ（コード${parsed.chordEvents.length}・音符${parsed.melody.length}・歌詞${parsed.words.length}語）。取り込み画面のピアノロール／歌詞欄で手なおしして「譜面にする」。`);
   } catch (error) {
     console.warn("musicxml import failed", error);
     window.alert("MusicXMLを読めなかった。MuseScore/Sibelius等で「MusicXML書き出し」したファイルを選んでね。");
   }
-});
+}
 
-fileImportEl.pdfButton?.addEventListener("click", () => fileImportEl.pdfInput.click());
-fileImportEl.pdfInput?.addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  event.target.value = "";
-  if (!file) return;
+async function handlePdfFile(file) {
   try {
     const text = await extractPdfLyrics(file);
     const parsed = parseScoreText(text);
@@ -99,12 +98,13 @@ fileImportEl.pdfInput?.addEventListener("change", async (event) => {
         words: [],
         lyricLines: parsed.lyricLines
       }, "PDF譜面");
-      window.alert(`PDFから読み込んだよ（コード${parsed.chords.length}・音符${vectorMelody.length}（実験的・要手なおし）・歌詞${parsed.lyricLines.length}行${parsed.bpm ? "・♩=" + parsed.bpm : ""}）。音符はピアノロールで直してね。`);
+      window.alert(`PDFから読み込んだよ（コード${parsed.chords.length}・メロディ${vectorMelody.length}音（実験的）・歌詞${parsed.lyricLines.length}行${parsed.bpm ? "・♩=" + parsed.bpm : ""}）。ピアノロールでメロディ、歌詞欄で歌詞を直して「譜面にする」。`);
     } else if (parsed.lyricLines.length) {
       if (importEl.melodyLyrics) importEl.melodyLyrics.value = parsed.lyricLines.join("\n");
       importEl.melodyBlock && (importEl.melodyBlock.open = true);
       importEl.result.classList.remove("is-hidden");
-      window.alert(`PDFから歌詞${parsed.lyricLines.length}行を読み込んだよ。`);
+      if (typeof setMode === "function") setMode("import");
+      window.alert(`PDFから歌詞${parsed.lyricLines.length}行を読み込んだよ（メロディ・コードは取れなかった）。`);
     } else {
       window.alert("PDFから歌詞・コードを読めなかった。スキャン画像のPDFはテキストが取れないんだ。");
     }
@@ -112,7 +112,54 @@ fileImportEl.pdfInput?.addEventListener("change", async (event) => {
     console.warn("pdf import failed", error);
     window.alert("PDFを読めなかった（ネットワークでpdf.jsの読み込みに失敗したか、対応外の形式かも）。");
   }
+}
+
+// 拡張子で振り分け（DnD用）
+function routeScoreFile(file) {
+  if (!file) return;
+  if (/\.(xml|musicxml|mxl)$/i.test(file.name)) {
+    handleMusicXmlFile(file);
+  } else if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
+    handlePdfFile(file);
+  } else if (typeof selectImportFile === "function" && (/^audio\//.test(file.type) || /\.(wav|mp3|m4a|aac|ogg|flac|webm)$/i.test(file.name))) {
+    // 音源は取り込みタブへ
+    if (typeof setMode === "function") setMode("import");
+    selectImportFile(file);
+  } else {
+    window.alert("対応していないファイルだよ（MusicXML / PDF / 音源）。");
+  }
+}
+
+fileImportEl.musicxmlButton?.addEventListener("click", () => fileImportEl.musicxmlInput.click());
+fileImportEl.musicxmlInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (file) handleMusicXmlFile(file);
 });
+
+fileImportEl.pdfButton?.addEventListener("click", () => fileImportEl.pdfInput.click());
+fileImportEl.pdfInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (file) handlePdfFile(file);
+});
+
+// ライブラリパネル全体をMusicXML/PDF/音源のドロップ領域にする
+const scoreDropZone = document.querySelector(".library-panel");
+if (scoreDropZone) {
+  let depth = 0;
+  const setOn = (on) => scoreDropZone.classList.toggle("is-dragover", on);
+  scoreDropZone.addEventListener("dragenter", (e) => { e.preventDefault(); depth += 1; setOn(true); });
+  scoreDropZone.addEventListener("dragover", (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; });
+  scoreDropZone.addEventListener("dragleave", (e) => { e.preventDefault(); depth = Math.max(0, depth - 1); if (depth === 0) setOn(false); });
+  scoreDropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    depth = 0;
+    setOn(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) routeScoreFile(file);
+  });
+}
 
 // 漢字・カタカナ → ひらがな 一括変換（歌詞欄）
 async function convertLyricsToHiragana(textarea) {
