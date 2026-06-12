@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-fingering-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-fullscreen-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -137,11 +137,19 @@
               <input id="original-toggle" type="checkbox" disabled>
               元音源と一緒に
             </label>
+            <label class="check-label">
+              <input id="fullscreen-toggle" type="checkbox" checked>
+              フルスクリーン再生
+            </label>
           </div>
           <p class="play-hint">ノートをクリックすると、そこが再生開始位置になるよ。</p>
         </div>
 
         <div class="panel lane-wrap" id="lane-wrap">
+          <div class="fullscreen-controls">
+            <button class="ghost-button" id="fs-pause" type="button">⏸ 一時停止</button>
+            <button class="ghost-button" id="fs-exit" type="button">✕ 全画面をやめる</button>
+          </div>
           <div class="stage-area">
             <div class="stage-bird" id="stage-bird">
               <img id="stage-bird-img" src="../../assets/app/characters/action-candidate-integrated-v3/action-major.png" alt="いまのコードのCodori">
@@ -253,9 +261,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-fingering-v1"></script>
-    <script src="./dsp.js?v=20260612-fingering-v1"></script>
-    <script src="./import.js?v=20260612-fingering-v1"></script>
-    <script src="./transcribe.js?v=20260612-fingering-v1"></script>
+    <script src="./song.js?v=20260612-fullscreen-v1"></script>
+    <script src="./dsp.js?v=20260612-fullscreen-v1"></script>
+    <script src="./import.js?v=20260612-fullscreen-v1"></script>
+    <script src="./transcribe.js?v=20260612-fullscreen-v1"></script>
   </body>
 </html>

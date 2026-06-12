@@ -427,6 +427,85 @@ button {
   overflow: hidden;
 }
 
+/* ===== フルスクリーン再生 ===== */
+
+.fullscreen-controls {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  gap: 8px;
+  z-index: 6;
+}
+
+.lane-wrap.is-fullscreen {
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(216, 226, 232, 0.42), rgba(251, 252, 253, 0) 34%),
+    var(--paper);
+}
+
+.lane-wrap.is-pseudo-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.lane-wrap.is-fullscreen .fullscreen-controls {
+  display: flex;
+}
+
+.lane-wrap.is-fullscreen .stage-area {
+  height: 30vh;
+  flex: none;
+}
+
+.lane-wrap.is-fullscreen .stage-bird {
+  width: 180px;
+  height: calc(30vh - 16px);
+}
+
+.lane-wrap.is-fullscreen .stage-chord {
+  font-size: 64px;
+}
+
+.lane-wrap.is-fullscreen .stage-fingering img {
+  max-height: calc(30vh - 12px);
+}
+
+.lane-wrap.is-fullscreen .stage-next img {
+  max-height: calc(30vh - 40px);
+}
+
+.lane-wrap.is-fullscreen .lane {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.lane-wrap.is-fullscreen .note-bird {
+  width: 110px;
+  height: 130px;
+}
+
+.lane-wrap.is-fullscreen .note-chord {
+  font-size: 28px;
+}
+
+.lane-wrap.is-fullscreen .note-lyric {
+  font-size: 22px;
+}
+
+.lane-wrap.is-fullscreen .current-line {
+  flex: none;
+  min-height: 70px;
+  padding: 18px 26px;
+  font-size: 26px;
+}
+
 .stage-area {
   position: relative;
   height: 150px;
@@ -500,15 +579,71 @@ button {
   box-shadow: 0 4px 12px rgba(25, 39, 52, 0.08);
 }
 
+.stage-fingering.is-pop img {
+  animation: fingering-pop 0.4s ease-out;
+}
+
+@keyframes fingering-pop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
 .stage-next {
+  --next-progress: 0;
   position: absolute;
   right: 14px;
   top: 4px;
-  bottom: 4px;
+  bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
-  opacity: 0.75;
+  opacity: 0.7;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+/* 次のコードまでの接近度バー（コードが近づくほど伸びて金色になる） */
+.stage-next::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -7px;
+  height: 4px;
+  width: calc(var(--next-progress, 0) * 100%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(216, 155, 43, 0.25), var(--gold));
+  transition: width 0.1s linear;
+}
+
+/* 残り1拍：パネルが少し前に出て、拍に合わせて脈動する */
+.stage-next.is-imminent {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.stage-next.is-imminent .stage-next-name {
+  color: var(--gold);
+}
+
+.stage-next.is-imminent img {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(216, 155, 43, 0.18);
+  animation: next-pulse var(--beat-duration, 0.5s) ease-in-out infinite;
+}
+
+@keyframes next-pulse {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+}
+
+/* 新しい「つぎ」が決まった瞬間は右からスライドイン */
+.stage-next.is-swap {
+  animation: next-swap 0.35s ease-out;
+}
+
+@keyframes next-swap {
+  0% { transform: translateX(22px); opacity: 0; }
+  100% { transform: translateX(0); }
 }
 
 .stage-next-label {
@@ -676,6 +811,22 @@ button {
 .note.is-start {
   border-color: var(--gold);
   border-style: dashed;
+}
+
+/* 残り1拍になった次のノートを光らせて予告する */
+.note.is-upcoming {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(216, 155, 43, 0.16);
+  animation: note-upcoming var(--beat-duration, 0.5s) ease-in-out infinite;
+}
+
+.note.is-upcoming .note-chord {
+  color: var(--gold);
+}
+
+@keyframes note-upcoming {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(216, 155, 43, 0.12); }
+  50% { box-shadow: 0 0 0 6px rgba(216, 155, 43, 0.26); }
 }
 
 .count-overlay {

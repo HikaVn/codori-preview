@@ -119,7 +119,9 @@ const player = {
   schedTimer: null,
   rafId: null,
   audioSource: null,
-  activeNoteIdx: -1
+  activeNoteIdx: -1,
+  upcomingKey: -1,
+  upcomingNoteEl: null
 };
 
 // computePositions() の結果
@@ -160,6 +162,9 @@ const el = {
   rhythmPattern: document.querySelector("#rhythm-pattern"),
   melodyGuideToggle: document.querySelector("#melody-guide-toggle"),
   originalToggle: document.querySelector("#original-toggle"),
+  fullscreenToggle: document.querySelector("#fullscreen-toggle"),
+  fsPause: document.querySelector("#fs-pause"),
+  fsExit: document.querySelector("#fs-exit"),
   tabImport: document.querySelector("#tab-import"),
   importView: document.querySelector("#import-view"),
   laneWrap: document.querySelector("#lane-wrap"),
@@ -169,6 +174,7 @@ const el = {
   stageBird: document.querySelector("#stage-bird"),
   stageBirdImg: document.querySelector("#stage-bird-img"),
   stageChord: document.querySelector("#stage-chord"),
+  stageFingering: document.querySelector(".stage-fingering"),
   stageFingeringImg: document.querySelector("#stage-fingering-img"),
   stageNext: document.querySelector("#stage-next"),
   nextChordName: document.querySelector("#next-chord-name"),
@@ -538,7 +544,10 @@ function startPlayback(fromBeat, withCountIn) {
   player.schedTimer = window.setInterval(schedulerTick, 30);
   player.rafId = window.requestAnimationFrame(frame);
   el.playButton.textContent = "⏸ 一時停止";
-  el.stageBird.style.setProperty("--beat-duration", `${secPerBeat()}s`);
+  if (el.fsPause) {
+    el.fsPause.textContent = "⏸ 一時停止";
+  }
+  el.laneWrap.style.setProperty("--beat-duration", `${secPerBeat()}s`);
   el.stageBird.classList.add("is-beating");
 }
 
@@ -666,6 +675,7 @@ function pausePlayback() {
 function stopPlayback() {
   player.pausedBeat = null;
   haltPlayback();
+  exitPlayFullscreen();
   setTrackTransform(player.startBeat);
   clearActiveNote();
   updatePositionLabel(player.startBeat);
@@ -694,8 +704,12 @@ function haltPlayback() {
     player.rafId = null;
   }
   el.playButton.textContent = "▶ 再生";
+  if (el.fsPause) {
+    el.fsPause.textContent = "▶ 再生";
+  }
   el.stageBird.classList.remove("is-beating");
   el.countOverlay.classList.add("is-hidden");
+  clearAnticipation();
 }
 
 function togglePlayback() {
@@ -703,12 +717,46 @@ function togglePlayback() {
     pausePlayback();
     return;
   }
+  enterPlayFullscreen();
   if (player.pausedBeat !== null) {
     startPlayback(player.pausedBeat, false);
     return;
   }
   startPlayback(player.startBeat, el.countinToggle.checked);
 }
+
+// ===== フルスクリーン再生 =====
+// requestFullscreen非対応（iPhone Safari等）は、固定配置の疑似フルスクリーンにフォールバックする
+
+function enterPlayFullscreen() {
+  if (!el.fullscreenToggle?.checked || el.laneWrap.classList.contains("is-fullscreen")) {
+    return;
+  }
+  if (el.laneWrap.requestFullscreen) {
+    el.laneWrap.requestFullscreen().catch(() => activatePseudoFullscreen());
+  } else {
+    activatePseudoFullscreen();
+  }
+}
+
+function activatePseudoFullscreen() {
+  el.laneWrap.classList.add("is-fullscreen", "is-pseudo-fullscreen");
+}
+
+function exitPlayFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  el.laneWrap.classList.remove("is-fullscreen", "is-pseudo-fullscreen");
+}
+
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement === el.laneWrap) {
+    el.laneWrap.classList.add("is-fullscreen");
+  } else if (!el.laneWrap.classList.contains("is-pseudo-fullscreen")) {
+    el.laneWrap.classList.remove("is-fullscreen");
+  }
+});
 
 function frame() {
   if (!player.playing) {
@@ -726,6 +774,7 @@ function frame() {
   }
 
   updateActiveNote(beat);
+  updateAnticipation(beat);
 
   if (beat > positioned.totalBeats + Number(song.beatsPerBar)) {
     if (el.loopToggle.checked) {
@@ -784,6 +833,11 @@ function updateActiveNote(beat) {
     el.stageBird.classList.remove("is-pop");
     void el.stageBird.offsetWidth;
     el.stageBird.classList.add("is-pop");
+    if (el.stageFingering) {
+      el.stageFingering.classList.remove("is-pop");
+      void el.stageFingering.offsetWidth;
+      el.stageFingering.classList.add("is-pop");
+    }
   }
   updateNextChordDisplay(index);
   renderCurrentLine(note);
@@ -816,9 +870,74 @@ function updateNextChordDisplay(fromNoteIndex) {
   el.stageNext.classList.toggle("is-hidden", !next);
   if (next) {
     const shown = transposeChord(next.chord, song.transpose);
+    const key = `${shown}:${next.index}`;
+    if (el.stageNext.dataset.chordKey !== key) {
+      el.stageNext.dataset.chordKey = key;
+      // 新しい「つぎ」は右からスライドインして予告する
+      el.stageNext.classList.remove("is-swap");
+      void el.stageNext.offsetWidth;
+      el.stageNext.classList.add("is-swap");
+    }
     el.nextChordName.textContent = shown;
     setFingeringImage(el.nextFingeringImg, shown);
+  } else {
+    delete el.stageNext.dataset.chordKey;
   }
+}
+
+// 次のコードへの「接近度」を毎フレーム更新して、切り替えを予感させる
+function updateAnticipation(beat) {
+  if (!el.stageNext) {
+    return;
+  }
+  let prevStart = null;
+  let next = null;
+  for (let i = 0; i < positioned.notes.length; i += 1) {
+    const note = positioned.notes[i];
+    if (!note.chord) {
+      continue;
+    }
+    if (note.startBeat <= beat + 1e-6) {
+      prevStart = note.startBeat;
+    } else {
+      next = note;
+      break;
+    }
+  }
+  if (!next) {
+    clearAnticipation();
+    return;
+  }
+  const span = Math.max(0.5, next.startBeat - (prevStart ?? next.startBeat - Number(song.beatsPerBar)));
+  const remaining = next.startBeat - beat;
+  const progress = Math.max(0, Math.min(1, 1 - remaining / span));
+  el.stageNext.style.setProperty("--next-progress", progress.toFixed(3));
+  const imminent = remaining <= 1;
+  el.stageNext.classList.toggle("is-imminent", imminent);
+
+  // レーン上の次ノートも、残り1拍から光らせる
+  const upcomingKey = imminent ? next.index : -1;
+  if (player.upcomingKey !== upcomingKey) {
+    player.upcomingKey = upcomingKey;
+    if (player.upcomingNoteEl) {
+      player.upcomingNoteEl.classList.remove("is-upcoming");
+      player.upcomingNoteEl = null;
+    }
+    if (upcomingKey >= 0) {
+      player.upcomingNoteEl = el.laneTrack.querySelector(`.note[data-index="${upcomingKey}"]`);
+      player.upcomingNoteEl?.classList.add("is-upcoming");
+    }
+  }
+}
+
+function clearAnticipation() {
+  el.stageNext?.classList.remove("is-imminent");
+  el.stageNext?.style.setProperty("--next-progress", "0");
+  if (player.upcomingNoteEl) {
+    player.upcomingNoteEl.classList.remove("is-upcoming");
+  }
+  player.upcomingNoteEl = null;
+  player.upcomingKey = -1;
 }
 
 // 停止中・開始位置変更時にも、その位置のコードでステージ表示を合わせる
@@ -923,6 +1042,8 @@ function renderLane() {
 
   el.laneTrack.style.width = `${trackWidth}px`;
   el.laneTrack.innerHTML = html;
+  player.upcomingNoteEl = null;
+  player.upcomingKey = -1;
   setTrackTransform(player.pausedBeat ?? player.startBeat);
   laneDirty = false;
 }
@@ -1428,6 +1549,9 @@ el.originalToggle?.addEventListener("change", () => {
     startPlayback(beat, false);
   }
 });
+
+el.fsPause?.addEventListener("click", togglePlayback);
+el.fsExit?.addEventListener("click", exitPlayFullscreen);
 
 el.laneTrack.addEventListener("click", (event) => {
   const noteEl = event.target.closest(".note[data-beat]");
