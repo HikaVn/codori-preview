@@ -70,24 +70,62 @@ function extractPageVectors(ol, OPS, pageH) {
   return { glyphs, hseg, vseg };
 }
 
-// 五線検出: 水平線分のyをクラスタ → 等間隔の5本組
-function findStaves(hseg) {
-  const ys = hseg.map((h) => h.y).sort((a, b) => a - b);
+function medianOfArray(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// 五線検出: 「横長の線（五線）だけ」をYでクラスタし、主要な間隔で等間隔の5本組を見つける。
+// 歌詞のベースラインや短い線、ページ枠を除外して誤検出を防ぐ。
+function findStaves(hseg, pageWidth, pageHeight) {
+  const minSpan = (pageWidth || 595) * 0.3;
+  const maxSpan = (pageWidth || 595) * 0.97; // これ以上はページ枠
+  // Yでクラスタ（x範囲も集計）
+  const sorted = [...hseg].sort((a, b) => a.y - b.y);
   const clusters = [];
-  for (const y of ys) {
+  for (const h of sorted) {
     const c = clusters[clusters.length - 1];
-    if (c && Math.abs(c.y - y) < 1.5) { c.ys.push(y); c.y = c.ys.reduce((s, v) => s + v, 0) / c.ys.length; }
-    else clusters.push({ y, ys: [y] });
+    if (c && Math.abs(c.y - h.y) < 1.5) {
+      c.ys.push(h.y);
+      c.y = c.ys.reduce((s, v) => s + v, 0) / c.ys.length;
+      c.x0 = Math.min(c.x0, h.x0);
+      c.x1 = Math.max(c.x1, h.x1);
+    } else {
+      clusters.push({ y: h.y, ys: [h.y], x0: h.x0, x1: h.x1 });
+    }
   }
-  const lineYs = clusters.map((c) => c.y).sort((a, b) => a - b);
+  // 五線らしい線（横長・ページ枠でない）だけ
+  const lineYs = clusters
+    .filter((c) => {
+      const span = c.x1 - c.x0;
+      return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
+    })
+    .map((c) => c.y)
+    .sort((a, b) => a - b);
+  if (lineYs.length < 5) {
+    return [];
+  }
+  // 主要な五線間隔（隣接ギャップのうち、線内っぽい小さいもののメディアン）
+  const gaps = [];
+  for (let i = 1; i < lineYs.length; i += 1) {
+    const g = lineYs[i] - lineYs[i - 1];
+    if (g > 2 && g < 12) gaps.push(g);
+  }
+  const spacing = medianOfArray(gaps) || 4.4;
+  const tol = spacing * 0.35;
+  // 主要間隔で等間隔に並ぶ5本を貪欲に拾う
   const staves = [];
   for (let i = 0; i + 4 < lineYs.length; i += 1) {
-    const s = lineYs[i + 1] - lineYs[i];
-    let ok = s > 2 && s < 10;
-    for (let j = 1; ok && j < 5; j += 1) {
-      if (Math.abs((lineYs[i + j] - lineYs[i + j - 1]) - s) > 1.4) ok = false;
+    let ok = true;
+    for (let j = 1; j < 5; j += 1) {
+      if (Math.abs((lineYs[i + j] - lineYs[i + j - 1]) - spacing) > tol) { ok = false; break; }
     }
-    if (ok) { staves.push({ lines: lineYs.slice(i, i + 5), spacing: s, top: lineYs[i], bottom: lineYs[i + 4] }); i += 4; }
+    if (ok) {
+      staves.push({ lines: lineYs.slice(i, i + 5), spacing, top: lineYs[i], bottom: lineYs[i + 4] });
+      i += 4;
+    }
   }
   return staves;
 }
@@ -105,9 +143,9 @@ function midiFromStaffY(y, staff) {
 }
 
 // ページ単位でベクター譜を読む → メロディノート（実験的）
-function readVectorScorePage(ol, OPS, pageH) {
+function readVectorScorePage(ol, OPS, pageH, pageW) {
   const { glyphs, hseg } = extractPageVectors(ol, OPS, pageH);
-  const staves = findStaves(hseg);
+  const staves = findStaves(hseg, pageW, pageH);
   if (!staves.length || !glyphs.length) {
     return { notes: [], staves: 0 };
   }
@@ -139,7 +177,17 @@ function readVectorScorePage(ol, OPS, pageH) {
     }
     notes.push({ x: h.x, staffTop: staff.top, midi });
   }
-  return { notes, staves: staves.length };
+  // 重複符頭の除去（同じ段で x がほぼ同じ＆同音＝二重検出や付点を1つに）
+  notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
+  const deduped = [];
+  for (const n of notes) {
+    const last = deduped[deduped.length - 1];
+    if (last && last.staffTop === n.staffTop && Math.abs(last.x - n.x) < 2.5 && last.midi === n.midi) {
+      continue;
+    }
+    deduped.push(n);
+  }
+  return { notes: deduped, staves: staves.length };
 }
 
 // PDF全ページのベクター譜 → 拍つきメロディ。
@@ -149,12 +197,13 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress) {
   const pdf = await getDocument({ data }).promise;
   const viewport0 = (await pdf.getPage(1)).getViewport({ scale: 1 });
   const pageH = viewport0.viewBox[3];
+  const pageW = viewport0.viewBox[2];
   const ordered = [];
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { notes } = readVectorScorePage(ol, OPS, pageH);
+    const { notes } = readVectorScorePage(ol, OPS, pageH, pageW);
     // システム（譜段）ごと＝staffTopでグルーピングし、上から、各段内はx昇順
     notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
     notes.forEach((n) => ordered.push({ page: p, ...n }));
