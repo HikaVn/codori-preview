@@ -32,6 +32,9 @@ const importEl = {
   tuneVocalVal: document.querySelector("#tune-vocal-val"),
   tuneClarity: document.querySelector("#tune-clarity"),
   tuneClarityVal: document.querySelector("#tune-clarity-val"),
+  separationMethod: document.querySelector("#separation-method"),
+  tuneRepet: document.querySelector("#tune-repet"),
+  tuneRepetVal: document.querySelector("#tune-repet-val"),
   reanalyzeMelody: document.querySelector("#reanalyze-melody"),
   reanalyzeFull: document.querySelector("#reanalyze-full"),
   exportDebug: document.querySelector("#export-debug"),
@@ -43,7 +46,9 @@ const importEl = {
 const importTuning = {
   changePenalty: 0.1,
   vocalSideFactor: 1.2,
-  clarityThreshold: 0.55
+  clarityThreshold: 0.55,
+  separationMethod: "center-repet",
+  repetStrength: 1.0
 };
 
 const importState = {
@@ -138,7 +143,9 @@ async function runImportAnalysis() {
       mid,
       side,
       sampleRate: IMPORT_RATE,
+      method: importTuning.separationMethod,
       vocalSideFactor: importTuning.vocalSideFactor,
+      repetStrength: importTuning.repetStrength,
       onProgress: (ratio) => setImportProgress("ボーカルと伴奏を分けてる…", 0.05 + ratio * 0.6)
     });
 
@@ -387,7 +394,9 @@ async function reanalyzeFull() {
       mid,
       side,
       sampleRate: IMPORT_RATE,
+      method: importTuning.separationMethod,
       vocalSideFactor: importTuning.vocalSideFactor,
+      repetStrength: importTuning.repetStrength,
       onProgress: (ratio) => setImportProgress("分離からやりなおしてる…", ratio * 0.7)
     });
     setImportProgress("メロディを聞き取ってる…", 0.72);
@@ -569,6 +578,13 @@ importEl.tuneVocal?.addEventListener("input", () => {
 importEl.tuneClarity?.addEventListener("input", () => {
   importTuning.clarityThreshold = Number(importEl.tuneClarity.value);
   importEl.tuneClarityVal.textContent = importTuning.clarityThreshold.toFixed(2);
+});
+importEl.separationMethod?.addEventListener("change", () => {
+  importTuning.separationMethod = importEl.separationMethod.value;
+});
+importEl.tuneRepet?.addEventListener("input", () => {
+  importTuning.repetStrength = Number(importEl.tuneRepet.value);
+  importEl.tuneRepetVal.textContent = importTuning.repetStrength.toFixed(1);
 });
 importEl.reanalyzeMelody?.addEventListener("click", reanalyzeMelodyOnly);
 importEl.reanalyzeFull?.addEventListener("click", reanalyzeFull);

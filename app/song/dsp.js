@@ -122,24 +122,55 @@ function midiFromFrequency(freq) {
   return 69 + 12 * Math.log2(freq / 440);
 }
 
-// ===== 分離＋特徴抽出（1パス） =====
-// mid/side信号からSTFTで「センター成分＝ボーカル」「残り＝伴奏」を推定し、
-// 同時にスペクトラルフラックス（リズム解析用）とクロマ（コード解析用）を集める。
+// ===== 分離＋特徴抽出 =====
+// ボーカルらしさ = 「中央に定位（mid≫side）」∩「繰り返さない（REPET-SIM）」の二段がけ。
+// - センター抽出: プロのミックスはボーカルが中央定位 → mid成分から推定（既存）
+// - REPET-SIM: 伴奏は時間方向に繰り返す/持続する → 各ビンの時間メディアンで伴奏を推定し除去
+//   （Rafii & Pardo 2013 / librosaのvocal separation例ベース）
+// - ソフトマスク（Wiener風）でアーティファクトを抑える
+// method: "center" = センター抽出のみ（軽い） / "center-repet" = 二段がけ（おすすめ）
 
-async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor = 1.2 }) {
+const REPET_TIME_STRIDE = 3; // 背景推定用に時間方向を間引く（メモリ削減）
+const REPET_BLOCK_SECONDS = 4; // この秒数ごとに伴奏スペクトルを推定（コード進行に追従）
+
+// ソフトマスク（power=2のWienerフィルタ）: a に属する度合いを返す
+function softMaskValue(a, b) {
+  const a2 = a * a;
+  const b2 = b * b;
+  const denom = a2 + b2;
+  return denom < 1e-12 ? 0 : a2 / denom;
+}
+
+function medianOf(values, from, to) {
+  const slice = values.slice(from, to).sort((x, y) => x - y);
+  const n = slice.length;
+  if (!n) {
+    return 0;
+  }
+  return n % 2 ? slice[(n - 1) / 2] : (slice[n / 2 - 1] + slice[n / 2]) / 2;
+}
+
+async function analyzeAudio(options) {
+  const { mid, side, sampleRate, onProgress } = options;
+  const vocalSideFactor = options.vocalSideFactor ?? 1.2;
+  const method = options.method || "center-repet";
+  const repetStrength = options.repetStrength ?? 1.0;
+  const useRepet = method !== "center" && repetStrength > 0;
+
   const size = DSP_FFT_SIZE;
   const hop = DSP_HOP;
   const win = hannWindow(size);
   const frames = Math.max(0, Math.floor((mid.length - size) / hop) + 1);
   const half = size / 2;
   const binHz = sampleRate / size;
+  const bins = half + 1;
 
   const vocal = new Float32Array(mid.length);
   const inst = new Float32Array(mid.length);
   const norm = new Float32Array(mid.length);
   const flux = new Float32Array(frames);
   const chroma = new Float32Array(frames * 12);
-  const prevMag = new Float32Array(half + 1);
+  const prevMag = new Float32Array(bins);
 
   const mRe = new Float32Array(size);
   const mIm = new Float32Array(size);
@@ -149,6 +180,52 @@ async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor
   const vIm = new Float32Array(size);
   const iRe = new Float32Array(size);
   const iIm = new Float32Array(size);
+
+  // --- REPET用: パス1で間引いたmidマグニチュードを貯めて、ブロックごとの伴奏スペクトルを作る ---
+  let background = null; // background[block][bin]
+  let blockCols = 1;
+  if (useRepet) {
+    const refFrames = Math.ceil(frames / REPET_TIME_STRIDE);
+    const refMag = new Float32Array(refFrames * bins);
+    for (let r = 0; r < refFrames; r += 1) {
+      const f = r * REPET_TIME_STRIDE;
+      const start = f * hop;
+      for (let i = 0; i < size; i += 1) {
+        mRe[i] = mid[start + i] * win[i];
+        mIm[i] = 0;
+      }
+      fftInPlace(mRe, mIm);
+      for (let k = 0; k < bins; k += 1) {
+        refMag[r * bins + k] = Math.hypot(mRe[k], mIm[k]);
+      }
+      if (onProgress && r % 64 === 0) {
+        onProgress((r / refFrames) * 0.4);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    const colSec = (hop * REPET_TIME_STRIDE) / sampleRate;
+    blockCols = Math.max(8, Math.round(REPET_BLOCK_SECONDS / colSec));
+    const blocks = Math.max(1, Math.ceil(refFrames / blockCols));
+    background = [];
+    const column = new Float32Array(blockCols);
+    for (let b = 0; b < blocks; b += 1) {
+      const from = b * blockCols;
+      const to = Math.min(refFrames, from + blockCols);
+      const bg = new Float32Array(bins);
+      for (let k = 0; k < bins; k += 1) {
+        let n = 0;
+        for (let r = from; r < to; r += 1) {
+          column[n++] = refMag[r * bins + k];
+        }
+        // 各ビンの時間メディアン＝そのブロックで持続している伴奏成分
+        bg[k] = medianOf(column, 0, n);
+      }
+      background.push(bg);
+    }
+  }
+
+  const progressBase = useRepet ? 0.4 : 0;
+  const progressSpan = useRepet ? 0.6 : 1;
 
   for (let f = 0; f < frames; f += 1) {
     const start = f * hop;
@@ -161,6 +238,10 @@ async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor
     fftInPlace(mRe, mIm);
     fftInPlace(sRe, sIm);
 
+    const bg = useRepet
+      ? background[Math.min(background.length - 1, Math.floor((f / REPET_TIME_STRIDE) / blockCols))]
+      : null;
+
     let fluxSum = 0;
     for (let k = 0; k <= half; k += 1) {
       const mMag = Math.hypot(mRe[k], mIm[k]);
@@ -171,7 +252,17 @@ async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor
       const freq = k * binHz;
       let mask = 0;
       if (freq >= 140 && freq <= 5200) {
-        mask = Math.min(1, Math.max(0, mMag - vocalSideFactor * sMag) / (mMag + 1e-9));
+        // 段1: センター定位マスク（mid≫side ほどボーカルらしい）
+        const panMask = Math.min(1, Math.max(0, mMag - vocalSideFactor * sMag) / (mMag + 1e-9));
+        if (useRepet) {
+          // 段2: 繰り返し（伴奏）を引いた残りのソフトマスク
+          const bgMag = bg[k] * repetStrength;
+          const foreground = Math.max(0, mMag - bgMag);
+          const repetMask = softMaskValue(foreground, bgMag);
+          mask = panMask * repetMask;
+        } else {
+          mask = panMask;
+        }
       }
       vRe[k] = mRe[k] * mask;
       vIm[k] = mIm[k] * mask;
@@ -202,7 +293,7 @@ async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor
     }
 
     if (onProgress && f % 64 === 0) {
-      onProgress(f / frames);
+      onProgress(progressBase + (f / frames) * progressSpan);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
@@ -751,6 +842,8 @@ if (typeof module !== "undefined" && module.exports) {
     buildScoreFromAnalysis,
     assignLyricsToEvents,
     assignTimedLyricsToEvents,
+    softMaskValue,
+    medianOf,
     CHORD_TEMPLATES,
     NOTE_NAMES
   };
