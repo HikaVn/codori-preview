@@ -101,6 +101,12 @@ const DEMO_SOURCE = `[イントロ]
 let song = null;
 let library = loadLibrary();
 let pxPerBeat = 110;
+// 実際のレイアウトに使う値。コードの中身（鳥＋運指）が必ず収まるよう自動で底上げされる
+let lanePxPerBeat = 110;
+let judgeXPx = 150;
+const JUDGE_RATIO = 0.3; // 判定線はレーン幅の30%（端すぎると見にくい）
+const MIN_CHORD_NOTE_PX = 210;
+const MIN_CHORD_NOTE_PX_FULLSCREEN = 400;
 let laneDirty = true;
 let audioCtx = null;
 let playbackHits = [];
@@ -753,6 +759,13 @@ document.addEventListener("fullscreenchange", () => {
   } else if (!el.laneWrap.classList.contains("is-pseudo-fullscreen")) {
     el.laneWrap.classList.remove("is-fullscreen");
   }
+  renderLane();
+});
+
+window.addEventListener("resize", () => {
+  if (el.playView.classList.contains("is-active")) {
+    renderLane();
+  }
 });
 
 function frame() {
@@ -786,7 +799,7 @@ function frame() {
 }
 
 function setTrackTransform(beat) {
-  el.laneTrack.style.transform = `translateX(${-beat * pxPerBeat}px)`;
+  el.laneTrack.style.transform = `translateX(${-beat * lanePxPerBeat}px)`;
 }
 
 function updatePositionLabel(beat) {
@@ -928,20 +941,34 @@ function renderCurrentLine(activeNote) {
 
 // ===== レーン描画 =====
 
-function judgeX() {
-  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--judge-x")) || 150;
+function refreshLaneMetrics() {
+  // 判定線：レーン幅の30%（非表示中は画面幅から推定）
+  const laneWidth = el.lane.clientWidth || window.innerWidth - 60;
+  judgeXPx = Math.max(120, Math.round(laneWidth * JUDGE_RATIO));
+  el.laneWrap.style.setProperty("--judge-x", `${judgeXPx}px`);
+
+  // 1拍あたりの幅：いちばん短いコードでも中身（鳥＋運指）が隠れない値まで底上げ
+  const minNotePx = el.laneWrap.classList.contains("is-fullscreen")
+    ? MIN_CHORD_NOTE_PX_FULLSCREEN
+    : MIN_CHORD_NOTE_PX;
+  const chordBeats = positioned.notes
+    .filter((note) => note.chord)
+    .map((note) => Math.max(0.25, Number(note.beats) || 0));
+  const minBeats = chordBeats.length ? Math.min(...chordBeats) : 2;
+  lanePxPerBeat = Math.max(pxPerBeat, Math.ceil(minNotePx / minBeats));
 }
 
 function renderLane() {
   computePositions();
+  refreshLaneMetrics();
   const beatsPerBar = Number(song.beatsPerBar);
-  const offset = judgeX();
+  const offset = judgeXPx;
   const totalBeats = positioned.totalBeats;
-  const trackWidth = offset + (totalBeats + 8) * pxPerBeat;
+  const trackWidth = offset + (totalBeats + 8) * lanePxPerBeat;
   let html = "";
 
   for (let beat = 0; beat <= totalBeats + beatsPerBar; beat += 1) {
-    const x = offset + beat * pxPerBeat;
+    const x = offset + beat * lanePxPerBeat;
     const isBarHead = beat % beatsPerBar === 0;
     html += `<div class="bar-line${isBarHead ? "" : " is-beat"}" style="left:${x}px"></div>`;
     if (isBarHead) {
@@ -950,13 +977,13 @@ function renderLane() {
   }
 
   positioned.sections.forEach((section) => {
-    const x = offset + section.startBeat * pxPerBeat;
+    const x = offset + section.startBeat * lanePxPerBeat;
     html += `<div class="note note--section" style="left:${x}px">${escapeHtml(section.label)}</div>`;
   });
 
   positioned.notes.forEach((note, order) => {
-    const x = offset + note.startBeat * pxPerBeat;
-    const width = Math.max((Number(note.beats) || 0) * pxPerBeat - 6, 34);
+    const x = offset + note.startBeat * lanePxPerBeat;
+    const width = Math.max((Number(note.beats) || 0) * lanePxPerBeat - 6, 34);
     const isStart = Math.abs(note.startBeat - player.startBeat) < 0.001;
     if (note.chord) {
       const shown = transposeChord(note.chord, song.transpose);
@@ -984,8 +1011,8 @@ function renderLane() {
     const minMidi = Math.min(...midis);
     const span = Math.max(1, Math.max(...midis) - minMidi);
     song.melody.forEach((note) => {
-      const x = offset + note.startBeat * pxPerBeat;
-      const width = Math.max(4, note.beats * pxPerBeat - 2);
+      const x = offset + note.startBeat * lanePxPerBeat;
+      const width = Math.max(4, note.beats * lanePxPerBeat - 2);
       const y = 6 + (1 - (note.midi - minMidi) / span) * 26;
       html += `<div class="melody-dot" style="left:${x}px;top:${y}px;width:${width}px"></div>`;
     });
@@ -995,7 +1022,10 @@ function renderLane() {
   el.laneTrack.innerHTML = html;
   player.upcomingNoteEl = null;
   player.upcomingKey = -1;
-  setTrackTransform(player.pausedBeat ?? player.startBeat);
+  player.activeNoteIdx = -1;
+  if (!player.playing) {
+    setTrackTransform(player.pausedBeat ?? player.startBeat);
+  }
   laneDirty = false;
 }
 
@@ -1357,9 +1387,7 @@ function setMode(mode) {
     syncMetaFromInputs();
     el.playBpm.value = song.bpm;
     syncPlayExtras();
-    if (laneDirty) {
-      renderLane();
-    }
+    renderLane();
     updatePositionLabel(player.pausedBeat ?? player.startBeat);
     updateStageForBeat(player.pausedBeat ?? player.startBeat);
   } else if (player.playing) {
