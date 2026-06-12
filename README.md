@@ -8,6 +8,7 @@ Codoriの公開確認用静的サイトです。
 https://hikavn.github.io/codori-preview/
 https://hikavn.github.io/codori-preview/app/
 https://hikavn.github.io/codori-preview/app/?actions=1&stage=0&view=quiz
+https://hikavn.github.io/codori-preview/app/song/
 ```
 
 この公開用リポジトリには、アプリ表示に必要な最小素材だけを含めます。
