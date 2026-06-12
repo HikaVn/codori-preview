@@ -1523,3 +1523,62 @@ button {
 .import-progress-head p {
   margin: 0;
 }
+
+/* ===== 取り込み: コード編集表 ===== */
+.import-chord-editor {
+  display: grid;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.chord-edit-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 76px 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 8px;
+}
+
+.chord-edit-row:nth-child(odd) {
+  background: #f4f8fb;
+}
+
+.chord-edit-pos {
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.chord-edit-name,
+.chord-edit-beats {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.chord-edit-name {
+  font-family: var(--font-code);
+  font-weight: 900;
+  color: var(--blue);
+}
+
+.chord-edit-del {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.chord-edit-del:hover {
+  border-color: var(--rose);
+  color: var(--rose);
+}
