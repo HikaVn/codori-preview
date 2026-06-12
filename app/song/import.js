@@ -72,7 +72,10 @@ function importQuantUnit() {
   switch (importEl.quantize.value) {
     case "4": return 1;
     case "8": return 0.5;
-    case "8t": return 1 / 3;
+    case "8t": return 1 / 3; // 8分3連
+    case "16t": return 1 / 6; // 16分3連
+    case "16+t": return [0.25, 1 / 3]; // 16分＋3連（自動スナップ）
+    case "16+16t": return [0.25, 1 / 6]; // 16分＋16分3連
     default: return 0.25; // 16分
   }
 }
