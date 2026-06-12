@@ -126,7 +126,7 @@ function midiFromFrequency(freq) {
 // mid/side信号からSTFTで「センター成分＝ボーカル」「残り＝伴奏」を推定し、
 // 同時にスペクトラルフラックス（リズム解析用）とクロマ（コード解析用）を集める。
 
-async function analyzeAudio({ mid, side, sampleRate, onProgress }) {
+async function analyzeAudio({ mid, side, sampleRate, onProgress, vocalSideFactor = 1.2 }) {
   const size = DSP_FFT_SIZE;
   const hop = DSP_HOP;
   const win = hannWindow(size);
@@ -171,7 +171,7 @@ async function analyzeAudio({ mid, side, sampleRate, onProgress }) {
       const freq = k * binHz;
       let mask = 0;
       if (freq >= 140 && freq <= 5200) {
-        mask = Math.min(1, Math.max(0, mMag - 1.2 * sMag) / (mMag + 1e-9));
+        mask = Math.min(1, Math.max(0, mMag - vocalSideFactor * sMag) / (mMag + 1e-9));
       }
       vRe[k] = mRe[k] * mask;
       vIm[k] = mIm[k] * mask;
@@ -275,6 +275,29 @@ function estimateTempo(flux, frameRate) {
   while (bpm < 70) bpm *= 2;
   while (bpm > 185) bpm /= 2;
 
+  // 上位のBPM候補（半分/倍を畳み込んで重複を除く）
+  const peaks = [];
+  for (let l = lagMin + 1; l < lagMax; l += 1) {
+    if (scores[l] >= scores[l - 1] && scores[l] >= scores[l + 1] && scores[l] > 0) {
+      peaks.push({ lag: l, score: scores[l] });
+    }
+  }
+  peaks.sort((a, b) => b.score - a.score);
+  const maxScore = peaks[0]?.score || 1;
+  const candidates = [];
+  for (const peak of peaks) {
+    let candidateBpm = (60 * frameRate) / peak.lag;
+    while (candidateBpm < 70) candidateBpm *= 2;
+    while (candidateBpm > 185) candidateBpm /= 2;
+    candidateBpm = Math.round(candidateBpm * 10) / 10;
+    if (!candidates.some((c) => Math.abs(c.bpm - candidateBpm) < 1.5)) {
+      candidates.push({ bpm: candidateBpm, score: Math.round((peak.score / maxScore) * 100) / 100 });
+    }
+    if (candidates.length >= 5) {
+      break;
+    }
+  }
+
   // 拍の位相：1周期内をずらして、拍位置のフラックス和が最大になるオフセットを探す
   const period = (60 * frameRate) / bpm;
   let bestPhase = 0;
@@ -289,7 +312,7 @@ function estimateTempo(flux, frameRate) {
       bestPhase = phase;
     }
   }
-  return { bpm, beatOffsetSec: bestPhase / frameRate };
+  return { bpm, beatOffsetSec: bestPhase / frameRate, candidates };
 }
 
 // ===== コード =====
@@ -462,7 +485,9 @@ function yinPitch(frame, sampleRate, minHz = 75, maxHz = 900, threshold = 0.15) 
   return { freq, clarity: 1 - b };
 }
 
-async function trackMelody(vocal, sampleRate, onProgress) {
+async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
+  const clarityThreshold = options.clarityThreshold ?? 0.55;
+  const rmsGate = options.rmsGate ?? 0.004;
   const down = resampleLinear(vocal, sampleRate, 11025);
   const rate = 11025;
   const winSize = 1024;
@@ -478,9 +503,9 @@ async function trackMelody(vocal, sampleRate, onProgress) {
       rms += frame[i] * frame[i];
     }
     rms = Math.sqrt(rms / winSize);
-    if (rms > 0.004) {
+    if (rms > rmsGate) {
       const found = yinPitch(frame, rate);
-      if (found && found.clarity > 0.55) {
+      if (found && found.clarity > clarityThreshold) {
         pitches[f] = midiFromFrequency(found.freq);
       }
     }
@@ -578,7 +603,7 @@ function buildScoreFromAnalysis(analysis, options) {
   const beatVectors = beatChromaVectors(
     analysis.chroma, analysis.frames, analysis.frameRate, bpm, beatOffsetSec, beatCount
   );
-  let labels = detectChordsFromChroma(beatVectors);
+  let labels = detectChordsFromChroma(beatVectors, options.changePenalty ?? 0.1);
   const shift = estimateDownbeatShift(labels, beatsPerBar);
   // 小節頭が途中から始まる場合は、先頭を切らずに無音拍を足して1小節目に収める
   const pad = shift === 0 ? 0 : beatsPerBar - shift;
@@ -624,6 +649,7 @@ function buildScoreFromAnalysis(analysis, options) {
     events,
     melody,
     beatCount: labels.length,
+    beatLabels: labels,
     bars: Math.ceil(labels.length / beatsPerBar),
     audioOffsetSec: scoreStartSec
   };

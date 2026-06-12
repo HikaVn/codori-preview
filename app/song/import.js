@@ -22,12 +22,35 @@ const importEl = {
   previewOriginal: document.querySelector("#preview-original"),
   previewInst: document.querySelector("#preview-inst"),
   previewVocal: document.querySelector("#preview-vocal"),
-  convertButton: document.querySelector("#import-convert")
+  convertButton: document.querySelector("#import-convert"),
+  bpmCandidates: document.querySelector("#bpm-candidates"),
+  bpmHalf: document.querySelector("#bpm-half"),
+  bpmDouble: document.querySelector("#bpm-double"),
+  tunePenalty: document.querySelector("#tune-penalty"),
+  tunePenaltyVal: document.querySelector("#tune-penalty-val"),
+  tuneVocal: document.querySelector("#tune-vocal"),
+  tuneVocalVal: document.querySelector("#tune-vocal-val"),
+  tuneClarity: document.querySelector("#tune-clarity"),
+  tuneClarityVal: document.querySelector("#tune-clarity-val"),
+  reanalyzeMelody: document.querySelector("#reanalyze-melody"),
+  reanalyzeFull: document.querySelector("#reanalyze-full"),
+  exportDebug: document.querySelector("#export-debug"),
+  debugFlux: document.querySelector("#debug-flux"),
+  debugMelody: document.querySelector("#debug-melody")
+};
+
+// 解析チューニングのパラメータ（デバッグパネルから変更できる）
+const importTuning = {
+  changePenalty: 0.1,
+  vocalSideFactor: 1.2,
+  clarityThreshold: 0.55
 };
 
 const importState = {
   fileName: "",
   originalBuffer: null,
+  midSide: null, // 再解析用に保持
+  tempoCandidates: [],
   analysis: null,
   instBuffer: null,
   vocalBuffer: null,
@@ -110,21 +133,25 @@ async function runImportAnalysis() {
       side[i] = (leftDown[i] - rightDown[i]) / 2;
     }
 
+    importState.midSide = { mid, side };
     const analysis = await analyzeAudio({
       mid,
       side,
       sampleRate: IMPORT_RATE,
+      vocalSideFactor: importTuning.vocalSideFactor,
       onProgress: (ratio) => setImportProgress("ボーカルと伴奏を分けてる…", 0.05 + ratio * 0.6)
     });
 
     setImportProgress("テンポと拍をさがしてる…", 0.68);
     const tempo = estimateTempo(analysis.flux, analysis.frameRate);
+    importState.tempoCandidates = tempo.candidates || [];
 
     setImportProgress("メロディを聞き取ってる…", 0.72);
     const melody = await trackMelody(
       analysis.vocal,
       IMPORT_RATE,
-      (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.22)
+      (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.22),
+      { clarityThreshold: importTuning.clarityThreshold }
     );
     analysis.pitches = melody.pitches;
     analysis.pitchFrameRate = melody.frameRate;
@@ -164,7 +191,8 @@ function buildImportScore() {
     bpm,
     beatOffsetSec,
     beatsPerBar: 4,
-    quantUnit: importQuantUnit()
+    quantUnit: importQuantUnit(),
+    changePenalty: importTuning.changePenalty
   });
 }
 
@@ -185,6 +213,234 @@ function refreshImportPreview() {
     .map((event) => `<span class="chord-chip">${escapeHtml(event.chord)}<small>${event.beats}拍</small></span>`)
     .join("")
     + (chordSegments.length > 32 ? `<span class="chord-chip chord-chip--more">…ほか${chordSegments.length - 32}個</span>` : "");
+  renderBpmCandidates();
+  drawDebugCanvases(score);
+}
+
+// ===== チューニング＆デバッグ =====
+
+function renderBpmCandidates() {
+  if (!importEl.bpmCandidates) {
+    return;
+  }
+  const current = Number(importEl.bpm.value) || 0;
+  importEl.bpmCandidates.innerHTML = "";
+  importState.tempoCandidates.forEach((candidate) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bpm-candidate";
+    button.classList.toggle("is-active", Math.abs(candidate.bpm - current) < 0.6);
+    button.textContent = `${candidate.bpm}`;
+    button.title = `スコア ${candidate.score}`;
+    button.addEventListener("click", () => {
+      importEl.bpm.value = String(candidate.bpm);
+      refreshImportPreview();
+    });
+    importEl.bpmCandidates.appendChild(button);
+  });
+}
+
+function scaleBpm(factor) {
+  const next = Math.max(40, Math.min(240, (Number(importEl.bpm.value) || 100) * factor));
+  importEl.bpm.value = String(Math.round(next * 10) / 10);
+  refreshImportPreview();
+}
+
+function drawDebugCanvases(score) {
+  drawFluxCanvas();
+  drawMelodyCanvas(score);
+}
+
+function drawFluxCanvas() {
+  const canvas = importEl.debugFlux;
+  const analysis = importState.analysis;
+  if (!canvas || !analysis) {
+    return;
+  }
+  const width = canvas.parentElement.clientWidth - 4 || 800;
+  canvas.width = width;
+  const height = canvas.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#10212e";
+  ctx.fillRect(0, 0, width, height);
+
+  const flux = analysis.flux;
+  let max = 0;
+  for (let i = 0; i < flux.length; i += 1) {
+    max = Math.max(max, flux[i]);
+  }
+  const durationSec = analysis.frames / analysis.frameRate;
+
+  // 拍グリッド
+  const bpm = Number(importEl.bpm.value) || 100;
+  const offset = Number(importEl.offset.value) || 0;
+  const spb = 60 / bpm;
+  ctx.lineWidth = 1;
+  let beatIndex = 0;
+  for (let t = offset; t < durationSec; t += spb) {
+    const x = (t / durationSec) * width;
+    const isBarHead = beatIndex % 4 === 0;
+    ctx.strokeStyle = isBarHead ? "rgba(216, 155, 43, 0.9)" : "rgba(216, 155, 43, 0.35)";
+    ctx.beginPath();
+    ctx.moveTo(x, isBarHead ? 0 : height * 0.25);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+    beatIndex += 1;
+  }
+
+  // フラックス
+  ctx.strokeStyle = "#9ec9f5";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < flux.length; i += 1) {
+    const x = (i / flux.length) * width;
+    const y = height - (flux[i] / (max || 1)) * (height - 6) - 2;
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+}
+
+function drawMelodyCanvas(score) {
+  const canvas = importEl.debugMelody;
+  const analysis = importState.analysis;
+  if (!canvas || !analysis || !analysis.pitches) {
+    return;
+  }
+  const width = canvas.parentElement.clientWidth - 4 || 800;
+  canvas.width = width;
+  const height = canvas.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#10212e";
+  ctx.fillRect(0, 0, width, height);
+
+  const pitches = analysis.pitches;
+  const durationSec = pitches.length / analysis.pitchFrameRate;
+  const voiced = pitches.filter((p) => p !== null);
+  if (!voiced.length) {
+    ctx.fillStyle = "#9ec9f5";
+    ctx.fillText("ピッチが見つからなかった（メロディ感度を下げてみて）", 10, 20);
+    return;
+  }
+  const minMidi = Math.min(...voiced) - 1;
+  const maxMidi = Math.max(...voiced) + 1;
+  const yFor = (midi) => height - ((midi - minMidi) / (maxMidi - minMidi)) * (height - 8) - 4;
+
+  // 検出ピッチ（点）
+  ctx.fillStyle = "rgba(158, 201, 245, 0.8)";
+  for (let i = 0; i < pitches.length; i += 1) {
+    if (pitches[i] === null) {
+      continue;
+    }
+    const x = (i / pitches.length) * width;
+    ctx.fillRect(x, yFor(pitches[i]), 1.6, 1.6);
+  }
+
+  // クオンタイズ後ノート（横棒）
+  if (score?.melody?.length) {
+    const bpm = Number(importEl.bpm.value) || 100;
+    const spb = 60 / bpm;
+    ctx.fillStyle = "rgba(216, 111, 119, 0.85)";
+    score.melody.forEach((note) => {
+      const startSec = score.audioOffsetSec + note.startBeat * spb;
+      const x = (startSec / durationSec) * width;
+      const w = Math.max(2, ((note.beats * spb) / durationSec) * width - 1);
+      ctx.fillRect(x, yFor(note.midi) - 1.4, w, 3.2);
+    });
+  }
+}
+
+async function reanalyzeMelodyOnly() {
+  if (!importState.analysis || importState.busy) {
+    return;
+  }
+  importState.busy = true;
+  try {
+    setImportProgress("メロディを聞き取りなおしてる…", 0.2);
+    const melody = await trackMelody(
+      importState.analysis.vocal,
+      IMPORT_RATE,
+      (ratio) => setImportProgress("メロディを聞き取りなおしてる…", 0.2 + ratio * 0.75),
+      { clarityThreshold: importTuning.clarityThreshold }
+    );
+    importState.analysis.pitches = melody.pitches;
+    importState.analysis.pitchFrameRate = melody.frameRate;
+    hideImportProgress();
+    refreshImportPreview();
+  } finally {
+    importState.busy = false;
+  }
+}
+
+async function reanalyzeFull() {
+  if (!importState.midSide || importState.busy) {
+    return;
+  }
+  importState.busy = true;
+  importEl.analyzeButton.disabled = true;
+  try {
+    const { mid, side } = importState.midSide;
+    const analysis = await analyzeAudio({
+      mid,
+      side,
+      sampleRate: IMPORT_RATE,
+      vocalSideFactor: importTuning.vocalSideFactor,
+      onProgress: (ratio) => setImportProgress("分離からやりなおしてる…", ratio * 0.7)
+    });
+    setImportProgress("メロディを聞き取ってる…", 0.72);
+    const melody = await trackMelody(
+      analysis.vocal,
+      IMPORT_RATE,
+      (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.25),
+      { clarityThreshold: importTuning.clarityThreshold }
+    );
+    analysis.pitches = melody.pitches;
+    analysis.pitchFrameRate = melody.frameRate;
+    importState.analysis = analysis;
+    importState.instBuffer = audioBufferFromArray(analysis.inst, IMPORT_RATE);
+    importState.vocalBuffer = audioBufferFromArray(analysis.vocal, IMPORT_RATE);
+    hideImportProgress();
+    refreshImportPreview();
+  } finally {
+    importState.busy = false;
+    importEl.analyzeButton.disabled = false;
+  }
+}
+
+function exportDebugJson() {
+  const analysis = importState.analysis;
+  if (!analysis) {
+    return;
+  }
+  const score = buildImportScore();
+  const data = {
+    fileName: importState.fileName,
+    exportedAt: new Date().toISOString(),
+    settings: {
+      bpm: Number(importEl.bpm.value),
+      beatOffsetSec: Number(importEl.offset.value),
+      quantize: importEl.quantize.value,
+      ...importTuning
+    },
+    tempoCandidates: importState.tempoCandidates,
+    beatLabels: score?.beatLabels || [],
+    melody: score?.melody || [],
+    audioOffsetSec: score?.audioOffsetSec,
+    frameRate: analysis.frameRate,
+    flux: Array.from(analysis.flux, (v) => Math.round(v * 100) / 100),
+    pitchFrameRate: analysis.pitchFrameRate,
+    pitches: (analysis.pitches || []).map((p) => (p === null ? null : Math.round(p * 100) / 100))
+  };
+  const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${importState.fileName || "analysis"}-debug.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function stopImportPreview() {
@@ -298,3 +554,27 @@ importEl.previewOriginal?.addEventListener("click", () => toggleImportPreview("o
 importEl.previewInst?.addEventListener("click", () => toggleImportPreview("inst", importEl.previewInst));
 importEl.previewVocal?.addEventListener("click", () => toggleImportPreview("vocal", importEl.previewVocal));
 importEl.convertButton?.addEventListener("click", convertImportToSong);
+
+importEl.bpmHalf?.addEventListener("click", () => scaleBpm(0.5));
+importEl.bpmDouble?.addEventListener("click", () => scaleBpm(2));
+importEl.tunePenalty?.addEventListener("input", () => {
+  importTuning.changePenalty = Number(importEl.tunePenalty.value);
+  importEl.tunePenaltyVal.textContent = importTuning.changePenalty.toFixed(2);
+  refreshImportPreview();
+});
+importEl.tuneVocal?.addEventListener("input", () => {
+  importTuning.vocalSideFactor = Number(importEl.tuneVocal.value);
+  importEl.tuneVocalVal.textContent = importTuning.vocalSideFactor.toFixed(1);
+});
+importEl.tuneClarity?.addEventListener("input", () => {
+  importTuning.clarityThreshold = Number(importEl.tuneClarity.value);
+  importEl.tuneClarityVal.textContent = importTuning.clarityThreshold.toFixed(2);
+});
+importEl.reanalyzeMelody?.addEventListener("click", reanalyzeMelodyOnly);
+importEl.reanalyzeFull?.addEventListener("click", reanalyzeFull);
+importEl.exportDebug?.addEventListener("click", exportDebugJson);
+document.querySelector("#import-debug")?.addEventListener("toggle", () => {
+  if (importState.analysis) {
+    drawDebugCanvases(buildImportScore());
+  }
+});

@@ -14,6 +14,7 @@ const WHISPER_MODELS = {
 
 const transcribeEl = {
   model: document.querySelector("#whisper-model"),
+  source: document.querySelector("#whisper-source"),
   button: document.querySelector("#transcribe-button"),
   progress: document.querySelector("#transcribe-progress"),
   progressBar: document.querySelector("#transcribe-progress-bar"),
@@ -99,8 +100,8 @@ async function runTranscription() {
     setTranscribeProgress("文字起こしの準備中…", 0.02);
     const asr = await loadWhisperPipeline(transcribeEl.model.value);
 
-    setTranscribeProgress("ボーカルから歌詞を聞き取ってる…（曲の長さによって数分かかるよ）", null);
-    const audio = resampleLinear(importState.analysis.vocal, IMPORT_RATE, WHISPER_RATE);
+    setTranscribeProgress("歌詞を聞き取ってる…（曲の長さによって数分かかるよ）", null);
+    const audio = prepareTranscriptionAudio();
     const output = await asr(audio, {
       language: "japanese",
       task: "transcribe",
@@ -131,6 +132,28 @@ async function runTranscription() {
     transcribeState.busy = false;
     transcribeEl.button.disabled = false;
   }
+}
+
+// 認識ソース（分離ボーカル / 元ミックス）を16kHzモノラルにして、ピーク正規化する
+function prepareTranscriptionAudio() {
+  let samples;
+  if (transcribeEl.source?.value === "mix" && importState.midSide) {
+    samples = importState.midSide.mid;
+  } else {
+    samples = importState.analysis.vocal;
+  }
+  const audio = resampleLinear(samples, IMPORT_RATE, WHISPER_RATE);
+  let peak = 0;
+  for (let i = 0; i < audio.length; i += 1) {
+    peak = Math.max(peak, Math.abs(audio[i]));
+  }
+  if (peak > 1e-6) {
+    const gain = 0.95 / peak;
+    for (let i = 0; i < audio.length; i += 1) {
+      audio[i] *= gain;
+    }
+  }
+  return audio;
 }
 
 function renderTranscriptList() {
