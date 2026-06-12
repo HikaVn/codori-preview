@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-whisper-antihallu-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-repet-separation-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -247,6 +247,20 @@
               <button class="ghost-button small-button" id="bpm-double" type="button">×2</button>
             </div>
             <div class="import-settings">
+              <label>分離方法
+                <select id="separation-method">
+                  <option value="center-repet" selected>センター＋繰り返し除去（おすすめ）</option>
+                  <option value="center">センター抽出のみ（軽い）</option>
+                </select>
+              </label>
+              <label>伴奏の繰り返し除去 強さ
+                <span class="tune-row">
+                  <input id="tune-repet" type="range" min="0.5" max="2.0" step="0.1" value="1.0">
+                  <span id="tune-repet-val">1.0</span>
+                </span>
+              </label>
+            </div>
+            <div class="import-settings">
               <label>コード切替のねばり
                 <span class="tune-row">
                   <input id="tune-penalty" type="range" min="0.02" max="0.30" step="0.02" value="0.10">
@@ -268,7 +282,8 @@
             </div>
             <p class="hint">
               「ねばり」は大きいほどコードが切り替わりにくい（即反映）。コードが揺れすぎる→上げる、変化を拾わない→下げる。<br>
-              「ボーカル抽出の強さ」は<b>分離から再解析</b>、「メロディ感度」は<b>メロディだけ再解析</b>で反映。<br>
+              「分離方法」「繰り返し除去 強さ」「ボーカル抽出の強さ」は<b>分離から再解析</b>、「メロディ感度」は<b>メロディだけ再解析</b>で反映。<br>
+              伴奏が残るときは「繰り返し除去 強さ」を上げる。ボーカルが痩せるときは下げる。<br>
               コードのタイミングが全体的にズレるときは、まずBPM候補と1拍目オフセットを疑ってね。
             </p>
             <div class="import-settings">
@@ -314,9 +329,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-whisper-antihallu-v1"></script>
-    <script src="./dsp.js?v=20260612-whisper-antihallu-v1"></script>
-    <script src="./import.js?v=20260612-whisper-antihallu-v1"></script>
-    <script src="./transcribe.js?v=20260612-whisper-antihallu-v1"></script>
+    <script src="./song.js?v=20260612-repet-separation-v1"></script>
+    <script src="./dsp.js?v=20260612-repet-separation-v1"></script>
+    <script src="./import.js?v=20260612-repet-separation-v1"></script>
+    <script src="./transcribe.js?v=20260612-repet-separation-v1"></script>
   </body>
 </html>
