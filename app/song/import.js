@@ -239,13 +239,23 @@ function convertImportToSong() {
     return;
   }
   stopImportPreview();
-  assignLyricsToEvents(
-    score.events,
-    importEl.lyrics.value,
-    4,
-    Number(importEl.barsPerLine.value) || 2
-  );
   const bpm = Math.max(40, Math.min(240, Number(importEl.bpm.value) || 100));
+  // 文字起こし結果があればタイムスタンプで割り付け、なければ貼り付け歌詞をN小節ごとに仮割り付け
+  const transcript = typeof getTranscriptChunks === "function" ? getTranscriptChunks() : [];
+  if (transcript.length) {
+    const timedLines = transcript.map((chunk) => ({
+      startBeat: Math.max(0, ((chunk.start - score.audioOffsetSec) * bpm) / 60),
+      text: chunk.text
+    }));
+    assignTimedLyricsToEvents(score.events, timedLines);
+  } else {
+    assignLyricsToEvents(
+      score.events,
+      importEl.lyrics.value,
+      4,
+      Number(importEl.barsPerLine.value) || 2
+    );
+  }
   applyImportedSong(
     {
       title: `${importState.fileName}（取り込み）`,
@@ -276,6 +286,9 @@ importEl.file?.addEventListener("change", () => {
   importEl.fileName.textContent = file ? file.name : "まだ選んでないよ";
   importEl.result.classList.add("is-hidden");
   stopImportPreview();
+  if (typeof resetTranscript === "function") {
+    resetTranscript();
+  }
 });
 importEl.analyzeButton?.addEventListener("click", runImportAnalysis);
 importEl.bpm?.addEventListener("change", refreshImportPreview);
