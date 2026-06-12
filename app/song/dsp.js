@@ -617,8 +617,27 @@ async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
   return { pitches: filtered, frameRate: rate / hop };
 }
 
+// unit は単一のグリッド幅（例: 0.25）か、複数グリッドの配列（例: [0.25, 1/3]）。
+// 配列のときは、各グリッドに丸めた候補のうち最も近いものへスナップする（ストレートと三連の混在に対応）。
 function quantizeBeat(beat, unit) {
+  if (Array.isArray(unit)) {
+    let best = beat;
+    let bestDelta = Infinity;
+    for (const u of unit) {
+      const snapped = Math.round(beat / u) * u;
+      const delta = Math.abs(snapped - beat);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        best = snapped;
+      }
+    }
+    return best;
+  }
   return Math.round(beat / unit) * unit;
+}
+
+function minQuantUnit(unit) {
+  return Array.isArray(unit) ? Math.min(...unit) : unit;
 }
 
 // ピッチフレーム列 → クオンタイズ済みノート列
@@ -640,7 +659,7 @@ function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit) {
     const endSec = endFrame / frameRate;
     const startBeat = quantizeBeat(((startSec - beat0Sec) * bpm) / 60, quantUnit);
     const rawBeats = ((endSec - startSec) * bpm) / 60;
-    const beats = Math.max(quantUnit, quantizeBeat(rawBeats, quantUnit));
+    const beats = Math.max(minQuantUnit(quantUnit), quantizeBeat(rawBeats, quantUnit));
     if (startBeat >= 0 && midi >= 40 && midi <= 96) {
       const last = notes[notes.length - 1];
       if (last && last.startBeat === startBeat && last.midi === midi) {
@@ -838,6 +857,7 @@ if (typeof module !== "undefined" && module.exports) {
     yinPitch,
     trackMelody,
     quantizeBeat,
+    minQuantUnit,
     melodyNotesFromPitches,
     buildScoreFromAnalysis,
     assignLyricsToEvents,
