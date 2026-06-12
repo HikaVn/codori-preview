@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-note-top-align-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-tuning-debug-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -238,6 +238,50 @@
           </div>
           <div class="import-chord-preview" id="import-chord-preview"></div>
 
+          <details class="debug-block" id="import-debug">
+            <summary>解析チューニング＆デバッグ（上級）</summary>
+            <div class="import-settings debug-row">
+              <span class="debug-label">BPM候補:</span>
+              <span class="bpm-candidates" id="bpm-candidates"></span>
+              <button class="ghost-button small-button" id="bpm-half" type="button">÷2</button>
+              <button class="ghost-button small-button" id="bpm-double" type="button">×2</button>
+            </div>
+            <div class="import-settings">
+              <label>コード切替のねばり
+                <span class="tune-row">
+                  <input id="tune-penalty" type="range" min="0.02" max="0.30" step="0.02" value="0.10">
+                  <span id="tune-penalty-val">0.10</span>
+                </span>
+              </label>
+              <label>ボーカル抽出の強さ
+                <span class="tune-row">
+                  <input id="tune-vocal" type="range" min="0.8" max="2.0" step="0.1" value="1.2">
+                  <span id="tune-vocal-val">1.2</span>
+                </span>
+              </label>
+              <label>メロディ感度
+                <span class="tune-row">
+                  <input id="tune-clarity" type="range" min="0.35" max="0.75" step="0.05" value="0.55">
+                  <span id="tune-clarity-val">0.55</span>
+                </span>
+              </label>
+            </div>
+            <p class="hint">
+              「ねばり」は大きいほどコードが切り替わりにくい（即反映）。コードが揺れすぎる→上げる、変化を拾わない→下げる。<br>
+              「ボーカル抽出の強さ」は<b>分離から再解析</b>、「メロディ感度」は<b>メロディだけ再解析</b>で反映。<br>
+              コードのタイミングが全体的にズレるときは、まずBPM候補と1拍目オフセットを疑ってね。
+            </p>
+            <div class="import-settings">
+              <button class="ghost-button" id="reanalyze-melody" type="button">メロディだけ再解析</button>
+              <button class="ghost-button" id="reanalyze-full" type="button">分離から再解析</button>
+              <button class="ghost-button" id="export-debug" type="button">デバッグJSON書き出し</button>
+            </div>
+            <p class="debug-caption">リズムの山（青）と拍グリッド（金=小節頭）。山が縦線に乗っていればBPM/オフセットが合ってる:</p>
+            <canvas class="debug-canvas" id="debug-flux" height="90"></canvas>
+            <p class="debug-caption">メロディ起こし（点=検出ピッチ、横棒=クオンタイズ後ノート）:</p>
+            <canvas class="debug-canvas" id="debug-melody" height="130"></canvas>
+          </details>
+
           <div class="transcribe-block">
             <h3>歌詞の自動文字起こし（β）</h3>
             <p class="hint">
@@ -248,8 +292,15 @@
               <label>モデル
                 <select id="whisper-model"></select>
               </label>
+              <label>認識する音
+                <select id="whisper-source">
+                  <option value="vocal" selected>ボーカル（分離後）</option>
+                  <option value="mix">元音源そのまま</option>
+                </select>
+              </label>
               <button class="primary-button" id="transcribe-button" type="button">文字起こしする</button>
             </div>
+            <p class="hint">うまく聞き取れないとき: モデルを大きくする → 「元音源そのまま」に切り替える、の順で試してね。</p>
             <div class="import-progress is-hidden" id="transcribe-progress">
               <p id="transcribe-progress-label">準備中…</p>
               <div class="import-progress-track"><div class="import-progress-bar" id="transcribe-progress-bar"></div></div>
@@ -263,9 +314,9 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-note-top-align-v1"></script>
-    <script src="./dsp.js?v=20260612-note-top-align-v1"></script>
-    <script src="./import.js?v=20260612-note-top-align-v1"></script>
-    <script src="./transcribe.js?v=20260612-note-top-align-v1"></script>
+    <script src="./song.js?v=20260612-tuning-debug-v1"></script>
+    <script src="./dsp.js?v=20260612-tuning-debug-v1"></script>
+    <script src="./import.js?v=20260612-tuning-debug-v1"></script>
+    <script src="./transcribe.js?v=20260612-tuning-debug-v1"></script>
   </body>
 </html>

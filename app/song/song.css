@@ -1025,6 +1025,85 @@ button {
   color: var(--muted);
 }
 
+/* ===== 解析チューニング＆デバッグ ===== */
+
+.debug-block {
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.debug-block summary {
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.debug-block[open] summary {
+  margin-bottom: 10px;
+  color: var(--blue);
+}
+
+.debug-row {
+  align-items: center;
+}
+
+.debug-label {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.bpm-candidates {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bpm-candidate {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  cursor: pointer;
+  font-family: var(--font-code);
+  font-weight: 900;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.bpm-candidate.is-active {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: #eef4fb;
+}
+
+.tune-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tune-row span {
+  min-width: 36px;
+  font-family: var(--font-code);
+  color: var(--blue);
+}
+
+.debug-caption {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.debug-canvas {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+}
+
 /* ===== 文字起こし ===== */
 
 .transcribe-block {
