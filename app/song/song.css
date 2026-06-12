@@ -489,7 +489,7 @@ button {
 }
 
 .lane-wrap.is-fullscreen .note-fingering {
-  height: 130px;
+  max-height: 340px;
 }
 
 .lane-wrap.is-fullscreen .note-chord {
@@ -683,10 +683,12 @@ button {
   gap: 4px;
   min-height: 0;
   overflow: hidden;
+  align-self: stretch;
 }
 
 .note-fingering {
-  height: 84px;
+  height: 100%;
+  max-height: 170px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #ffffff;
@@ -1076,7 +1078,7 @@ button {
   }
 
   .note-fingering {
-    height: 66px;
+    max-height: 120px;
   }
 
   .timeline-row {
