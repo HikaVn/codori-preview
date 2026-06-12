@@ -20,6 +20,25 @@
   box-sizing: border-box;
 }
 
+/* スマホ・高DPI対策: 画像やcanvasは必ず親幅に収め、切れずに縮小させる */
+img,
+canvas,
+svg,
+video {
+  max-width: 100%;
+}
+
+/* フレックス/グリッドの子が「中身の最小幅」でページを押し広げないように */
+.song-shell,
+.song-view,
+.panel,
+.stage-info,
+.lane-wrap,
+.practice-transport,
+.import-dropzone {
+  min-width: 0;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -74,6 +93,10 @@ button {
 .mode-tabs {
   display: flex;
   gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mode-tab {
@@ -1274,6 +1297,100 @@ button {
 
   .timeline-row {
     grid-template-columns: 32px 44px minmax(64px, 90px) minmax(0, 1fr) 58px auto;
+  }
+}
+
+/* ===== 小さめスマホ（〜560px） ===== */
+@media (max-width: 560px) {
+  .song-top {
+    gap: 8px;
+  }
+
+  /* タブは縮めて、入りきらなければ横スクロール（ページは広げない） */
+  .mode-tab {
+    min-width: 0;
+    flex: 0 0 auto;
+    padding: 6px 10px;
+  }
+
+  .mode-tab span {
+    font-size: 14px;
+  }
+
+  .mode-tab small {
+    font-size: 10px;
+  }
+
+  /* ボタン群は折り返してはみ出さない */
+  .library-buttons,
+  .import-settings,
+  .play-options,
+  .practice-buttons,
+  .import-preview-buttons,
+  .library-panel {
+    flex-wrap: wrap;
+  }
+
+  .library-label select,
+  .library-label {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .meta-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .meta-panel input,
+  .meta-panel select,
+  .timeline-row input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* 譜面の手なおし表: ボタンを小さくして1行に収める */
+  .timeline-row {
+    grid-template-columns: 26px 40px minmax(54px, 80px) minmax(0, 1fr) 50px auto;
+    gap: 4px;
+  }
+
+  .timeline-row.is-section {
+    grid-template-columns: 26px 40px minmax(0, 1fr) auto;
+  }
+
+  .row-buttons button {
+    min-height: 28px;
+    padding: 2px 5px;
+  }
+
+  /* ステージのコード名と運指が画面内に収まるように */
+  .stage-chord {
+    font-size: 26px;
+  }
+
+  .stage-fingering img {
+    max-height: 84px;
+  }
+
+  /* ノート内の運指・鳥が枠からはみ出さない */
+  .note-fingering {
+    max-height: 96px;
+  }
+
+  /* 採点の点数表示の折り返し */
+  .result-metrics {
+    gap: 6px;
+  }
+
+  .metric-chip {
+    min-width: 72px;
+    padding: 6px 10px;
+  }
+
+  /* ピアノロールは横スクロールで全体は溢れさせない */
+  .pianoroll-wrap {
+    max-width: 100%;
+    overflow: auto;
   }
 }
 
