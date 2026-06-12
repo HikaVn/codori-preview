@@ -224,32 +224,72 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     }
     deduped.push(n);
   }
-  return { notes: deduped, staves: staves.length };
+
+  // 段（システム）ごとに、小節線で区切る。小節線＝五線をほぼ縦断する縦線（ページ枠は除外）。
+  const systems = staves.map((s) => {
+    const sh = s.bottom - s.top;
+    const barX = vseg
+      .filter((v) => v.y0 <= s.top + sh * 0.2 && v.y1 >= s.bottom - sh * 0.2 && (v.y1 - v.y0) >= sh * 0.7)
+      .map((v) => v.x)
+      .filter((x) => x > 6 && x < (pageW || 595) - 6)
+      .sort((a, b) => a - b);
+    // 近接した小節線をまとめる
+    const bars = [];
+    for (const x of barX) {
+      if (!bars.length || x - bars[bars.length - 1] > 8) bars.push(x);
+    }
+    return { top: s.top, bottom: s.bottom, bars, notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x) };
+  });
+  return { systems, staves: staves.length };
 }
 
-// PDF全ページのベクター譜 → 拍つきメロディ（推定した音価で並べる）。
-async function extractPdfVectorMelody(file, getDocument, OPS, onProgress) {
+// PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
+async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsPerBar = 4) {
   const data = await file.arrayBuffer();
   const pdf = await getDocument({ data }).promise;
   const viewport0 = (await pdf.getPage(1)).getViewport({ scale: 1 });
   const pageH = viewport0.viewBox[3];
   const pageW = viewport0.viewBox[2];
-  const ordered = [];
+  const bpb = Number(beatsPerBar) || 4;
+  const allSystems = [];
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { notes } = readVectorScorePage(ol, OPS, pageH, pageW);
-    // システム（譜段）ごと＝staffTopでグルーピングし、上から、各段内はx昇順
-    notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
-    notes.forEach((n) => ordered.push({ page: p, ...n }));
+    const { systems } = readVectorScorePage(ol, OPS, pageH, pageW);
+    systems.forEach((s) => allSystems.push(s));
   }
-  // 読み順に、推定した音価ぶんずつ累積して並べる（小節境界は手なおし前提）
+
+  // 各システムを上から、システム内は小節（小節線区切り）ごとに。
+  // 空小節は休符として beatsPerBar ぶん進める＝出だしの休符小節も正しく前に入る。
+  const melody = [];
   let beat = 0;
-  const melody = ordered.map((n) => {
-    const note = { startBeat: beat, beats: n.beats || 1, midi: n.midi };
-    beat += n.beats || 1;
-    return note;
-  });
-  return { melody, noteCount: ordered.length };
+  let noteCount = 0;
+  for (const sys of allSystems) {
+    // 小節境界（最初の音符より前の小節線も含めて区切る）
+    const edges = sys.bars.slice();
+    // 小節範囲 [edges[i], edges[i+1]]。小節線が無い場合はシステム全体を1小節扱い。
+    if (edges.length < 2) {
+      // 小節線なし: 音符を音価順に詰める
+      sys.notes.forEach((n) => { melody.push({ startBeat: beat, beats: n.beats || 1, midi: n.midi }); beat += n.beats || 1; noteCount += 1; });
+      continue;
+    }
+    // 各システムは「最初の小節線より前の領域」も1小節（行頭の小節：ト音記号・調号・拍子・出だしの休符を含む）。
+    // 小節範囲を [行頭, edges[0]], [edges[0], edges[1]], ... と作る。
+    const placeBar = (xL, xR) => {
+      const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
+      let local = 0;
+      for (const n of inBar) {
+        melody.push({ startBeat: beat + local, beats: n.beats || 1, midi: n.midi });
+        local += n.beats || 1;
+        noteCount += 1;
+      }
+      beat += bpb; // 小節1つぶん進める（空小節＝休符でも進む）
+    };
+    placeBar(-Infinity, edges[0]); // 行頭の小節
+    for (let i = 0; i < edges.length - 1; i += 1) {
+      placeBar(edges[i], edges[i + 1]);
+    }
+  }
+  return { melody, noteCount };
 }
