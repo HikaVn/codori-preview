@@ -53,6 +53,7 @@ const importEl = {
   melodyClear: document.querySelector("#melody-clear"),
   melodyLyrics: document.querySelector("#melody-lyrics"),
   melodyGroupWords: document.querySelector("#melody-group-words"),
+  melodyFitLyrics: document.querySelector("#melody-fit-lyrics"),
   melodyWordsSummary: document.querySelector("#melody-words-summary"),
   melodyWordChips: document.querySelector("#melody-word-chips")
 };
@@ -346,6 +347,34 @@ function groupWordsToMelody() {
   pianoRoll?.render();
   importEl.melodyWordsSummary.textContent = `${wordEvents.length}単語をボーカルのタイミングにわりつけたよ。`;
   importEl.melodyWordChips.innerHTML = wordEvents
+    .map((w) => `<span class="word-chip">${escapeHtml(w.text)}<small>${formatBeatPos(w.startBeat)}</small></span>`)
+    .join("");
+}
+
+function fitLyricsToMelodyUI() {
+  const score = importState.workingScore;
+  if (!score || !score.melody.length) {
+    importEl.melodyWordsSummary.textContent = "先にメロディが必要だよ。";
+    return;
+  }
+  const lines = importEl.melodyLyrics.value.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) {
+    importEl.melodyWordsSummary.textContent = "歌詞を1行ずつ入れてね。";
+    return;
+  }
+  const result = fitLyricsToMelody(lines, score.melody);
+  const sorted = [...score.melody].sort((a, b) => a.startBeat - b.startBeat);
+  sorted.forEach((note) => { note.lyric = ""; });
+  result.noteAssignments.forEach((a) => {
+    if (sorted[a.noteIndex]) {
+      sorted[a.noteIndex].lyric = a.text;
+    }
+  });
+  importWordEvents = result.lineEvents; // 行＝歌詞イベント（ボーカルのタイミング）
+  pianoRoll?.render();
+  importEl.melodyWordsSummary.textContent =
+    `音にはめたよ（${result.stats.notes}音 / ${result.stats.morae}文字、のばし${result.stats.melisma}・つめ${result.stats.crammed}）。`;
+  importEl.melodyWordChips.innerHTML = result.lineEvents
     .map((w) => `<span class="word-chip">${escapeHtml(w.text)}<small>${formatBeatPos(w.startBeat)}</small></span>`)
     .join("");
 }
@@ -872,6 +901,7 @@ importEl.melodyClear?.addEventListener("click", () => {
   }
 });
 importEl.melodyGroupWords?.addEventListener("click", groupWordsToMelody);
+importEl.melodyFitLyrics?.addEventListener("click", fitLyricsToMelodyUI);
 importEl.melodyBlock?.addEventListener("toggle", () => {
   if (importEl.melodyBlock.open) {
     syncPianoRoll();

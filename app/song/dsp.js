@@ -1417,6 +1417,69 @@ function groupLyricsToMelody(text, melodyNotes) {
   return { wordEvents, noteLyrics };
 }
 
+// 完璧な歌詞（全文）を、検出したメロディノートに「音にはめる」アシスト。
+// 各行のモーラ列とノート列を対応づけ、過不足は伸ばし（メリスマ）／詰め（1音に複数文字）で吸収する。
+// lines: 歌詞の行配列（行ごとに語を空白区切り）。melodyNotes: [{startBeat,beats,midi}]
+// 返り値: { noteAssignments:[{noteIndex, text}], lineEvents:[{startBeat,text}], stats:{notes,morae,melisma,crammed} }
+function fitLyricsToMelody(lines, melodyNotes) {
+  const notes = [...(melodyNotes || [])].sort((a, b) => a.startBeat - b.startBeat);
+  const lineList = (Array.isArray(lines) ? lines : String(lines || "").split("\n"))
+    .map((l) => String(l).trim())
+    .filter(Boolean);
+  if (!notes.length || !lineList.length) {
+    return { noteAssignments: [], lineEvents: [], stats: { notes: notes.length, morae: 0, melisma: 0, crammed: 0 } };
+  }
+
+  // 行ごとのモーラ数の比で、ノートを行に配分する
+  const lineMorae = lineList.map((line) => splitMorae(line));
+  const totalMorae = lineMorae.reduce((s, m) => s + m.length, 0);
+  let noteCursor = 0;
+  const noteAssignments = notes.map((_, i) => ({ noteIndex: i, text: "" }));
+  const lineEvents = [];
+  let melisma = 0;
+  let crammed = 0;
+
+  lineMorae.forEach((morae, li) => {
+    const isLast = li === lineMorae.length - 1;
+    const remainingNotes = notes.length - noteCursor;
+    const remainingMorae = lineMorae.slice(li).reduce((s, m) => s + m.length, 0);
+    let lineNoteCount = isLast
+      ? remainingNotes
+      : Math.max(1, Math.round((morae.length / Math.max(1, remainingMorae)) * remainingNotes));
+    lineNoteCount = Math.min(lineNoteCount, remainingNotes);
+    const startNote = noteCursor;
+    if (lineNoteCount <= 0 || !morae.length) {
+      return;
+    }
+    lineEvents.push({ startBeat: notes[startNote].startBeat, text: lineList[li] });
+
+    // この行: morae.length 文字 を lineNoteCount ノートへ均等対応（DPの単純版＝等間隔割り当て）
+    if (morae.length <= lineNoteCount) {
+      // 文字 < 音 → メリスマ（足りない音は前の文字を伸ばす＝空文字）
+      morae.forEach((mora, mi) => {
+        const ni = startNote + Math.floor((mi * lineNoteCount) / morae.length);
+        noteAssignments[ni].text += mora;
+      });
+      melisma += lineNoteCount - morae.length;
+    } else {
+      // 文字 > 音 → 1音に複数文字を詰める
+      for (let k = 0; k < lineNoteCount; k += 1) {
+        const from = Math.floor((k * morae.length) / lineNoteCount);
+        const to = Math.floor(((k + 1) * morae.length) / lineNoteCount);
+        noteAssignments[startNote + k].text = morae.slice(from, to).join("");
+      }
+      crammed += morae.length - lineNoteCount;
+    }
+    noteCursor += lineNoteCount;
+  });
+
+  return {
+    noteAssignments,
+    lineEvents,
+    stats: { notes: notes.length, morae: totalMorae, melisma, crammed }
+  };
+}
+
 // 歌詞行を「1行＝barsPerLine小節」で仮割り付けする
 function assignLyricsToEvents(events, lyricsText, beatsPerBar, barsPerLine) {
   const lines = String(lyricsText || "")
@@ -1520,6 +1583,7 @@ if (typeof module !== "undefined" && module.exports) {
     assignTimedLyricsToEvents,
     splitMorae,
     groupLyricsToMelody,
+    fitLyricsToMelody,
     softMaskValue,
     medianOf,
     CANCELLED,

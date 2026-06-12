@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-beattrack-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-fitlyrics-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -378,8 +378,12 @@
             </label>
             <div class="import-settings">
               <button class="primary-button" id="melody-group-words" type="button">単語でわりつけ（ボーカルと連動）</button>
+              <button class="primary-button" id="melody-fit-lyrics" type="button">完璧な歌詞を音にはめる</button>
               <span class="timeline-summary" id="melody-words-summary"></span>
             </div>
+            <p class="hint">
+              「単語でわりつけ」は1音＝1モーラのざっくり割り当て。<b>歌詞を1行ずつ正確に入れているなら「完璧な歌詞を音にはめる」</b>を押すと、行ごとに音数と文字数を合わせて自動アライメント（足りない音は伸ばし／多い文字は1音に詰める）するよ。
+            </p>
             <div class="word-chips" id="melody-word-chips"></div>
           </details>
 
@@ -495,11 +499,11 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-beattrack-v1"></script>
-    <script src="./dsp.js?v=20260612-beattrack-v1"></script>
-    <script src="./pianoroll.js?v=20260612-beattrack-v1"></script>
-    <script src="./import.js?v=20260612-beattrack-v1"></script>
-    <script src="./transcribe.js?v=20260612-beattrack-v1"></script>
-    <script src="./practice.js?v=20260612-beattrack-v1"></script>
+    <script src="./song.js?v=20260612-fitlyrics-v1"></script>
+    <script src="./dsp.js?v=20260612-fitlyrics-v1"></script>
+    <script src="./pianoroll.js?v=20260612-fitlyrics-v1"></script>
+    <script src="./import.js?v=20260612-fitlyrics-v1"></script>
+    <script src="./transcribe.js?v=20260612-fitlyrics-v1"></script>
+    <script src="./practice.js?v=20260612-fitlyrics-v1"></script>
   </body>
 </html>
