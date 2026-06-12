@@ -1408,14 +1408,18 @@ function setMode(mode) {
   const isPlay = mode === "play";
   const tabPractice = document.querySelector("#tab-practice");
   const practiceView = document.querySelector("#practice-view");
+  const tabScore = document.querySelector("#tab-score");
+  const scoreView = document.querySelector("#score-view");
   el.tabEdit.classList.toggle("is-active", mode === "edit");
   el.tabPlay.classList.toggle("is-active", isPlay);
   el.tabImport?.classList.toggle("is-active", mode === "import");
   tabPractice?.classList.toggle("is-active", mode === "practice");
+  tabScore?.classList.toggle("is-active", mode === "score");
   el.editView.classList.toggle("is-active", mode === "edit");
   el.playView.classList.toggle("is-active", isPlay);
   el.importView?.classList.toggle("is-active", mode === "import");
   practiceView?.classList.toggle("is-active", mode === "practice");
+  scoreView?.classList.toggle("is-active", mode === "score");
   if (isPlay) {
     syncMetaFromInputs();
     el.playBpm.value = song.bpm;

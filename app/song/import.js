@@ -913,6 +913,18 @@ importEl.melodyClear?.addEventListener("click", () => {
 });
 importEl.melodyGroupWords?.addEventListener("click", groupWordsToMelody);
 importEl.melodyFitLyrics?.addEventListener("click", fitLyricsToMelodyUI);
+document.querySelector("#melody-to-hiragana")?.addEventListener("click", async () => {
+  const ta = document.querySelector("#melody-lyrics");
+  if (!ta || !ta.value.trim() || typeof toHiragana !== "function") {
+    return;
+  }
+  const lines = ta.value.split("\n");
+  const out = [];
+  for (const line of lines) {
+    out.push(await toHiragana(line));
+  }
+  ta.value = out.join("\n");
+});
 importEl.melodyBlock?.addEventListener("toggle", () => {
   if (importEl.melodyBlock.open) {
     syncPianoRoll();
