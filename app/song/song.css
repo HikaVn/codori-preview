@@ -476,6 +476,14 @@ button {
   max-height: calc(30vh - 12px);
 }
 
+.lane-wrap.is-fullscreen .stage-next img {
+  max-height: calc(30vh - 60px);
+}
+
+.lane-wrap.is-fullscreen .stage-next-name {
+  font-size: 34px;
+}
+
 
 .lane-wrap.is-fullscreen .lane {
   flex: 1;
@@ -551,10 +559,21 @@ button {
   100% { transform: translateY(0) scale(1); }
 }
 
-.stage-chord {
+/* コード名・運指・つぎのコードを横並びにして、被らないようにする */
+.stage-info {
   position: absolute;
-  left: calc(var(--judge-x) + 70px);
-  bottom: 30px;
+  left: calc(var(--judge-x) + 60px);
+  right: 8px;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  overflow: hidden;
+}
+
+.stage-chord {
+  flex: none;
   font-family: var(--font-code);
   font-size: 44px;
   font-weight: 900;
@@ -563,10 +582,8 @@ button {
 }
 
 .stage-fingering {
-  position: absolute;
-  left: calc(var(--judge-x) + 230px);
-  top: 4px;
-  bottom: 4px;
+  flex: none;
+  height: 100%;
   display: grid;
   place-items: center;
 }
@@ -578,6 +595,51 @@ button {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 4px 12px rgba(25, 39, 52, 0.08);
+}
+
+/* つぎのコード（現在コードのすぐ隣に、控えめに） */
+.stage-next {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  opacity: 0.6;
+}
+
+.stage-next-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+  writing-mode: vertical-rl;
+}
+
+.stage-next-name {
+  font-family: var(--font-code);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.stage-next img {
+  height: 100%;
+  max-height: 108px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* 残り1拍：つぎのコード名が金色になって知らせる */
+.stage-next.is-imminent {
+  opacity: 0.95;
+}
+
+.stage-next.is-imminent .stage-next-name {
+  color: var(--gold);
+}
+
+.stage-next.is-imminent img {
+  border-color: var(--gold);
 }
 
 .stage-fingering.is-pop img {
@@ -1053,18 +1115,21 @@ button {
     height: 100px;
   }
 
-  .stage-chord {
-    left: calc(var(--judge-x) + 55px);
-    font-size: 32px;
+  .stage-info {
+    left: calc(var(--judge-x) + 40px);
+    gap: 12px;
   }
 
-  .stage-fingering {
-    left: auto;
-    right: 8px;
+  .stage-chord {
+    font-size: 32px;
   }
 
   .stage-fingering img {
     max-height: 100px;
+  }
+
+  .stage-next {
+    display: none;
   }
 
 

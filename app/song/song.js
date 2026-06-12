@@ -182,6 +182,9 @@ const el = {
   stageChord: document.querySelector("#stage-chord"),
   stageFingering: document.querySelector(".stage-fingering"),
   stageFingeringImg: document.querySelector("#stage-fingering-img"),
+  stageNext: document.querySelector("#stage-next"),
+  nextChordName: document.querySelector("#next-chord-name"),
+  nextFingeringImg: document.querySelector("#next-fingering-img"),
   currentLine: document.querySelector("#current-line")
 };
 
@@ -849,6 +852,7 @@ function updateActiveNote(beat) {
       el.stageFingering.classList.add("is-pop");
     }
   }
+  updateNextChordDisplay(index);
   renderCurrentLine(note);
 }
 
@@ -863,6 +867,26 @@ function setFingeringImage(image, chordName) {
   }
   image.style.visibility = "visible";
   image.src = asset;
+}
+
+// 「つぎ」のコード表示（現在コードのすぐ隣）
+function updateNextChordDisplay(fromNoteIndex) {
+  if (!el.stageNext) {
+    return;
+  }
+  let next = null;
+  for (let index = fromNoteIndex + 1; index < positioned.notes.length; index += 1) {
+    if (positioned.notes[index].chord) {
+      next = positioned.notes[index];
+      break;
+    }
+  }
+  el.stageNext.classList.toggle("is-hidden", !next);
+  if (next) {
+    const shown = transposeChord(next.chord, song.transpose);
+    el.nextChordName.textContent = shown;
+    setFingeringImage(el.nextFingeringImg, shown);
+  }
 }
 
 // 次のコードノートを残り1拍から光らせて、切り替えを予感させる
@@ -880,6 +904,7 @@ function updateAnticipation(beat) {
     return;
   }
   const imminent = next.startBeat - beat <= 1;
+  el.stageNext?.classList.toggle("is-imminent", imminent);
   const upcomingKey = imminent ? next.index : -1;
   if (player.upcomingKey !== upcomingKey) {
     player.upcomingKey = upcomingKey;
@@ -895,6 +920,7 @@ function updateAnticipation(beat) {
 }
 
 function clearAnticipation() {
+  el.stageNext?.classList.remove("is-imminent");
   if (player.upcomingNoteEl) {
     player.upcomingNoteEl.classList.remove("is-upcoming");
   }
@@ -915,6 +941,7 @@ function updateStageForBeat(beat) {
   if (index < 0) {
     el.stageChord.textContent = "-";
     setFingeringImage(el.stageFingeringImg, null);
+    updateNextChordDisplay(positioned.notes.length);
     return;
   }
   const note = positioned.notes[index];
@@ -922,6 +949,7 @@ function updateStageForBeat(beat) {
   el.stageChord.textContent = shown;
   el.stageBirdImg.src = characterAssetForChord(note.chord);
   setFingeringImage(el.stageFingeringImg, shown);
+  updateNextChordDisplay(index);
 }
 
 function clearActiveNote() {
