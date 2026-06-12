@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-import-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-whisper-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -165,7 +165,7 @@
           <p class="hint">
             手持ちの音源ファイルを解析して、コード・テンポ・メロディを推定するよ。<br>
             ボーカルと伴奏を分けてから、伴奏でコード、ボーカルでメロディを聞き取る。すべてブラウザの中だけで処理して、音源はどこにも送信しないよ。<br>
-            ※ 自分で権利を持っている音源・権利処理済みの音源で使ってね。歌詞の自動文字起こしは今後対応予定（下の欄に貼り付ければ仮割り付けできるよ）。
+            ※ 自分で権利を持っている音源・権利処理済みの音源で使ってね。歌詞は解析後に自動文字起こし（Whisper）もできるし、下の欄に貼り付けてもOK。
           </p>
           <div class="import-file-row">
             <button class="primary-button" id="import-file-button" type="button">音源ファイルを選ぶ</button>
@@ -219,13 +219,35 @@
             <button class="ghost-button" id="preview-vocal" type="button">ボーカルだけ</button>
           </div>
           <div class="import-chord-preview" id="import-chord-preview"></div>
-          <p class="hint">「譜面にする」のあと、エディットで1つずつ手なおしできるよ。プレイの「元音源と一緒に」「メロディガイド」も使えるようになる。<br>※ 音源そのものは保存されない（ブラウザを閉じると譜面だけ残る）。</p>
+
+          <div class="transcribe-block">
+            <h3>歌詞の自動文字起こし（β）</h3>
+            <p class="hint">
+              Whisperモデルをブラウザにダウンロードして、分離したボーカルから歌詞を聞き取るよ。<br>
+              音声はどこにも送信しない。モデルのダウンロードは初回だけ（ブラウザにキャッシュされる）。
+            </p>
+            <div class="import-settings">
+              <label>モデル
+                <select id="whisper-model"></select>
+              </label>
+              <button class="primary-button" id="transcribe-button" type="button">文字起こしする</button>
+            </div>
+            <div class="import-progress is-hidden" id="transcribe-progress">
+              <p id="transcribe-progress-label">準備中…</p>
+              <div class="import-progress-track"><div class="import-progress-bar" id="transcribe-progress-bar"></div></div>
+            </div>
+            <p class="timeline-summary" id="transcribe-status"></p>
+            <ol class="transcribe-list is-hidden" id="transcribe-list"></ol>
+          </div>
+
+          <p class="hint">「譜面にする」のあと、エディットで1つずつ手なおしできるよ。文字起こし済みなら歌詞はタイミングで自動割り付け。プレイの「元音源と一緒に」「メロディガイド」も使えるようになる。<br>※ 音源そのものは保存されない（ブラウザを閉じると譜面だけ残る）。</p>
           <button class="primary-button" id="import-convert" type="button">譜面にする</button>
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-import-v1"></script>
-    <script src="./dsp.js?v=20260612-import-v1"></script>
-    <script src="./import.js?v=20260612-import-v1"></script>
+    <script src="./song.js?v=20260612-whisper-v1"></script>
+    <script src="./dsp.js?v=20260612-whisper-v1"></script>
+    <script src="./import.js?v=20260612-whisper-v1"></script>
+    <script src="./transcribe.js?v=20260612-whisper-v1"></script>
   </body>
 </html>

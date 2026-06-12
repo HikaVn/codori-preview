@@ -814,6 +814,74 @@ button {
   color: var(--muted);
 }
 
+/* ===== 文字起こし ===== */
+
+.transcribe-block {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.transcribe-block h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--blue);
+}
+
+.transcribe-list {
+  width: 100%;
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.transcribe-list li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.transcribe-time {
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.transcribe-list input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.transcribe-list button {
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.transcribe-list button:hover {
+  border-color: var(--rose);
+  color: var(--rose);
+}
+
 .is-hidden {
   display: none !important;
 }

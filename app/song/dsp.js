@@ -655,6 +655,56 @@ function assignLyricsToEvents(events, lyricsText, beatsPerBar, barsPerLine) {
   });
 }
 
+// タイムスタンプ付きの歌詞行（文字起こし結果）を、開始拍が重なるコードイベントへ割り付ける
+// timedLines: [{ startBeat, text }]（開始拍の昇順）
+function assignTimedLyricsToEvents(events, timedLines) {
+  const lines = (timedLines || [])
+    .filter((line) => line && String(line.text || "").trim())
+    .sort((a, b) => a.startBeat - b.startBeat);
+  if (!lines.length) {
+    return;
+  }
+  let beat = 0;
+  const chordEvents = [];
+  events.forEach((event) => {
+    if (event.type !== "chord") {
+      return;
+    }
+    event._startBeat = beat;
+    beat += Number(event.beats) || 0;
+    chordEvents.push(event);
+  });
+
+  lines.forEach((line) => {
+    let target = null;
+    for (const event of chordEvents) {
+      if (event._startBeat + (Number(event.beats) || 0) > line.startBeat + 1e-6) {
+        target = event;
+        break;
+      }
+    }
+    if (!target) {
+      target = chordEvents[chordEvents.length - 1];
+    }
+    if (target) {
+      const text = String(line.text).trim();
+      target.lyric = target.lyric ? `${target.lyric} ${text}` : text;
+    }
+  });
+
+  // 行のまとまり（lineIndex）も文字起こしの区切りに合わせる
+  // （歌詞の割り付けと同じく「行の開始拍を含むイベント」から次の行が始まる前まで）
+  let lineIdx = -1;
+  chordEvents.forEach((event) => {
+    const eventEnd = event._startBeat + (Number(event.beats) || 0);
+    while (lineIdx + 1 < lines.length && lines[lineIdx + 1].startBeat < eventEnd - 1e-6) {
+      lineIdx += 1;
+    }
+    event.lineIndex = lineIdx + 1;
+    delete event._startBeat;
+  });
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     hannWindow,
@@ -674,6 +724,7 @@ if (typeof module !== "undefined" && module.exports) {
     melodyNotesFromPitches,
     buildScoreFromAnalysis,
     assignLyricsToEvents,
+    assignTimedLyricsToEvents,
     CHORD_TEMPLATES,
     NOTE_NAMES
   };
