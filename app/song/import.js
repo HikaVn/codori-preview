@@ -53,6 +53,7 @@ const importTuning = {
 
 const importState = {
   fileName: "",
+  selectedFile: null,
   originalBuffer: null,
   midSide: null, // 再解析用に保持
   tempoCandidates: [],
@@ -108,8 +109,26 @@ async function decodeImportFile(file) {
   return { decoded, left, right, sampleRate: decoded.sampleRate, truncated };
 }
 
+// ファイル選択（ボタン / ドラッグ＆ドロップ 共通）
+function selectImportFile(file) {
+  if (!file) {
+    return;
+  }
+  if (!/^audio\//.test(file.type) && !/\.(wav|mp3|m4a|aac|ogg|flac|webm)$/i.test(file.name)) {
+    window.alert("音源ファイル（mp3 / wav / m4a など）を選んでね。");
+    return;
+  }
+  importState.selectedFile = file;
+  importEl.fileName.textContent = file.name;
+  importEl.result.classList.add("is-hidden");
+  stopImportPreview();
+  if (typeof resetTranscript === "function") {
+    resetTranscript();
+  }
+}
+
 async function runImportAnalysis() {
-  const file = importEl.file.files?.[0];
+  const file = importState.selectedFile || importEl.file.files?.[0];
   if (!file) {
     window.alert("先に音源ファイル（mp3 / wav / m4aなど）を選んでね。");
     return;
@@ -547,14 +566,42 @@ function convertImportToSong() {
 
 importEl.fileButton?.addEventListener("click", () => importEl.file.click());
 importEl.file?.addEventListener("change", () => {
-  const file = importEl.file.files?.[0];
-  importEl.fileName.textContent = file ? file.name : "まだ選んでないよ";
-  importEl.result.classList.add("is-hidden");
-  stopImportPreview();
-  if (typeof resetTranscript === "function") {
-    resetTranscript();
-  }
+  selectImportFile(importEl.file.files?.[0]);
 });
+
+// ドラッグ＆ドロップで音源を受け取る
+const importDropZone = document.querySelector("#import-view");
+if (importDropZone) {
+  let dragDepth = 0;
+  const setDragging = (on) => importDropZone.classList.toggle("is-dragover", on);
+  importDropZone.addEventListener("dragenter", (event) => {
+    event.preventDefault();
+    dragDepth += 1;
+    setDragging(true);
+  });
+  importDropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  });
+  importDropZone.addEventListener("dragleave", (event) => {
+    event.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
+      setDragging(false);
+    }
+  });
+  importDropZone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    dragDepth = 0;
+    setDragging(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      selectImportFile(file);
+    }
+  });
+}
 importEl.analyzeButton?.addEventListener("click", runImportAnalysis);
 importEl.bpm?.addEventListener("change", refreshImportPreview);
 importEl.offset?.addEventListener("change", refreshImportPreview);
