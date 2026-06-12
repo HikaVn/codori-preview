@@ -1224,6 +1224,58 @@ function buildScoreFromAnalysis(analysis, options) {
   };
 }
 
+// 日本語テキストをモーラ（歌の1音）に分割する。小書き仮名・長音・促音は前の音にくっつける。
+function splitMorae(text) {
+  // 拗音（小書き）と長音は前の音にくっつける。促音「っ」と撥音「ん」は歌では独立した音になりやすいので分ける。
+  const attach = new Set([
+    "ゃ", "ゅ", "ょ", "ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "ゎ",
+    "ャ", "ュ", "ョ", "ァ", "ィ", "ゥ", "ェ", "ォ", "ヮ",
+    "ー", "ｰ", "〜", "～"
+  ]);
+  const morae = [];
+  for (const ch of Array.from(String(text || ""))) {
+    if (/\s/.test(ch)) {
+      continue;
+    }
+    if (morae.length && attach.has(ch)) {
+      morae[morae.length - 1] += ch;
+    } else {
+      morae.push(ch);
+    }
+  }
+  return morae;
+}
+
+// 歌詞（語は空白区切り）を、メロディノートに「1モーラ＝1ノート」で割り付ける。
+// 各ノートに乗る文字（noteLyrics）と、単語ごとの開始拍＝ボーカルのタイム（wordEvents）を返す。
+function groupLyricsToMelody(text, melodyNotes) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const notes = [...(melodyNotes || [])].sort((a, b) => a.startBeat - b.startBeat);
+  const noteLyrics = new Array(notes.length).fill("");
+  const wordEvents = [];
+  let noteIdx = 0;
+  for (const word of words) {
+    const morae = splitMorae(word);
+    if (!morae.length) {
+      continue;
+    }
+    const startNoteIdx = Math.min(noteIdx, Math.max(0, notes.length - 1));
+    morae.forEach((mora) => {
+      const ni = Math.min(noteIdx, Math.max(0, notes.length - 1));
+      if (notes.length) {
+        noteLyrics[ni] += mora;
+      }
+      noteIdx += 1;
+    });
+    wordEvents.push({
+      startBeat: notes[startNoteIdx]?.startBeat ?? 0,
+      text: word,
+      noteCount: morae.length
+    });
+  }
+  return { wordEvents, noteLyrics };
+}
+
 // 歌詞行を「1行＝barsPerLine小節」で仮割り付けする
 function assignLyricsToEvents(events, lyricsText, beatsPerBar, barsPerLine) {
   const lines = String(lyricsText || "")
@@ -1321,6 +1373,8 @@ if (typeof module !== "undefined" && module.exports) {
     buildScoreFromAnalysis,
     assignLyricsToEvents,
     assignTimedLyricsToEvents,
+    splitMorae,
+    groupLyricsToMelody,
     softMaskValue,
     medianOf,
     CANCELLED,

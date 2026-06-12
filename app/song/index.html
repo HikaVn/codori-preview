@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-import-edit-v1">
+    <link rel="stylesheet" href="./song.css?v=20260612-pianoroll-v3">
   </head>
   <body>
     <main class="song-shell">
@@ -360,6 +360,29 @@
           </p>
           <div class="import-chord-editor" id="import-chord-editor"></div>
 
+          <details class="debug-block" id="import-melody-block">
+            <summary>ボーカル（メロディ）の手なおし＋歌詞の単語わけ</summary>
+            <p class="hint">
+              ピアノロールでボーカルの音を掃除できるよ。<b>ノートをドラッグで移動／右端をドラッグで長さ変え／空きをクリックで追加／Alt+クリック（右クリック）で削除</b>。<br>
+              下の歌詞を入れて「単語でわりつけ」を押すと、単語がボーカルの音のタイミングに乗るよ（1音＝1モーラ）。
+            </p>
+            <div class="import-settings">
+              <button class="ghost-button" id="melody-play" type="button">▶ メロディを聞く</button>
+              <button class="ghost-button" id="melody-clear" type="button">全部消す</button>
+            </div>
+            <div class="pianoroll-wrap">
+              <canvas id="melody-pianoroll" class="pianoroll-canvas"></canvas>
+            </div>
+            <label class="import-lyrics-label">この曲の歌詞（単語ごとに空白で区切る）
+              <textarea id="melody-lyrics" rows="4" spellcheck="false" placeholder="そらを とべたら どこへ ゆこう"></textarea>
+            </label>
+            <div class="import-settings">
+              <button class="primary-button" id="melody-group-words" type="button">単語でわりつけ（ボーカルと連動）</button>
+              <span class="timeline-summary" id="melody-words-summary"></span>
+            </div>
+            <div class="word-chips" id="melody-word-chips"></div>
+          </details>
+
           <details class="debug-block" id="import-debug">
             <summary>解析チューニング＆デバッグ（上級）</summary>
             <div class="import-settings debug-row">
@@ -472,10 +495,11 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-import-edit-v1"></script>
-    <script src="./dsp.js?v=20260612-import-edit-v1"></script>
-    <script src="./import.js?v=20260612-import-edit-v1"></script>
-    <script src="./transcribe.js?v=20260612-import-edit-v1"></script>
-    <script src="./practice.js?v=20260612-import-edit-v1"></script>
+    <script src="./song.js?v=20260612-pianoroll-v3"></script>
+    <script src="./dsp.js?v=20260612-pianoroll-v3"></script>
+    <script src="./pianoroll.js?v=20260612-pianoroll-v3"></script>
+    <script src="./import.js?v=20260612-pianoroll-v3"></script>
+    <script src="./transcribe.js?v=20260612-pianoroll-v3"></script>
+    <script src="./practice.js?v=20260612-pianoroll-v3"></script>
   </body>
 </html>
