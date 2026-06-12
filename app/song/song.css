@@ -741,11 +741,16 @@ button {
 
 .note-top {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 4px;
   min-height: 0;
   overflow: hidden;
   align-self: stretch;
+}
+
+.note-top .note-bird {
+  align-self: flex-start;
+  place-items: start center;
 }
 
 .note-fingering {
