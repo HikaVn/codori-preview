@@ -22,6 +22,7 @@ function extractPageVectors(ol, OPS, pageH) {
   const stack = [];
   let curFont = null;
   let tm = [1, 0, 0, 1, 0, 0];
+  let tlm = [1, 0, 0, 1, 0, 0]; // テキスト行マトリクス（Td/Tm/BTで更新）
   const glyphs = [];
   const hseg = [];
   const vseg = [];
@@ -37,7 +38,14 @@ function extractPageVectors(ol, OPS, pageH) {
     else if (fn === OPS.restore) { ctm = stack.pop() || ctm; }
     else if (fn === OPS.transform) { ctm = pdfMul(ctm, args); }
     else if (fn === OPS.setFont) { curFont = args[0]; }
-    else if (fn === OPS.setTextMatrix) { tm = args.slice(); }
+    else if (fn === OPS.beginText) { tm = [1, 0, 0, 1, 0, 0]; tlm = [1, 0, 0, 1, 0, 0]; }
+    else if (fn === OPS.setTextMatrix) { tm = args.slice(); tlm = args.slice(); }
+    // Td/TD（テキスト行の移動）。各グリフがこれで配置されるType3譜面では必須。
+    else if (fn === OPS.moveText || fn === OPS.setLeadingMoveText) {
+      tlm = pdfMul(tlm, [1, 0, 0, 1, args[0], args[1]]);
+      tm = tlm.slice();
+    }
+    else if (fn === OPS.nextLine) { tlm = pdfMul(tlm, [1, 0, 0, 1, 0, 0]); tm = tlm.slice(); }
     else if (fn === OPS.showText) {
       const m = pdfMul(ctm, tm);
       const gs = args[0] || [];
@@ -706,28 +714,23 @@ function leftmostStaffX(glyphs, staves, nearestStaff, s) {
 }
 
 // 段 s の調号（五度圏 fifths: ♯=正/♭=負）。SMuFL前提。
-// 調号の♭/♯は「同じ(x,y)に重ねて」描かれる（重なり数＝調号の数）。
-// 1小節目の臨時記号は別のyに付くので、最大の同一(x,y)クラスタを取れば調号だけが残る。
+// クレフと最初の符頭の間には音符が無い＝音符の臨時記号も無いので、その帯（かつ
+// 五線のすぐ近く）にある♭/♯の数がそのまま調号の数になる。
+// （遠い位置の臨時記号や隣段のものは五線帯フィルタと最初の符頭手前で除外）
 function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   const clefs = glyphs.filter((g) => (g.smufl === SMUFL.gClef || g.smufl === SMUFL.fClef) && nearestStaff(g.y).staff === staff).map((g) => g.x);
   const clefX = clefs.length ? Math.min(...clefs) : -Infinity;
   const heads = deduped.filter((n) => n.staffTop === staff.top).map((n) => n.x);
-  const firstNoteX = heads.length ? Math.min(...heads) : (clefX + spacing * 10);
-  const maxCluster = (smufl) => {
-    const m = new Map();
-    for (const g of glyphs) {
-      if (g.smufl !== smufl) continue;
-      if (nearestStaff(g.y).staff !== staff) continue;
-      if (g.x <= clefX || g.x >= firstNoteX - 3) continue;
-      const k = `${Math.round(g.x)}:${Math.round(g.y)}`;
-      m.set(k, (m.get(k) || 0) + 1);
-    }
-    let max = 0;
-    for (const v of m.values()) if (v > max) max = v;
-    return max;
-  };
-  const f = maxCluster(SMUFL.accFlat);
-  const s = maxCluster(SMUFL.accSharp);
+  const firstNoteX = heads.length ? Math.min(...heads) : (clefX + spacing * 12);
+  const mid = (staff.top + staff.bottom) / 2;
+  const countKeySig = (smufl) => glyphs.filter((g) =>
+    g.smufl === smufl &&
+    g.x > clefX && g.x < firstNoteX - spacing * 1.2 && // クレフ〜最初の符頭の手前
+    Math.abs(g.y - mid) < spacing * 5 &&               // 五線の近く（遠い臨時記号を除外）
+    nearestStaff(g.y).staff === staff
+  ).length;
+  const f = countKeySig(SMUFL.accFlat);
+  const s = countKeySig(SMUFL.accSharp);
   return s > f ? s : -f;
 }
 
