@@ -300,16 +300,12 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     return { staff, d: bd };
   };
 
-  // 縦線を小節線（五線を縦断）と符幹に分ける
+  // 縦線はすべて符幹候補（小節線かどうかは符頭が同定できた後に判定する）
   const stems = [];
   for (const v of vseg) {
     const len = v.y1 - v.y0;
     if (len < 6 || len > 40) continue;
-    const { staff } = nearestStaff((v.y0 + v.y1) / 2);
-    if (!staff) continue;
-    const sh = staff.bottom - staff.top;
-    const isBarline = v.y0 <= staff.top + sh * 0.2 && v.y1 >= staff.bottom - sh * 0.2 && len >= sh * 0.95;
-    if (!isBarline) stems.push(v);
+    stems.push(v);
   }
   // グリフが符幹のどちらかの端に付いているか（符頭・旗の位置関係）
   const stemAt = (g) => stems.find((v) => {
@@ -456,11 +452,19 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   }
   const restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
 
-  // 段（システム）ごとに、小節線で区切る。小節線＝五線をほぼ縦断する縦線（ページ枠は除外）。
+  // 段（システム）ごとに、小節線で区切る。
+  // 小節線＝五線をほぼ縦断する縦線のうち、どちらの端にも符頭が付いていないもの。
+  // （上の音から下の音へ伸びる符幹も五線を縦断しうるので、符頭の有無で見分ける＝人間と同じ）
+  const headAtEitherEnd = (v) => deduped.some((n) => {
+    const dx = n.x - v.x;
+    if (dx <= -8 || dx >= 4) return false;
+    return Math.abs(n.y - v.y0) < 4 || Math.abs(n.y - v.y1) < 4;
+  });
   const systems = staves.map((s) => {
     const sh = s.bottom - s.top;
     const barX = vseg
       .filter((v) => v.y0 <= s.top + sh * 0.2 && v.y1 >= s.bottom - sh * 0.2 && (v.y1 - v.y0) >= sh * 0.7)
+      .filter((v) => !headAtEitherEnd(v))
       .map((v) => v.x)
       .filter((x) => x > 6 && x < (pageW || 595) - 6)
       .sort((a, b) => a - b);
