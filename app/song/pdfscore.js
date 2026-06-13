@@ -753,16 +753,23 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       sysMeasures.push({ xL, xR, startBeat: beat });
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
-      const items = inBar.map((n) => ({ rest: false, x: n.x, n }))
+      // 同じx（±3px）の符頭は和音＝同時発音。1アイテムにまとめて同じ拍へ置く。
+      const noteGroups = [];
+      for (const n of inBar.slice().sort((a, b) => a.x - b.x)) {
+        const last = noteGroups[noteGroups.length - 1];
+        if (last && Math.abs(n.x - last.x) < 3) last.ns.push(n);
+        else noteGroups.push({ rest: false, x: n.x, ns: [n] });
+      }
+      const items = noteGroups
         .concat(inRests.map((r) => ({ rest: true, x: r.x, restBeats: r.restBeats })))
         .sort((a, b) => a.x - b.x);
       if (!items.length) {
         beat += bpb; // 空小節＝休符でも進む
         return;
       }
-      // 記号ベース: 音価を累積。休符の拍数はSMuFLで分かればそれを使い、
-      // 不明な休符は「小節合計=拍子」から残り拍を等分する。
-      const noteSum = inBar.reduce((s, n) => s + (n.beats || 1), 0);
+      // 記号ベース: 音価を累積。和音グループは代表値（最大音価）で1回だけ進める。
+      const groupBeats = (g) => Math.max(...g.ns.map((n) => n.beats || 1));
+      const noteSum = noteGroups.reduce((s, g) => s + groupBeats(g), 0);
       const knownRest = inRests.reduce((s, r) => s + (r.restBeats || 0), 0);
       const unknownRests = inRests.filter((r) => !(r.restBeats > 0)).length;
       const gap = bpb - noteSum - knownRest;
@@ -770,7 +777,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       let acc = 0;
       for (const it of items) {
         it.symOnset = acc;
-        acc += it.rest ? (it.restBeats > 0 ? it.restBeats : fillBeats) : (it.n.beats || 1);
+        acc += it.rest ? (it.restBeats > 0 ? it.restBeats : fillBeats) : groupBeats(it);
       }
       // 実時間比ベース: 小節は先頭アイテム（拍0）〜小節線で拍子ぶん、と線形対応。
       // 記号の足し算が自己整合する小節（合計=拍子）は記号を信頼し、
@@ -795,9 +802,12 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         // 音価は記号ベースを基本に、次の音のオンセット（最後は小節線）を越えるぶんは詰める
         const next = noteItems[i + 1];
         const limit = (next && next.onset > it.onset ? next.onset : bpb) - it.onset;
-        const beats = Math.min(it.n.beats || 1, Math.max(0.25, limit));
-        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y, tiedFromPrev: it.n.tiedFromPrev, slurId: it.n.slurId, slurRole: it.n.slurRole });
-        noteCount += 1;
+        // 和音グループの各音を同じ拍に置く
+        for (const n of it.ns) {
+          const beats = Math.min(n.beats || 1, Math.max(0.25, limit));
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole });
+          noteCount += 1;
+        }
       }
       beat += bpb;
     };
