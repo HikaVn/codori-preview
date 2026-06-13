@@ -414,6 +414,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
     let pdfLib = null;
     let bpb = explicit || 4;
     let bpm = parsed.bpm || 100;
+    let vectorChords = null;
     try {
       pdfLib = await loadPdfjs();
       const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, explicit);
@@ -421,6 +422,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
       keySig = res.keySig || null;
       if (res.beatsPerBar) bpb = res.beatsPerBar;     // 自動検出した拍子
       if (res.tempo) bpm = res.tempo;                 // 自動検出したテンポ
+      if (res.chordEvents && res.chordEvents.length) vectorChords = res.chordEvents; // ♭グリフ込みのコード
     } catch (e) {
       console.warn("vector note read failed", e);
     }
@@ -429,13 +431,15 @@ async function scoreLoadPdf(file, beatsPerBar) {
       window.alert("PDFから読めなかった。スキャン画像のPDFはテキストが取れないんだ。");
       return;
     }
+    // コードはベクター再構成（♭/♯グリフ込み・小節位置つき）を優先、無ければテキスト解析
+    const chordEvents = vectorChords || parsed.chords.map((c, i) => ({ startBeat: i * bpb, chord: c }));
     loadScoreData({
       title: parsed.title,
       bpm,
       beatsPerBar: bpb,
       keySig,
       melody: vectorMelody,
-      chordEvents: parsed.chords.map((c, i) => ({ startBeat: i, chord: c })),
+      chordEvents,
       words: [],
       lyricLines: parsed.lyricLines
     }, "PDF楽譜");

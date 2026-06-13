@@ -110,6 +110,26 @@ function isSmuflFilled(u) { return u === SMUFL.noteheadBlack; }
 // 拍子グリフ（U+E080〜E089 = timeSig 0〜9）→ 数字
 function smuflTimeSigDigit(u) { return (u >= 0xe080 && u <= 0xe089) ? u - 0xe080 : null; }
 
+// コード記号の文字（SMuFL csym臨時記号 ED60/61/62 と ASCII）→ 文字。コード以外は null。
+function chordCharFromSmufl(u) {
+  if (u === 0xed60) return "b"; // csymAccidentalFlat ♭
+  if (u === 0xed62) return "#"; // csymAccidentalSharp ♯
+  if (u === 0xed61) return "n"; // csymAccidentalNatural（コード名では稀）
+  if (u >= 0x20 && u <= 0x7e) return String.fromCodePoint(u); // ASCII（英字・数字・記号）
+  return null;
+}
+// 再構成したコード文字列が妥当か（A〜Gで始まる）
+function looksLikeChordToken(t) {
+  return /^[A-G][#b]?(maj|min|m|M|dim|aug|sus|add|°|\+|\d|\/|[#b])*$/.test(t) && t.length <= 10;
+}
+// コード表記を整える（M7→maj7 など。表示はそのままでも可）
+function normalizeChordText(t) {
+  return String(t || "")
+    .replace(/M7/g, "maj7")
+    .replace(/°/g, "dim")
+    .trim();
+}
+
 function medianOfArray(arr) {
   if (!arr.length) return 0;
   const s = [...arr].sort((a, b) => a - b);
@@ -537,10 +557,28 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     for (const x of barX) {
       if (!bars.length || x - bars[bars.length - 1] > 8) bars.push(x);
     }
+    // コード記号: 五線のすぐ上の帯にある英字・数字・csym臨時記号グリフを
+    // x順に集め、x間隔でトークンに割る。各トークン＝1コード。
+    const bandTop = s.top - spacing * 5;
+    const bandBot = s.top - spacing * 0.8;
+    const chordGlyphs = glyphs
+      .filter((g) => g.y >= bandTop && g.y < bandBot && chordCharFromSmufl(g.smufl) !== null)
+      .sort((a, b) => a.x - b.x);
+    const tokens = [];
+    for (const g of chordGlyphs) {
+      const ch = chordCharFromSmufl(g.smufl);
+      const last = tokens[tokens.length - 1];
+      if (last && g.x - last.lastX < spacing * 2.4) { last.text += ch; last.lastX = g.x; }
+      else tokens.push({ x: g.x, lastX: g.x, text: ch });
+    }
+    const chords = tokens
+      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }))
+      .filter((t) => looksLikeChordToken(t.text));
     return {
       top: s.top,
       bottom: s.bottom,
       bars,
+      chords,
       notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x),
       rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
     };
@@ -636,6 +674,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   // 各システムを上から、システム内は小節（小節線区切り）ごとに。
   // 空小節は休符として beatsPerBar ぶん進める＝出だしの休符小節も正しく前に入る。
   const melody = [];
+  const chordEvents = [];
   let beat = 0;
   let noteCount = 0;
   const keyedMidi = (n) => {
@@ -649,14 +688,27 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   for (const sys of allSystems) {
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
+    const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
       melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y });
       noteCount += 1;
     };
+    const assignChords = () => {
+      for (const c of sys.chords || []) {
+        // コードのxを含む小節（左に少し余裕）に割り当て、無ければ最も近い小節
+        let m = sysMeasures.find((mm) => c.x >= mm.xL - 6 && c.x < mm.xR);
+        if (!m && sysMeasures.length) {
+          m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
+        }
+        if (m) chordEvents.push({ startBeat: m.startBeat, chord: normalizeChordText(c.text) });
+      }
+    };
     // 小節範囲 [edges[i], edges[i+1]]。小節線が無い場合はシステム全体を1小節扱い。
     if (edges.length < 2) {
       // 小節線なし: 音符を音価順に詰める
+      sysMeasures.push({ xL: -Infinity, xR: Infinity, startBeat: beat });
       sys.notes.forEach((n) => { place(n, beat); beat += n.beats || 1; });
+      assignChords();
       continue;
     }
     // 各システムは「最初の小節線より前の領域」も1小節（行頭の小節：ト音記号・調号・拍子・出だしの休符を含む）。
@@ -666,6 +718,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     // さらに譜刻の性質「小節内の音符間隔 ≒ だいたい実時間比」を使い、
     // 記号ベースの拍（音価累積）とx位置比例の拍をブレンドして配置する。
     const placeBar = (xL, xR) => {
+      sysMeasures.push({ xL, xR, startBeat: beat });
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
       const items = inBar.map((n) => ({ rest: false, x: n.x, n }))
@@ -720,10 +773,19 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     for (let i = 0; i < edges.length - 1; i += 1) {
       placeBar(edges[i], edges[i + 1]);
     }
+    assignChords();
+  }
+  // 同じ小節に重複するコードは1つに（最初のもの）
+  chordEvents.sort((a, b) => a.startBeat - b.startBeat);
+  const dedupChords = [];
+  for (const c of chordEvents) {
+    const last = dedupChords[dedupChords.length - 1];
+    if (last && last.startBeat === c.startBeat) continue;
+    if (c.chord) dedupChords.push(c);
   }
   const keySig = keyPick ? { fifths, mode: keyPick.mode, tonic: keyPick.tonic } : null;
   return {
-    melody, noteCount, keySig, tempo,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };
