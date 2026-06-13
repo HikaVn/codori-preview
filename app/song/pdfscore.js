@@ -475,19 +475,28 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   }
 
   // タイ/スラー: 横長の弧。
-  //  ・両端が同じ高さの符頭（横線）＝タイ → 音価を結合
+  //  ・隣り合う同じ高さ(=同音)の2符頭の間に弧の中心があれば タイ → 音価を結合
+  //    （弧の端を符頭に対応づける方式だと、弧が左右にずれたとき両端が同じ符頭に
+  //     当たって取りこぼす。特にシンコペーションの同音タイで顕著だった。
+  //     「弧が同音2符頭の間にかかっているか」で見るほうが頑健。）
   //  ・それ以外（音をまたいで弧を描く）＝スラー → x範囲の音にIDを付け、表示だけ曲線で結ぶ
   let slurSeq = 0;
   for (const a of arcs || []) {
-    const nearSameY = (x) => deduped
-      .filter((n) => Math.abs(n.y - a.y) < spacing * 1.2 && n.x > x - 8 && n.x < x + 8)
-      .sort((p, q) => Math.abs(p.x - x) - Math.abs(q.x - x))[0];
-    const tl = nearSameY(a.x0);
-    const tr = nearSameY(a.x1);
-    if (tl && tr && tl !== tr && tl.x < tr.x && tl.midi === tr.midi) {
-      tr.tiedFromPrev = true;
-      continue;
+    const cx = (a.x0 + a.x1) / 2;
+    // 弧とほぼ同じ高さ帯（=同じ音程の符頭）を左から
+    const onY = deduped
+      .filter((n) => Math.abs(n.y - a.y) < spacing * 1.4)
+      .sort((p, q) => p.x - q.x);
+    // 隣り合う同音ペアで、弧の中心がその間にあるもの＝タイ
+    let tiedPair = null;
+    for (let i = 0; i + 1 < onY.length; i += 1) {
+      const L = onY[i];
+      const R = onY[i + 1];
+      if (L.midi !== R.midi) continue;
+      if (R.x - L.x > spacing * 14) continue; // 離れすぎは別物
+      if (cx >= L.x - spacing * 0.5 && cx <= R.x + spacing * 0.5) { tiedPair = R; break; }
     }
+    if (tiedPair) { tiedPair.tiedFromPrev = true; continue; }
     // スラー: 弧のx範囲・近い高さ帯にある音符をまとめ、先頭と末尾に同じIDを振る
     const inSpan = deduped
       .filter((n) => n.x >= a.x0 - 5 && n.x <= a.x1 + 5 && Math.abs(n.y - a.y) < spacing * 7)
