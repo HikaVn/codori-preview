@@ -274,60 +274,144 @@ function choosePdfKeySignature(steps, hypotheses) {
   return best;
 }
 
-// ページ単位でベクター譜を読む → メロディノート（実験的）。音価も推定する。
+// ページ単位でベクター譜を読む → メロディノート（実験的）。
+// 人間の読譜のプロセスに寄せた構造ベースの記号認識:
+//  ・符頭 = 「符幹の端にぶら下がるグリフ」（出現統計でなく構造で同定）
+//  ・旗 = 符幹の反対側の端（符頭が付いている端の逆）に付くグリフ → 8分
+//  ・白玉/黒玉 = 連桁・旗と共起しないコードが白玉（2分・全音符）
+//  ・休符 = 五線の中段に居て符幹に付かないグリフ → 小節内の拍配分に使う
 function readVectorScorePage(ol, OPS, pageH, pageW) {
-  const { glyphs, hseg, vseg, beams } = extractPageVectors(ol, OPS, pageH);
+  const { glyphs: rawGlyphs, hseg, vseg, beams } = extractPageVectors(ol, OPS, pageH);
   const staves = findStaves(hseg, pageW, pageH);
-  if (!staves.length || !glyphs.length) {
-    return { notes: [], staves: 0 };
+  if (!staves.length || !rawGlyphs.length) {
+    return { systems: [], staves: 0, keyCand: null };
   }
-  // 符頭グリフ: 縦位置の種類が多い上位2コード（塗り＝4分/8分、中抜き＝2分/全音符）
-  const byCode = {};
-  for (const g of glyphs) {
-    byCode[g.code] = byCode[g.code] || { ys: new Set(), n: 0 };
-    byCode[g.code].ys.add(Math.round(g.y));
-    byCode[g.code].n += 1;
-  }
-  const ranked = Object.entries(byCode).sort((a, b) => b[1].ys.size - a[1].ys.size);
-  const filledCode = ranked[0] ? ranked[0][0] : null;
-  const openCode = ranked[1] && ranked[1][1].ys.size >= 10 ? ranked[1][0] : null;
-  const filled = glyphs.filter((g) => String(g.code) === filledCode);
-  const openGlyphs = openCode ? glyphs.filter((g) => String(g.code) === openCode) : [];
-  // 中抜き候補が「臨時記号」でないか: すぐ右(2〜10px)に塗り符頭が同じYであればNG
-  const openHeads = openGlyphs.filter((o) =>
-    !filled.some((f) => Math.abs(f.y - o.y) < 3 && f.x - o.x > 1.5 && f.x - o.x < 11));
+  const spacing = staves[0].spacing;
+  // 注意: 同座標に重なったグリフ（調号の♭4枚など）は正規の表現なので潰さない
+  const glyphs = rawGlyphs;
+  const keyOf = (g) => `${g.font}/${g.code}`;
+  const nearestStaff = (y) => {
+    let staff = null;
+    let bd = Infinity;
+    for (const s of staves) {
+      const d = Math.abs(y - (s.top + s.bottom) / 2);
+      if (d < bd) { bd = d; staff = s; }
+    }
+    return { staff, d: bd };
+  };
 
-  const stems = vseg.filter((v) => { const len = v.y1 - v.y0; return len > 6 && len < 40; });
-  const headList = filled.map((g) => ({ ...g, filled: true })).concat(openHeads.map((g) => ({ ...g, filled: false })));
+  // 縦線を小節線（五線を縦断）と符幹に分ける
+  const stems = [];
+  for (const v of vseg) {
+    const len = v.y1 - v.y0;
+    if (len < 6 || len > 40) continue;
+    const { staff } = nearestStaff((v.y0 + v.y1) / 2);
+    if (!staff) continue;
+    const sh = staff.bottom - staff.top;
+    const isBarline = v.y0 <= staff.top + sh * 0.2 && v.y1 >= staff.bottom - sh * 0.2 && len >= sh * 0.95;
+    if (!isBarline) stems.push(v);
+  }
+  // グリフが符幹のどちらかの端に付いているか（符頭・旗の位置関係）
+  const stemAt = (g) => stems.find((v) => {
+    const dx = g.x - v.x;
+    if (dx <= -8 || dx >= 4) return false;
+    return Math.abs(g.y - v.y0) < 3.2 || Math.abs(g.y - v.y1) < 3.2;
+  });
+  const beamAtEnd = (v, endY) => beams.some((b) =>
+    v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(b.y - endY) < spacing * 1.8);
+
+  // font+code ごとの構造統計
+  const stat = new Map();
+  for (const g of glyphs) {
+    const k = keyOf(g);
+    if (!stat.has(k)) stat.set(k, { count: 0, ys: new Set(), stemEnd: 0, beamEnd: 0, flagLike: 0 });
+    const s = stat.get(k);
+    s.count += 1;
+    s.ys.add(Math.round(g.y));
+  }
+  for (const g of glyphs) {
+    const v = stemAt(g);
+    if (!v) continue;
+    const s = stat.get(keyOf(g));
+    const otherY = Math.abs(g.y - v.y0) < 3.2 ? v.y1 : v.y0;
+    s.stemEnd += 1;
+    if (beamAtEnd(v, otherY)) s.beamEnd += 1;
+  }
+  // 黒玉（塗り符頭）= 符幹の端に最も多く付くコード
+  let filledKey = null;
+  let filledBest = 0;
+  for (const [k, s] of stat) {
+    if (s.ys.size >= 8 && s.stemEnd >= s.count * 0.45 && s.stemEnd > filledBest) {
+      filledBest = s.stemEnd;
+      filledKey = k;
+    }
+  }
+  if (!filledKey) {
+    return { systems: [], staves: staves.length, keyCand: null };
+  }
+  // 旗らしさ: 符幹の反対側の端に黒玉が付いている（→そのグリフは旗であって符頭ではない）
+  const filledGlyphs = glyphs.filter((g) => keyOf(g) === filledKey);
+  const filledAtEnd = (v, endY) => filledGlyphs.some((g) =>
+    Math.abs(g.y - endY) < 3.2 && g.x - v.x > -8 && g.x - v.x < 4);
+  for (const g of glyphs) {
+    if (keyOf(g) === filledKey) continue;
+    const v = stemAt(g);
+    if (!v) continue;
+    const otherY = Math.abs(g.y - v.y0) < 3.2 ? v.y1 : v.y0;
+    if (filledAtEnd(v, otherY)) stat.get(keyOf(g)).flagLike += 1;
+  }
+  // 白玉（中抜き符頭）= 符幹の端に付くが、連桁と無縁で、旗でもないコード
+  let openKey = null;
+  let openBest = 0;
+  for (const [k, s] of stat) {
+    if (k === filledKey) continue;
+    if (s.count >= 3 && s.ys.size >= 3 && s.stemEnd >= s.count * 0.3 &&
+        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && s.stemEnd > openBest) {
+      openBest = s.stemEnd;
+      openKey = k;
+    }
+  }
+
+  const headList = glyphs
+    .filter((g) => keyOf(g) === filledKey || keyOf(g) === openKey)
+    .map((g) => ({ ...g, filled: keyOf(g) === filledKey }));
+
+  // 重なり合うグリフ（調号・拍子の数字などは同座標に積まれる）
+  const stackCount = new Map();
+  for (const g of glyphs) {
+    const k = `${Math.round(g.x)}/${Math.round(g.y)}`;
+    stackCount.set(k, (stackCount.get(k) || 0) + 1);
+  }
+  const isStacked = (g) => (stackCount.get(`${Math.round(g.x)}/${Math.round(g.y)}`) || 0) >= 2;
 
   const notes = [];
   for (const h of headList) {
-    let staff = null;
-    let bestD = Infinity;
-    for (const s of staves) {
-      const c = (s.top + s.bottom) / 2;
-      const d = Math.abs(h.y - c);
-      if (d < bestD) { bestD = d; staff = s; }
-    }
-    if (!staff || bestD > staff.spacing * 14) {
+    const { staff, d } = nearestStaff(h.y);
+    if (!staff || d > staff.spacing * 14) {
       continue;
     }
     const midi = midiFromStaffY(h.y, staff);
     if (midi < 36 || midi > 88) {
       continue;
     }
-    // 符幹: 符頭のx近く（±4px）で、符頭yから上下に伸びる縦線
-    const stem = stems.find((v) => Math.abs(v.x - h.x) < 4 && v.y0 < h.y + 4 && v.y1 > h.y - 4);
-    // 連桁: 符頭xの近くで、符頭から少し離れたy（符幹の先）に横長の塗り
-    const beamed = stem && beams.some((b) =>
-      h.x >= b.x0 - 3 && h.x <= b.x1 + 3 && Math.abs(b.y - h.y) > staff.spacing * 1.5 && Math.abs(b.y - h.y) < staff.spacing * 8);
+    const stem = stemAt(h);
+    let beamed = false;
+    let flagged = false;
+    if (stem) {
+      const tipY = Math.abs(h.y - stem.y0) < 3.2 ? stem.y1 : stem.y0;
+      beamed = beamAtEnd(stem, tipY);
+      // 旗: 符幹の先（符頭の反対の端）に付く別グリフ
+      flagged = !beamed && glyphs.some((g) =>
+        keyOf(g) !== filledKey && keyOf(g) !== openKey &&
+        Math.abs(g.y - tipY) < 3.2 && g.x - stem.x > -2 && g.x - stem.x < 7);
+    }
     let beats;
     if (!h.filled) {
-      beats = stem ? 2 : 4;           // 中抜き＋幹=2分、幹なし=全音符
-    } else if (beamed) {
-      beats = 0.5;                     // 塗り＋連桁=8分
+      beats = stem ? 2 : 4;            // 白玉＋幹=2分、幹なし=全音符
+    } else if (beamed || flagged) {
+      beats = 0.5;                     // 黒玉＋連桁/旗=8分
     } else {
-      beats = 1;                       // 塗り＋幹=4分（既定）
+      beats = 1;                       // 黒玉＋幹=4分（既定）
     }
     notes.push({ x: h.x, y: h.y, staffTop: staff.top, step: staffStepFromY(h.y, staff), midi, beats });
   }
@@ -342,6 +426,36 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     deduped.push(n);
   }
 
+  // 休符候補: 符頭と同じ音楽フォントで、五線の中段に居て、符幹に付かず、
+  // 重なりグリフ（調号・拍子）でも、符頭の直前の臨時記号でもないコード
+  const musicFont = filledKey.slice(0, filledKey.indexOf("/"));
+  const restQualifies = (g) => {
+    const { staff, d } = nearestStaff(g.y);
+    if (!staff || d > spacing * 6) return false;
+    const mid = (staff.top + staff.bottom) / 2;
+    if (Math.abs(g.y - mid) > spacing * 1.9) return false;
+    if (stemAt(g) || isStacked(g)) return false;
+    // 直後に符頭がある → 臨時記号
+    if (deduped.some((n) => n.x - g.x > 1.5 && n.x - g.x < 11 && Math.abs(n.y - g.y) < 3)) return false;
+    // 段の左端（クレフ・調号ゾーン）は除外
+    const leftmost = glyphs.reduce((m, o) => {
+      const ns = nearestStaff(o.y).staff;
+      return ns === staff && o.x < m ? o.x : m;
+    }, Infinity);
+    if (g.x < leftmost + spacing * 4) return false;
+    return true;
+  };
+  const restCodes = new Set();
+  for (const [k, s] of stat) {
+    if (k === filledKey || k === openKey) continue;
+    if (!k.startsWith(musicFont + "/")) continue;
+    if (s.count < 3 || s.flagLike > s.count * 0.2) continue;
+    const occ = glyphs.filter((g) => keyOf(g) === k);
+    const q = occ.filter(restQualifies);
+    if (q.length >= occ.length * 0.7) restCodes.add(k);
+  }
+  const restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
+
   // 段（システム）ごとに、小節線で区切る。小節線＝五線をほぼ縦断する縦線（ページ枠は除外）。
   const systems = staves.map((s) => {
     const sh = s.bottom - s.top;
@@ -355,21 +469,21 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     for (const x of barX) {
       if (!bars.length || x - bars[bars.length - 1] > 8) bars.push(x);
     }
-    return { top: s.top, bottom: s.bottom, bars, notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x) };
+    return {
+      top: s.top,
+      bottom: s.bottom,
+      bars,
+      notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x),
+      rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
+    };
   });
 
   // 調号グリフ（個数）と、音符の左に付く同グリフの臨時記号
-  const noteheadKeys = new Set(headList.map((g) => `${g.font}/${g.code}`));
+  const noteheadKeys = new Set([filledKey, openKey].filter(Boolean));
   const keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
   if (keyCand) {
-    const keyGlyphs = glyphs.filter((g) => `${g.font}/${g.code}` === keyCand.glyphKey);
-    // 同一座標に重なったグリフ（調号本体）を除き、単独のものだけ臨時記号候補に
-    const stacks = new Map();
-    for (const g of keyGlyphs) {
-      const k = `${Math.round(g.x)}/${Math.round(g.y)}`;
-      stacks.set(k, (stacks.get(k) || 0) + 1);
-    }
-    const singles = keyGlyphs.filter((g) => (stacks.get(`${Math.round(g.x)}/${Math.round(g.y)}`) || 0) < 2);
+    const keyGlyphs = glyphs.filter((g) => keyOf(g) === keyCand.glyphKey);
+    const singles = keyGlyphs.filter((g) => !isStacked(g));
     for (const n of deduped) {
       n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
     }
@@ -434,12 +548,25 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     }
     // 各システムは「最初の小節線より前の領域」も1小節（行頭の小節：ト音記号・調号・拍子・出だしの休符を含む）。
     // 小節範囲を [行頭, edges[0]], [edges[0], edges[1]], ... と作る。
+    // 小節内に休符があれば、「小節の合計は拍子ぶん」という制約から逆算して
+    // 余り拍を休符に配分する（休符の後の音符が正しい拍に置かれる）。
     const placeBar = (xL, xR) => {
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
+      const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
+      const noteSum = inBar.reduce((s, n) => s + (n.beats || 1), 0);
+      const gap = bpb - noteSum;
+      const restBeats = inRests.length && gap > 0 ? gap / inRests.length : 0;
+      const items = inBar.map((n) => ({ rest: false, x: n.x, n }))
+        .concat(inRests.map((r) => ({ rest: true, x: r.x })))
+        .sort((a, b) => a.x - b.x);
       let local = 0;
-      for (const n of inBar) {
-        place(n, beat + local);
-        local += n.beats || 1;
+      for (const it of items) {
+        if (it.rest) {
+          local += restBeats;
+        } else {
+          place(it.n, beat + local);
+          local += it.n.beats || 1;
+        }
       }
       beat += bpb; // 小節1つぶん進める（空小節＝休符でも進む）
     };
