@@ -432,6 +432,49 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   }
   const isStacked = (g) => (stackCount.get(`${Math.round(g.x)}/${Math.round(g.y)}`) || 0) >= 2;
 
+  // ===== 自己キャリブレーション =====
+  // 明瞭な同種記号（旗・連桁）を見比べ、「障害物がない標準の形・位置」を学ぶ。
+  // 学んだ基準で、重なりなどで曖昧な音符の音価（8分/16分/32分）を確度高く判定する。
+  // 旗: 符幹の先に付く SMuFL 旗グリフ(E240-E245)。その標準的な水平オフセットを学習。
+  const flagGlyphs = glyphs.filter((g) => SMUFL_FLAG_BEATS[g.smufl] !== undefined);
+  const flagDx = [];
+  for (const g of flagGlyphs) {
+    const v = stemAt(g);
+    if (v) flagDx.push(g.x - v.x);
+  }
+  const medFlagDx = flagDx.length ? medianOfArray(flagDx) : 0;
+  const flagDxLo = medFlagDx - spacing * 1.6;
+  const flagDxHi = medFlagDx + spacing * 1.6;
+  // 連桁の縦間隔（二重連桁＝16分の判定用）。重なる連桁から学習、無ければ既定 0.9*spacing。
+  const beamGaps = [];
+  for (const b of beams) {
+    for (const o of beams) {
+      if (o === b || o.x1 < b.x0 || o.x0 > b.x1) continue;
+      const dy = b.y - o.y;
+      if (dy > spacing * 0.25 && dy < spacing * 2) beamGaps.push(dy);
+    }
+  }
+  const beamGap = beamGaps.length ? medianOfArray(beamGaps) : spacing * 0.9;
+  // 符幹の先 tipY に付く旗の音価（SMuFL→拍）。無ければ null。
+  const flagBeatsAt = (v, tipY) => {
+    const f = flagGlyphs.find((g) => g.x - v.x > flagDxLo && g.x - v.x < flagDxHi && Math.abs(g.y - tipY) < spacing * 1.8);
+    return f ? SMUFL_FLAG_BEATS[f.smufl] : null;
+  };
+  // 符幹の先 tipY に重なる連桁の本数（1=8分,2=16分,3=32分）。学習した縦間隔で段数を数える。
+  const beamLevelsAt = (v, tipY) => {
+    const ys = beams
+      .filter((b) => v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(b.y - tipY) < beamGap * 2.5 + spacing)
+      .map((b) => b.y)
+      .sort((a, b) => a - b);
+    let levels = 0;
+    let prev = -Infinity;
+    for (const y of ys) {
+      if (y - prev > beamGap * 0.5) { levels += 1; prev = y; }
+    }
+    return levels;
+  };
+  const BEAM_LEVEL_BEATS = { 1: 0.5, 2: 0.25, 3: 0.125 };
+
   const notes = [];
   for (const h of headList) {
     const { staff, d } = nearestStaff(h.y);
@@ -443,23 +486,25 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       continue;
     }
     const stem = stemAt(h);
-    let beamed = false;
-    let flagged = false;
-    if (stem) {
-      const tipY = Math.abs(h.y - stem.y0) < 3.2 ? stem.y1 : stem.y0;
-      beamed = beamAtEnd(stem, tipY);
-      // 旗: 符幹の先（符頭の反対の端）に付く別グリフ
-      flagged = !beamed && glyphs.some((g) =>
-        keyOf(g) !== filledKey && keyOf(g) !== openKey &&
-        Math.abs(g.y - tipY) < 3.2 && g.x - stem.x > -2 && g.x - stem.x < 7);
-    }
     let beats;
     if (!h.filled) {
       beats = stem ? 2 : 4;            // 白玉＋幹=2分、幹なし=全音符
-    } else if (beamed || flagged) {
-      beats = 0.5;                     // 黒玉＋連桁/旗=8分
+    } else if (stem) {
+      const tipY = Math.abs(h.y - stem.y0) < 3.2 ? stem.y1 : stem.y0;
+      // 連桁の本数を優先（学習した縦間隔で段数を数える）、無ければ旗のSMuFLコード、
+      // どちらも無ければ4分。これで8分/16分/32分を取り違えない。
+      const levels = beamLevelsAt(stem, tipY);
+      const flagBeats = flagBeatsAt(stem, tipY);
+      // 非標準フォントで旗がSMuFL範囲外でも8分は拾う（先端に符頭でない別グリフ）。
+      const flagLike = flagBeats === null && glyphs.some((g) =>
+        keyOf(g) !== filledKey && keyOf(g) !== openKey &&
+        Math.abs(g.y - tipY) < 3.2 && g.x - stem.x > -2 && g.x - stem.x < 7);
+      if (levels >= 1) beats = BEAM_LEVEL_BEATS[Math.min(levels, 3)];
+      else if (flagBeats !== null) beats = flagBeats;
+      else if (flagLike) beats = 0.5;  // 旗あり（コード不明）=8分
+      else beats = 1;                  // 黒玉＋幹のみ=4分
     } else {
-      beats = 1;                       // 黒玉＋幹=4分（既定）
+      beats = 1;                       // 幹なし黒玉=4分扱い
     }
     notes.push({ x: h.x, y: h.y, staffTop: staff.top, step: staffStepFromY(h.y, staff), midi, beats });
   }
