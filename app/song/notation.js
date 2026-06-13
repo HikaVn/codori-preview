@@ -185,18 +185,48 @@ function createScoreNotation(canvas, options = {}) {
       }
       const pad = 14;
       const localToX = (lb) => o.x + pad + (lb / bpb) * (m.measureW - pad * 2);
+      const baseOf = (b) => ((b === 0.75 || b === 1.5 || b === 3 || b === 6) ? b / 1.5 : b);
       const sorted = notes.slice().sort((a, b) => a.startBeat - b.startBeat);
-      let cursor = 0; // 小節内の現在拍（休符の隙間を検出する）
-      for (const note of sorted) {
-        const noteLocal = note.startBeat - bar * bpb;
-        if (noteLocal - cursor > 0.15) {
-          drawRest(localToX((cursor + noteLocal) / 2), o.top, noteLocal - cursor);
-        }
-        drawNote(note, localToX(noteLocal), o.top);
-        cursor = Math.max(cursor, noteLocal + (note.beats || 1));
+      const placed = sorted.map((note) => {
+        const local = note.startBeat - bar * bpb;
+        return { note, local, x: localToX(local), base: baseOf(Number(note.beats) || 1) };
+      });
+      // 休符（音符間・小節端の隙間）
+      let cursor = 0;
+      for (const d of placed) {
+        if (d.local - cursor > 0.15) drawRest(localToX((cursor + d.local) / 2), o.top, d.local - cursor);
+        cursor = Math.max(cursor, d.local + (Number(d.note.beats) || 1));
       }
-      if (bpb - cursor > 0.15) {
-        drawRest(localToX((cursor + bpb) / 2), o.top, bpb - cursor);
+      if (bpb - cursor > 0.15) drawRest(localToX((cursor + bpb) / 2), o.top, bpb - cursor);
+
+      // 連桁グループ: 同じ拍内に連続する8分以下(base<=0.5)の音符をまとめる
+      const groups = [];
+      let run = null;
+      for (const d of placed) {
+        const beamable = d.base <= 0.5 + 1e-6;
+        const beat = Math.floor(d.local + 1e-6);
+        if (beamable && run && run.beat === beat) run.items.push(d);
+        else { if (run) groups.push(run); run = beamable ? { beat, items: [d] } : null; if (!beamable) groups.push({ items: [d], single: true }); }
+      }
+      if (run) groups.push(run);
+
+      for (const g of groups) {
+        if (g.single || g.items.length < 2) {
+          for (const d of g.items) drawNote(d.note, d.x, o.top, null);
+          continue;
+        }
+        // 連桁: 向きを多数決し、符幹の先を揃えて直線の連桁を引く
+        const steps = g.items.map((d) => notationMidiToStaff(d.note.midi, state.fifths < 0).step);
+        const up = steps.reduce((s, v) => s + v, 0) / steps.length < 4;
+        const ys = g.items.map((d, i) => stepToY(steps[i], o.top));
+        const tipY = up ? Math.min(...ys) - 24 : Math.max(...ys) + 24;
+        for (const d of g.items) drawNote(d.note, d.x, o.top, { up, tipY });
+        const x0 = (up ? g.items[0].x + 4.6 : g.items[0].x - 4.6);
+        const x1 = (up ? g.items[g.items.length - 1].x + 4.6 : g.items[g.items.length - 1].x - 4.6);
+        ctx.strokeStyle = state.selected && g.items.some((d) => d.note === state.selected) ? "#d89b2b" : "#1f2933";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, tipY); ctx.lineTo(x1, tipY); ctx.stroke();
+        ctx.lineWidth = 1;
       }
     }
   }
@@ -231,7 +261,7 @@ function createScoreNotation(canvas, options = {}) {
     }
   }
 
-  function drawNote(note, x, staffTop) {
+  function drawNote(note, x, staffTop, beam) {
     const { step, alt } = notationMidiToStaff(note.midi, state.fifths < 0);
     const y = stepToY(step, staffTop);
     const beats = Number(note.beats) || 1;
@@ -286,21 +316,25 @@ function createScoreNotation(canvas, options = {}) {
       ctx.fill();
     }
 
-    // 符幹と旗
+    // 符幹と旗（連桁グループのときは旗を描かず、符幹を連桁の高さまで伸ばす）
     if (base < 4) {
-      const up = step < 4; // 第3線(B4)より下は上向き
+      const up = beam ? beam.up : step < 4; // 第3線(B4)より下は上向き
       const sx = up ? x + 4.6 : x - 4.6;
-      const sy = up ? y - 26 : y + 26;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, sy); ctx.stroke();
-      const flags = base <= 0.26 ? 2 : base <= 0.51 ? 1 : 0;
-      for (let f = 0; f < flags; f += 1) {
-        const fy = sy + (up ? f * 5 : -f * 5);
-        ctx.beginPath();
-        ctx.moveTo(sx, fy);
-        ctx.quadraticCurveTo(sx + 7, fy + (up ? 5 : -5), sx + 4, fy + (up ? 12 : -12));
-        ctx.stroke();
+      if (beam) {
+        ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, beam.tipY); ctx.stroke();
+      } else {
+        const sy = up ? y - 26 : y + 26;
+        ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, sy); ctx.stroke();
+        const flags = base <= 0.26 ? 2 : base <= 0.51 ? 1 : 0;
+        for (let f = 0; f < flags; f += 1) {
+          const fy = sy + (up ? f * 5 : -f * 5);
+          ctx.beginPath();
+          ctx.moveTo(sx, fy);
+          ctx.quadraticCurveTo(sx + 7, fy + (up ? 5 : -5), sx + 4, fy + (up ? 12 : -12));
+          ctx.stroke();
+        }
       }
     }
 
