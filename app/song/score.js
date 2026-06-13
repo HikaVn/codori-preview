@@ -97,6 +97,7 @@ function loadScoreData(parsed, kind) {
   scoreState.bpm = parsed.bpm || 100;
   scoreState.beatsPerBar = parsed.beatsPerBar || 4;
   scoreState.keySig = parsed.keySig || null;
+  scoreState.beatCheck = parsed.beatCheck || null; // 拍検算（小節ごとの拍合計が拍子に合うか）
   // コード列 → events（startBeatは隣との差で拍数化）
   const chords = [...(parsed.chordEvents || [])].sort((a, b) => a.startBeat - b.startBeat);
   scoreState.events = [{ type: "section", label: kind, beats: 0, lineIndex: 0 }];
@@ -133,7 +134,14 @@ function renderScore() {
   recomputeScoreStartBeats();
   const chordCount = scoreState.events.filter((e) => e.type === "chord" && e.chord).length;
   const keyName = scoreKeySigName();
-  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}`;
+  const bc = scoreState.beatCheck;
+  let beatNote = "";
+  if (bc && bc.measures) {
+    beatNote = bc.problemCount === 0
+      ? ` / 拍検算: 全${bc.measures}小節OK`
+      : ` / 拍検算: ${bc.problemCount}小節が拍子と不一致（要確認）`;
+  }
+  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}`;
   renderScoreChordEditor();
   syncScoreNotation();
   syncScorePianoRoll();
@@ -415,11 +423,13 @@ async function scoreLoadPdf(file, beatsPerBar) {
     let bpb = explicit || 4;
     let bpm = parsed.bpm || 100;
     let vectorChords = null;
+    let vectorBeatCheck = null;
     try {
       pdfLib = await loadPdfjs();
       const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, explicit);
       vectorMelody = res.melody || [];
       keySig = res.keySig || null;
+      vectorBeatCheck = res.beatCheck || null;        // 拍検算サマリ
       if (res.beatsPerBar) bpb = res.beatsPerBar;     // 自動検出した拍子
       if (res.tempo) bpm = res.tempo;                 // 自動検出したテンポ
       if (res.chordEvents && res.chordEvents.length) vectorChords = res.chordEvents; // ♭グリフ込みのコード
@@ -440,6 +450,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
       keySig,
       melody: vectorMelody,
       chordEvents,
+      beatCheck: vectorBeatCheck,
       words: [],
       lyricLines: parsed.lyricLines
     }, "PDF楽譜");

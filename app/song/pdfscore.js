@@ -742,6 +742,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   // 空小節は休符として beatsPerBar ぶん進める＝出だしの休符小節も正しく前に入る。
   const melody = [];
   const chordEvents = [];
+  const barChecks = []; // 拍検算: 各小節の記号音価合計が拍子ぶんに合うか
   let beat = 0;
   let noteCount = 0;
   // 段ごとの調号 fifths を適用（転調対応）。段に検出値が無ければ代表調号 fifths。
@@ -789,7 +790,10 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const placeBar = (xL, xR) => {
       sysMeasures.push({ xL, xR, startBeat: beat });
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
-      const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
+      // 全休符は拍子に関係なく「1小節まるごと休み」の慣習＝拍子ぶん（3/4なら3拍）。
+      const inRests = (sys.rests || [])
+        .filter((r) => r.x >= xL - 2 && r.x < xR)
+        .map((r) => (r.smufl === SMUFL.restWhole ? { ...r, restBeats: bpb } : r));
       // 同じx（±3px）の符頭は和音＝同時発音。1アイテムにまとめて同じ拍へ置く。
       const noteGroups = [];
       for (const n of inBar.slice().sort((a, b) => a.x - b.x)) {
@@ -824,24 +828,30 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const useX = Number.isFinite(span) && span > 4;
       const symTotal = noteSum + knownRest + fillBeats * unknownRests;
       const consistent = Math.abs(bpb - symTotal) < 0.26;
-      const wX = useX && !consistent ? 0.6 : 0;
+      // 拍検算の記録（合わない小節＝認識が怪しい小節）
+      barChecks.push({ page: sys.page, startBeat: beat, symTotal: Math.round(symTotal * 100) / 100, consistent, items: items.length });
+      // 合わない小節はx位置比を強めに信頼（記号の音価/休符に取りこぼしがある）
+      const wX = useX && !consistent ? 0.75 : 0;
+      // グリッド: 拍子ぶんを割り切れる細かさに丸める（8分=0.5、3連や16分が要れば0.25）
+      const gridUnit = (items.some((it) => (it.restBeats === 0.25) || (!it.rest && it.ns.some((n) => (n.beats || 1) <= 0.3)))) ? 0.25 : 0.5;
+      const snap = (v) => Math.round(v / gridUnit) * gridUnit;
       let prev = 0;
       for (const it of items) {
         const xOnset = useX ? ((it.x - x0) / span) * bpb : it.symOnset;
-        let onset = Math.round((it.symOnset * (1 - wX) + xOnset * wX) * 4) / 4;
-        onset = Math.max(prev, Math.min(onset, bpb - 0.25));
+        let onset = consistent ? Math.round(it.symOnset * 4) / 4 : snap(it.symOnset * (1 - wX) + xOnset * wX);
+        onset = Math.max(prev, Math.min(onset, bpb - gridUnit));
         it.onset = onset;
         prev = onset;
       }
       const noteItems = items.filter((it) => !it.rest);
       for (let i = 0; i < noteItems.length; i += 1) {
         const it = noteItems[i];
-        // 音価は記号ベースを基本に、次の音のオンセット（最後は小節線）を越えるぶんは詰める
-        const next = noteItems[i + 1];
-        const limit = (next && next.onset > it.onset ? next.onset : bpb) - it.onset;
-        // 和音グループの各音を同じ拍に置く
+        // 次イベント（音 or 休符）までを上限に。整合小節は記号音価を尊重、
+        // 不整合小節は「拍検算で割り出したオンセット差」を実音価として使う（小節が拍子ぶんに収まる）。
+        const nextItem = items.find((o) => o.onset > it.onset);
+        const limit = Math.max(0.25, (nextItem ? nextItem.onset : bpb) - it.onset);
         for (const n of it.ns) {
-          const beats = Math.min(n.beats || 1, Math.max(0.25, limit));
+          const beats = consistent ? Math.min(n.beats || 1, limit) : limit;
           melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
           noteCount += 1;
         }
@@ -888,8 +898,19 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const last = keyChanges[keyChanges.length - 1];
     if (!last || last.fifths !== kf) keyChanges.push({ startBeat: n.startBeat, fifths: kf });
   }
+  // 拍検算サマリ: 拍子ぶんに合わない小節＝音価/休符の取りこぼしが疑われる小節
+  const balanced = barChecks.filter((b) => b.consistent).length;
+  const problems = barChecks
+    .map((b, i) => ({ ...b, index: i }))
+    .filter((b) => !b.consistent && b.items > 0);
+  const beatCheck = {
+    measures: barChecks.length,
+    balanced,
+    problemCount: problems.length,
+    problems: problems.slice(0, 50)
+  };
   return {
-    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };
