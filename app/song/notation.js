@@ -38,8 +38,48 @@ function notationKeyAlter(letterC, fifths) {
   return 0;
 }
 
+// canvas 2D の使う分だけを模した SVG 出力シム。
+// 描画コードは canvas のまま書け、出力は真のベクター(SVG)になる（拡大で滲まない・書き出せる）。
+function makeSvgCtx() {
+  const out = [];
+  const base = () => ({ stroke: "#000", fill: "#000", lw: 1, font: 11, t: [1, 0, 0, 1, 0, 0] });
+  let cur = base();
+  const stack = [];
+  let path = "";
+  let pend = null; // 直近の ellipse（stroke/fill で確定）
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const ap = (x, y) => { const t = cur.t; return [t[0] * x + t[2] * y + t[4], t[1] * x + t[3] * y + t[5]]; };
+  const mul = (a, b) => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const ellSvg = (extra) => `<ellipse cx="${r2(pend.cx)}" cy="${r2(pend.cy)}" rx="${r2(pend.rx)}" ry="${r2(pend.ry)}" transform="rotate(${r2(pend.ang)} ${r2(pend.cx)} ${r2(pend.cy)})" ${extra}/>`;
+  return {
+    clear() { out.length = 0; path = ""; pend = null; stack.length = 0; cur = base(); },
+    flush() { return out.join(""); },
+    set strokeStyle(v) { cur.stroke = v; },
+    set fillStyle(v) { cur.fill = v; },
+    set lineWidth(v) { cur.lw = v; },
+    get lineWidth() { return cur.lw; },
+    set font(v) { const m = /(\d+(?:\.\d+)?)px/.exec(v); cur.font = m ? parseFloat(m[1]) : 11; },
+    beginPath() { path = ""; pend = null; },
+    moveTo(x, y) { const p = ap(x, y); path += `M${r2(p[0])} ${r2(p[1])}`; },
+    lineTo(x, y) { const p = ap(x, y); path += `L${r2(p[0])} ${r2(p[1])}`; },
+    bezierCurveTo(x1, y1, x2, y2, x, y) { const a = ap(x1, y1), b = ap(x2, y2), c = ap(x, y); path += `C${r2(a[0])} ${r2(a[1])} ${r2(b[0])} ${r2(b[1])} ${r2(c[0])} ${r2(c[1])}`; },
+    quadraticCurveTo(cx, cy, x, y) { const a = ap(cx, cy), b = ap(x, y); path += `Q${r2(a[0])} ${r2(a[1])} ${r2(b[0])} ${r2(b[1])}`; },
+    arc(x, y, rad) { const p = ap(x, y); path += `M${r2(p[0] + rad)} ${r2(p[1])}A${r2(rad)} ${r2(rad)} 0 1 0 ${r2(p[0] - rad)} ${r2(p[1])}A${r2(rad)} ${r2(rad)} 0 1 0 ${r2(p[0] + rad)} ${r2(p[1])}`; },
+    ellipse(x, y, rx, ry) { const c = ap(x, y); const ang = Math.atan2(cur.t[1], cur.t[0]) * 180 / Math.PI; pend = { cx: c[0], cy: c[1], rx, ry, ang }; },
+    fillRect(x, y, w, h) { const p = ap(x, y); out.push(`<rect x="${r2(p[0])}" y="${r2(p[1])}" width="${r2(w)}" height="${r2(h)}" fill="${cur.fill}"/>`); },
+    stroke() { if (pend) { out.push(ellSvg(`fill="none" stroke="${cur.stroke}" stroke-width="${cur.lw}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="none" stroke="${cur.stroke}" stroke-width="${cur.lw}" stroke-linecap="round" stroke-linejoin="round"/>`); },
+    fill() { if (pend) { out.push(ellSvg(`fill="${cur.fill}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="${cur.fill}"/>`); },
+    fillText(t, x, y) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${cur.fill}" font-size="${cur.font}" font-family="sans-serif">${esc(t)}</text>`); },
+    save() { stack.push({ ...cur, t: cur.t.slice() }); },
+    restore() { const s = stack.pop(); if (s) cur = s; },
+    translate(x, y) { cur.t = mul(cur.t, [1, 0, 0, 1, x, y]); },
+    rotate(a) { const c = Math.cos(a), s = Math.sin(a); cur.t = mul(cur.t, [c, s, -s, c, 0, 0]); }
+  };
+}
+
 function createScoreNotation(canvas, options = {}) {
-  const ctx = canvas.getContext("2d");
+  const ctx = makeSvgCtx(); // canvas は <svg> 要素。描画は canvas風に書いてSVGを出力。
   const state = {
     melody: [],
     beatsPerBar: options.beatsPerBar || 4,
@@ -110,20 +150,24 @@ function createScoreNotation(canvas, options = {}) {
     ctx.lineWidth = 1;
   }
 
-  function render() {
-    const m = layoutMetrics();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(m.cssW * dpr);
-    canvas.height = Math.round(m.cssH * dpr);
+  function flush(m) {
+    canvas.setAttribute("width", m.cssW);
+    canvas.setAttribute("height", m.cssH);
+    canvas.setAttribute("viewBox", `0 0 ${m.cssW} ${m.cssH}`);
     canvas.style.width = `${m.cssW}px`;
     canvas.style.height = `${m.cssH}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, m.cssW, m.cssH);
+    canvas.innerHTML = ctx.flush();
+  }
+
+  function render() {
+    const m = layoutMetrics();
+    ctx.clear();
     state.layouts = [];
     if (!state.melody.length) {
       ctx.fillStyle = "#62717d";
       ctx.font = "12px sans-serif";
       ctx.fillText("メロディが入ると、ここに五線譜で再現するよ", 8, 22);
+      flush(m);
       return;
     }
 
@@ -261,6 +305,8 @@ function createScoreNotation(canvas, options = {}) {
 
     // スラー: 同じ slurId の始点・終点（同じ行のみ）を曲線で結ぶ
     drawSlurs();
+
+    flush(m);
   }
 
   // スラー描画（state.layouts の start/end を結ぶ。行が違う場合は省略）
