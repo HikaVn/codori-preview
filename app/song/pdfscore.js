@@ -554,25 +554,55 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     // 小節範囲を [行頭, edges[0]], [edges[0], edges[1]], ... と作る。
     // 小節内に休符があれば、「小節の合計は拍子ぶん」という制約から逆算して
     // 余り拍を休符に配分する（休符の後の音符が正しい拍に置かれる）。
+    // さらに譜刻の性質「小節内の音符間隔 ≒ だいたい実時間比」を使い、
+    // 記号ベースの拍（音価累積）とx位置比例の拍をブレンドして配置する。
     const placeBar = (xL, xR) => {
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
-      const noteSum = inBar.reduce((s, n) => s + (n.beats || 1), 0);
-      const gap = bpb - noteSum;
-      const restBeats = inRests.length && gap > 0 ? gap / inRests.length : 0;
       const items = inBar.map((n) => ({ rest: false, x: n.x, n }))
         .concat(inRests.map((r) => ({ rest: true, x: r.x })))
         .sort((a, b) => a.x - b.x);
-      let local = 0;
-      for (const it of items) {
-        if (it.rest) {
-          local += restBeats;
-        } else {
-          place(it.n, beat + local);
-          local += it.n.beats || 1;
-        }
+      if (!items.length) {
+        beat += bpb; // 空小節＝休符でも進む
+        return;
       }
-      beat += bpb; // 小節1つぶん進める（空小節＝休符でも進む）
+      // 記号ベース: 音価を累積し、休符に余り拍を等分
+      const noteSum = inBar.reduce((s, n) => s + (n.beats || 1), 0);
+      const gap = bpb - noteSum;
+      const restBeats = inRests.length && gap > 0 ? gap / inRests.length : 0;
+      let acc = 0;
+      for (const it of items) {
+        it.symOnset = acc;
+        acc += it.rest ? restBeats : (it.n.beats || 1);
+      }
+      // 実時間比ベース: 小節は先頭アイテム（拍0）〜小節線で拍子ぶん、と線形対応。
+      // 記号の足し算が自己整合する小節（合計=拍子）は記号を信頼し、
+      // 合わない小節（休符の見逃し・音価の読み違い）だけ実時間比で補正する。
+      const x0 = items[0].x;
+      const span = xR - x0;
+      const useX = Number.isFinite(span) && span > 4;
+      const symTotal = noteSum + restBeats * inRests.length;
+      const consistent = Math.abs(bpb - symTotal) < 0.26;
+      const wX = useX && !consistent ? 0.6 : 0;
+      let prev = 0;
+      for (const it of items) {
+        const xOnset = useX ? ((it.x - x0) / span) * bpb : it.symOnset;
+        let onset = Math.round((it.symOnset * (1 - wX) + xOnset * wX) * 4) / 4;
+        onset = Math.max(prev, Math.min(onset, bpb - 0.25));
+        it.onset = onset;
+        prev = onset;
+      }
+      const noteItems = items.filter((it) => !it.rest);
+      for (let i = 0; i < noteItems.length; i += 1) {
+        const it = noteItems[i];
+        // 音価は記号ベースを基本に、次の音のオンセット（最後は小節線）を越えるぶんは詰める
+        const next = noteItems[i + 1];
+        const limit = (next && next.onset > it.onset ? next.onset : bpb) - it.onset;
+        const beats = Math.min(it.n.beats || 1, Math.max(0.25, limit));
+        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y });
+        noteCount += 1;
+      }
+      beat += bpb;
     };
     placeBar(-Infinity, edges[0]); // 行頭の小節
     for (let i = 0; i < edges.length - 1; i += 1) {
