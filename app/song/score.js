@@ -111,7 +111,7 @@ function loadScoreData(parsed, kind) {
   }
   // メロディ（元推定値 origMidi と、PDF上の位置 page/x/y を保持）
   scoreState.melody = (parsed.melody || [])
-    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y }))
+    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y, keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole }))
     .sort((a, b) => a.startBeat - b.startBeat);
   // 歌詞
   if (parsed.words && parsed.words.length) {

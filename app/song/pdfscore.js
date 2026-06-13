@@ -611,27 +611,22 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       bottom: s.bottom,
       bars,
       chords,
+      fifths: hasSmufl ? detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped) : null,
       notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x),
       rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
     };
   });
 
-  // 調号グリフ（個数）。SMuFL があれば調号は♭(E260)/♯(E262)の個数で直接わかる。
+  // 調号。SMuFL があれば段ごとの fifths（同一(x,y)最大クラスタ）を採用。転調も拾える。
   const noteheadKeys = new Set([filledKey, openKey].filter(Boolean));
   let keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
   if (hasSmufl) {
-    // 調号ゾーン（各段の左端付近）の♭/♯の数を段ごとに数え、多数決
+    // 段の fifths の多数決を曲全体の代表調号に
     const counts = new Map();
-    for (const s of staves) {
-      const leftX = leftmostStaffX(glyphs, staves, nearestStaff, s);
-      const flats = glyphs.filter((g) => g.smufl === SMUFL.accFlat && nearestStaff(g.y).staff === s && g.x < leftX + spacing * 9 && g.x > leftX);
-      const sharps = glyphs.filter((g) => g.smufl === SMUFL.accSharp && nearestStaff(g.y).staff === s && g.x < leftX + spacing * 9 && g.x > leftX);
-      const key = sharps.length > flats.length ? sharps.length : -flats.length;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    let bestKey = 0; let bestN = 0;
-    for (const [k, n] of counts) if (n > bestN && k !== 0) { bestN = n; bestKey = k; }
-    if (bestKey !== 0) keyCand = { smuflFifths: bestKey };
+    for (const sy of systems) counts.set(sy.fifths, (counts.get(sy.fifths) || 0) + 1);
+    let bestKey = 0; let bestN = -1;
+    for (const [k, n] of counts) if (n > bestN) { bestN = n; bestKey = k; }
+    keyCand = { smuflFifths: bestKey };
   } else if (keyCand) {
     const keyGlyphs = glyphs.filter((g) => keyOf(g) === keyCand.glyphKey);
     const singles = keyGlyphs.filter((g) => !isStacked(g));
@@ -649,6 +644,32 @@ function leftmostStaffX(glyphs, staves, nearestStaff, s) {
     if (nearestStaff(g.y).staff === s && g.x < min) min = g.x;
   }
   return min;
+}
+
+// 段 s の調号（五度圏 fifths: ♯=正/♭=負）。SMuFL前提。
+// 調号の♭/♯は「同じ(x,y)に重ねて」描かれる（重なり数＝調号の数）。
+// 1小節目の臨時記号は別のyに付くので、最大の同一(x,y)クラスタを取れば調号だけが残る。
+function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
+  const clefs = glyphs.filter((g) => (g.smufl === SMUFL.gClef || g.smufl === SMUFL.fClef) && nearestStaff(g.y).staff === staff).map((g) => g.x);
+  const clefX = clefs.length ? Math.min(...clefs) : -Infinity;
+  const heads = deduped.filter((n) => n.staffTop === staff.top).map((n) => n.x);
+  const firstNoteX = heads.length ? Math.min(...heads) : (clefX + spacing * 10);
+  const maxCluster = (smufl) => {
+    const m = new Map();
+    for (const g of glyphs) {
+      if (g.smufl !== smufl) continue;
+      if (nearestStaff(g.y).staff !== staff) continue;
+      if (g.x <= clefX || g.x >= firstNoteX - 3) continue;
+      const k = `${Math.round(g.x)}:${Math.round(g.y)}`;
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    let max = 0;
+    for (const v of m.values()) if (v > max) max = v;
+    return max;
+  };
+  const f = maxCluster(SMUFL.accFlat);
+  const s = maxCluster(SMUFL.accSharp);
+  return s > f ? s : -f;
 }
 
 // PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
@@ -709,20 +730,22 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const chordEvents = [];
   let beat = 0;
   let noteCount = 0;
-  const keyedMidi = (n) => {
+  // 段ごとの調号 fifths を適用（転調対応）。段に検出値が無ければ代表調号 fifths。
+  const keyedMidi = (n, sysFifths) => {
     // 明示的な臨時記号(♯♭♮)があれば絶対指定として最優先（調号を上書き）
     if (n.accidental !== undefined) return n.midi + n.accidental;
-    // 調号による変化。SMuFL無しPDF用フォールバック（同グリフが左にあれば調号方向に変化）
-    let alter = pdfKeyAlter(pdfLetterCFromStep(n.step), fifths);
-    if (n.accSame && fifths !== 0) alter = fifths < 0 ? -1 : 1;
+    const kf = (sysFifths === null || sysFifths === undefined) ? fifths : sysFifths;
+    let alter = pdfKeyAlter(pdfLetterCFromStep(n.step), kf);
+    if (n.accSame && kf !== 0) alter = kf < 0 ? -1 : 1; // SMuFL無しPDF用フォールバック
     return n.midi + alter;
   };
   for (const sys of allSystems) {
+    const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -805,7 +828,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         // 和音グループの各音を同じ拍に置く
         for (const n of it.ns) {
           const beats = Math.min(n.beats || 1, Math.max(0.25, limit));
-          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole });
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
           noteCount += 1;
         }
       }
@@ -843,8 +866,16 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     if (c.chord) dedupChords.push(c);
   }
   const keySig = keyPick ? { fifths, mode: keyPick.mode, tonic: keyPick.tonic } : null;
+  // 転調: メロディの keyFifths が変わる位置を記録
+  const keyChanges = [];
+  for (const n of melody) {
+    const kf = n.keyFifths;
+    if (kf === null || kf === undefined) continue;
+    const last = keyChanges[keyChanges.length - 1];
+    if (!last || last.fifths !== kf) keyChanges.push({ startBeat: n.startBeat, fifths: kf });
+  }
   return {
-    melody, noteCount, keySig, tempo, chordEvents: dedupChords,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };

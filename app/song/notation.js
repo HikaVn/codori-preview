@@ -59,8 +59,13 @@ function createScoreNotation(canvas, options = {}) {
   const CLEF_W = 30;
   const MIN_MEASURE_W = 110;
 
+  function maxAbsFifths() {
+    let mx = Math.abs(state.fifths);
+    for (const n of state.melody) if (Number.isFinite(n.keyFifths)) mx = Math.max(mx, Math.abs(n.keyFifths));
+    return mx;
+  }
   function leftW() {
-    return CLEF_W + Math.abs(state.fifths) * 7 + (state.fifths ? 6 : 0);
+    return CLEF_W + maxAbsFifths() * 7 + (maxAbsFifths() ? 6 : 0);
   }
 
   function totalBars() {
@@ -122,6 +127,23 @@ function createScoreNotation(canvas, options = {}) {
       return;
     }
 
+    // 小節ごとに音符を分け、各小節の調号 fifths を先に求める（行ヘッダで使う＝転調対応）
+    const bpb = state.beatsPerBar;
+    const byBar = new Map();
+    state.melody.forEach((n) => {
+      const bar = Math.floor(n.startBeat / bpb);
+      if (!byBar.has(bar)) byBar.set(bar, []);
+      byBar.get(bar).push(n);
+    });
+    const barFifths = [];
+    let curF = state.fifths;
+    for (let bar = 0; bar < m.bars; bar += 1) {
+      const ns = byBar.get(bar);
+      if (ns && ns.length && Number.isFinite(ns[0].keyFifths)) curF = ns[0].keyFifths;
+      barFifths[bar] = curF;
+    }
+    const lineFifths = (line) => barFifths[line * m.perLine] || 0;
+
     // 五線・小節線・記号
     for (let line = 0; line < m.lines; line += 1) {
       const top = line * LINE_H + TOP_PAD;
@@ -141,13 +163,14 @@ function createScoreNotation(canvas, options = {}) {
       ctx.lineTo(4, top + STAFF_H);
       ctx.stroke();
       drawClef(6, top);
-      // 調号
-      if (state.fifths) {
-        const steps = state.fifths > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
-        const sym = state.fifths > 0 ? "♯" : "♭";
+      // 調号（行ごと。転調する曲はラインで変わる）
+      const lf = lineFifths(line);
+      if (lf) {
+        const steps = lf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
+        const sym = lf > 0 ? "♯" : "♭";
         ctx.fillStyle = "#1f2933";
         ctx.font = "12px sans-serif";
-        for (let i = 0; i < Math.abs(state.fifths); i += 1) {
+        for (let i = 0; i < Math.abs(lf); i += 1) {
           ctx.fillText(sym, CLEF_W + i * 7, stepToY(steps[i], top) + 4);
         }
       }
@@ -167,13 +190,6 @@ function createScoreNotation(canvas, options = {}) {
     }
 
     // 小節ごとに音符を置く（空小節は全休符）
-    const bpb = state.beatsPerBar;
-    const byBar = new Map();
-    state.melody.forEach((n) => {
-      const bar = Math.floor(n.startBeat / bpb);
-      if (!byBar.has(bar)) byBar.set(bar, []);
-      byBar.get(bar).push(n);
-    });
     // タイ等で前の小節から保持される音が、この小節をどこまで覆うか（拍）
     const heldCoverEnd = (barStart) => {
       let end = barStart;
@@ -299,7 +315,8 @@ function createScoreNotation(canvas, options = {}) {
   }
 
   function drawNote(note, x, staffTop, beam) {
-    const { step, alt } = notationMidiToStaff(note.midi, state.fifths < 0);
+    const fifths = Number.isFinite(note.keyFifths) ? note.keyFifths : state.fifths;
+    const { step, alt } = notationMidiToStaff(note.midi, fifths < 0);
     const y = stepToY(step, staffTop);
     const beats = Number(note.beats) || 1;
     const changed = Number.isFinite(note.origMidi) && note.origMidi !== note.midi;
@@ -318,7 +335,7 @@ function createScoreNotation(canvas, options = {}) {
     }
 
     // 臨時記号（調号で説明できる変化は描かない。調号の変化を打ち消すときは♮）
-    const keyA = notationKeyAlter(NOTATION_STEP_LETTER_C[((step % 7) + 7) % 7], state.fifths);
+    const keyA = notationKeyAlter(NOTATION_STEP_LETTER_C[((step % 7) + 7) % 7], fifths);
     if (alt !== keyA) {
       ctx.fillStyle = color;
       ctx.font = "11px sans-serif";
