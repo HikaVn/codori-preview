@@ -184,11 +184,50 @@ function createScoreNotation(canvas, options = {}) {
         continue;
       }
       const pad = 14;
-      for (const note of notes) {
-        const offset = note.startBeat - bar * bpb;
-        const x = o.x + pad + (offset / bpb) * (m.measureW - pad * 2);
-        drawNote(note, x, o.top);
+      const localToX = (lb) => o.x + pad + (lb / bpb) * (m.measureW - pad * 2);
+      const sorted = notes.slice().sort((a, b) => a.startBeat - b.startBeat);
+      let cursor = 0; // 小節内の現在拍（休符の隙間を検出する）
+      for (const note of sorted) {
+        const noteLocal = note.startBeat - bar * bpb;
+        if (noteLocal - cursor > 0.15) {
+          drawRest(localToX((cursor + noteLocal) / 2), o.top, noteLocal - cursor);
+        }
+        drawNote(note, localToX(noteLocal), o.top);
+        cursor = Math.max(cursor, noteLocal + (note.beats || 1));
       }
+      if (bpb - cursor > 0.15) {
+        drawRest(localToX((cursor + bpb) / 2), o.top, bpb - cursor);
+      }
+    }
+  }
+
+  // 休符記号（簡易）。隙間の拍数に応じて 8分／4分／2分休符を描き分ける。
+  function drawRest(x, staffTop, beats) {
+    const midY = staffTop + 2 * SPACING; // 第3線
+    ctx.fillStyle = "#8a96a0";
+    ctx.strokeStyle = "#8a96a0";
+    if (beats >= 1.5) {
+      // 2分休符: 第3線の上に乗る塗りつぶし矩形
+      ctx.fillRect(x - 5, midY - SPACING * 0.55, 10, SPACING * 0.55);
+    } else if (beats >= 0.75) {
+      // 4分休符: ジグザグ
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 3, midY - SPACING);
+      ctx.lineTo(x + 2, midY - SPACING * 0.25);
+      ctx.lineTo(x - 2, midY + SPACING * 0.35);
+      ctx.lineTo(x + 3, midY + SPACING);
+      ctx.stroke();
+    } else {
+      // 8分休符: 旗付きの斜線＋玉
+      ctx.beginPath();
+      ctx.arc(x - 2, midY - SPACING * 0.4, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(x - 0.5, midY - SPACING * 0.35);
+      ctx.lineTo(x + 2.5, midY + SPACING * 0.7);
+      ctx.stroke();
     }
   }
 
