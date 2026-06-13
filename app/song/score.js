@@ -5,6 +5,7 @@
 // pianoroll.js（createPianoRoll）/ dsp.js（fitLyricsToMelody, groupLyricsToMelody）の後に読み込む。
 
 const SCORE_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const SCORE_NOTE_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
 const scoreState = {
   title: "",
@@ -13,8 +14,10 @@ const scoreState = {
   events: [],       // [{type:'section'|'chord', chord, beats, ...}]
   melody: [],       // [{startBeat, beats, midi, origMidi, lyric}]
   lyricLines: [],
+  keySig: null,     // {fifths, mode, tonic} | null（PDF読み取りの調号）
   pianoRoll: null,
-  notation: null
+  notation: null,
+  overlayPages: []  // PDF重ね合わせの {pageNum, marks, scale, dispScale}
 };
 
 const scoreEl = {
@@ -35,6 +38,8 @@ const scoreEl = {
   playMelody: document.querySelector("#score-play-melody"),
   chordEditor: document.querySelector("#score-chord-editor"),
   notationCanvas: document.querySelector("#score-notation"),
+  overlayBlock: document.querySelector("#score-overlay-block"),
+  overlay: document.querySelector("#score-overlay"),
   canvas: document.querySelector("#score-pianoroll"),
   noteTable: document.querySelector("#score-note-table"),
   lyrics: document.querySelector("#score-lyrics"),
@@ -46,7 +51,16 @@ const scoreEl = {
 
 function scoreMidiToName(midi) {
   if (!Number.isFinite(midi)) return "";
-  return SCORE_NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+  const names = scoreState.keySig?.fifths < 0 ? SCORE_NOTE_NAMES_FLAT : SCORE_NOTE_NAMES;
+  return names[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
+function scoreKeySigName() {
+  const k = scoreState.keySig;
+  if (!k) return "";
+  const names = k.fifths < 0 ? SCORE_NOTE_NAMES_FLAT : SCORE_NOTE_NAMES;
+  const acc = k.fifths === 0 ? "" : k.fifths > 0 ? `（♯${k.fifths}）` : `（♭${-k.fifths}）`;
+  return `${names[k.tonic % 12]}${k.mode === "minor" ? "マイナー" : "メジャー"}${acc}`;
 }
 
 function scoreNameToMidi(name) {
@@ -82,6 +96,7 @@ function loadScoreData(parsed, kind) {
   scoreState.title = parsed.title || kind;
   scoreState.bpm = parsed.bpm || 100;
   scoreState.beatsPerBar = parsed.beatsPerBar || 4;
+  scoreState.keySig = parsed.keySig || null;
   // コード列 → events（startBeatは隣との差で拍数化）
   const chords = [...(parsed.chordEvents || [])].sort((a, b) => a.startBeat - b.startBeat);
   scoreState.events = [{ type: "section", label: kind, beats: 0, lineIndex: 0 }];
@@ -94,9 +109,9 @@ function loadScoreData(parsed, kind) {
   } else {
     scoreState.events.push({ type: "chord", chord: null, lyric: "", beats: scoreState.beatsPerBar, lineIndex: 1 });
   }
-  // メロディ（元推定値 origMidi を保持）
+  // メロディ（元推定値 origMidi と、PDF上の位置 page/x/y を保持）
   scoreState.melody = (parsed.melody || [])
-    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "" }))
+    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y }))
     .sort((a, b) => a.startBeat - b.startBeat);
   // 歌詞
   if (parsed.words && parsed.words.length) {
@@ -117,7 +132,8 @@ function loadScoreData(parsed, kind) {
 function renderScore() {
   recomputeScoreStartBeats();
   const chordCount = scoreState.events.filter((e) => e.type === "chord" && e.chord).length;
-  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行`;
+  const keyName = scoreKeySigName();
+  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}`;
   renderScoreChordEditor();
   syncScoreNotation();
   syncScorePianoRoll();
@@ -130,11 +146,12 @@ function syncScoreNotation() {
   if (!scoreState.notation) {
     scoreState.notation = createScoreNotation(scoreEl.notationCanvas, {
       beatsPerBar: scoreState.beatsPerBar,
+      keySig: scoreState.keySig,
       onChange: () => { afterNoteEdit(); },
-      onSelect: (note) => { renderScoreNoteTable(); scrollScoreNoteIntoView(note); }
+      onSelect: (note) => { renderScoreNoteTable(); drawScoreOverlayMarks(); scrollScoreNoteIntoView(note); }
     });
   }
-  scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar });
+  scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar, keySig: scoreState.keySig });
 }
 
 function scrollScoreNoteIntoView(note) {
@@ -143,6 +160,96 @@ function scrollScoreNoteIntoView(note) {
   if (index < 0) return;
   const row = scoreEl.noteTable.children[index];
   row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// --- PDF重ね合わせ（検出位置を元の紙面に丸で表示・クリックで選択） ---
+async function buildScoreOverlay(lib, file) {
+  if (!scoreEl.overlayBlock || !lib || !file) return;
+  // 同じファイルでページ描画済みなら、印だけ描き直す（拍子変更の再解析など）
+  if (scoreState.overlayFile === file && scoreState.overlayPages.length) {
+    drawScoreOverlayMarks();
+    return;
+  }
+  scoreState.overlayFile = file;
+  scoreState.overlayPages = [];
+  scoreEl.overlay.innerHTML = "";
+  try {
+    const data = await file.arrayBuffer();
+    const pdf = await lib.getDocument({ data }).promise;
+    for (let p = 1; p <= pdf.numPages; p += 1) {
+      const page = await pdf.getPage(p);
+      const scale = 1.6;
+      const vp = page.getViewport({ scale });
+      const wrap = document.createElement("div");
+      wrap.className = "overlay-page";
+      const base = document.createElement("canvas");
+      base.width = vp.width;
+      base.height = vp.height;
+      const marks = document.createElement("canvas");
+      marks.width = vp.width;
+      marks.height = vp.height;
+      marks.className = "overlay-marks";
+      wrap.appendChild(base);
+      wrap.appendChild(marks);
+      scoreEl.overlay.appendChild(wrap);
+      await page.render({ canvasContext: base.getContext("2d"), viewport: vp }).promise;
+      scoreState.overlayPages.push({ pageNum: p, marks, scale });
+      marks.addEventListener("pointerdown", (e) => scoreOverlayClick(e, p, marks, scale));
+    }
+    scoreEl.overlayBlock.classList.remove("is-hidden");
+    drawScoreOverlayMarks();
+  } catch (e) {
+    console.warn("overlay render failed", e);
+    scoreEl.overlayBlock.classList.add("is-hidden");
+  }
+}
+
+function hideScoreOverlay() {
+  scoreState.overlayFile = null;
+  scoreState.overlayPages = [];
+  if (scoreEl.overlay) scoreEl.overlay.innerHTML = "";
+  scoreEl.overlayBlock?.classList.add("is-hidden");
+}
+
+function drawScoreOverlayMarks() {
+  for (const op of scoreState.overlayPages) {
+    const ctx = op.marks.getContext("2d");
+    ctx.clearRect(0, 0, op.marks.width, op.marks.height);
+    for (const note of scoreState.melody) {
+      if (note.page !== op.pageNum || !Number.isFinite(note.x)) continue;
+      const selected = scoreState.notation?.getSelected() === note;
+      const changed = Number.isFinite(note.origMidi) && note.origMidi !== note.midi;
+      ctx.beginPath();
+      ctx.arc(note.x * op.scale, note.y * op.scale, 7, 0, Math.PI * 2);
+      ctx.lineWidth = selected ? 3 : 1.6;
+      ctx.strokeStyle = selected ? "#d89b2b" : changed ? "#2e8b57" : "rgba(30,90,168,0.8)";
+      ctx.stroke();
+      if (selected) {
+        ctx.fillStyle = "rgba(216,155,43,0.25)";
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function scoreOverlayClick(event, pageNum, marks, scale) {
+  const rect = marks.getBoundingClientRect();
+  const ratio = marks.width / rect.width; // CSSで縮小表示されているぶんを戻す
+  const px = ((event.clientX - rect.left) * ratio) / scale;
+  const py = ((event.clientY - rect.top) * ratio) / scale;
+  let best = null;
+  let bestD = 9 * 9;
+  for (const note of scoreState.melody) {
+    if (note.page !== pageNum || !Number.isFinite(note.x)) continue;
+    const d = (note.x - px) * (note.x - px) + (note.y - py) * (note.y - py);
+    if (d < bestD) { bestD = d; best = note; }
+  }
+  if (best) {
+    scoreState.notation?.select(best);
+    renderScoreNoteTable();
+    drawScoreOverlayMarks();
+    scrollScoreNoteIntoView(best);
+  }
 }
 
 // --- コード編集表 ---
@@ -213,10 +320,11 @@ function renderScoreNoteTable() {
       if (m !== null) { note.midi = m; }
       afterNoteEdit();
     });
-    // 行クリック → 五線譜側でも選択（入力・ボタン操作は除く）
+    // 行クリック → 五線譜・PDF側でも選択（入力・ボタン操作は除く）
     row.addEventListener("click", (e) => {
       if (e.target.closest("button, input")) return;
       scoreState.notation?.select(note);
+      drawScoreOverlayMarks();
       renderScoreNoteTable();
     });
     scoreEl.noteTable.appendChild(row);
@@ -225,7 +333,8 @@ function renderScoreNoteTable() {
 
 function afterNoteEdit() {
   scoreState.pianoRoll?.setMelody(scoreState.melody, { bpm: Number(scoreEl.bpm.value) || 100, beatsPerBar: scoreState.beatsPerBar });
-  scoreState.notation?.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar });
+  scoreState.notation?.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar, keySig: scoreState.keySig });
+  drawScoreOverlayMarks();
   renderScoreNoteTable();
 }
 
@@ -282,6 +391,8 @@ async function scoreLoadMusicXml(file) {
     const parsed = await loadMusicXmlFile(file);
     if (!parsed) throw new Error("empty");
     hideScoreProgress();
+    scoreState.lastPdfFile = null;
+    hideScoreOverlay();
     loadScoreData(parsed, "MusicXML");
   } catch (error) {
     hideScoreProgress();
@@ -298,10 +409,13 @@ async function scoreLoadPdf(file, beatsPerBar) {
     const text = await extractPdfLyrics(file);
     const parsed = parseScoreText(text);
     let vectorMelody = [];
+    let keySig = null;
+    let pdfLib = null;
     try {
-      const lib = await loadPdfjs();
-      const res = await extractPdfVectorMelody(file, lib.getDocument.bind(lib), lib.OPS, null, bpb);
+      pdfLib = await loadPdfjs();
+      const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, bpb);
       vectorMelody = res.melody || [];
+      keySig = res.keySig || null;
     } catch (e) {
       console.warn("vector note read failed", e);
     }
@@ -314,11 +428,14 @@ async function scoreLoadPdf(file, beatsPerBar) {
       title: parsed.title,
       bpm: parsed.bpm,
       beatsPerBar: bpb,
+      keySig,
       melody: vectorMelody,
       chordEvents: parsed.chords.map((c, i) => ({ startBeat: i, chord: c })),
       words: [],
       lyricLines: parsed.lyricLines
     }, "PDF楽譜");
+    if (pdfLib && vectorMelody.length) buildScoreOverlay(pdfLib, file);
+    else hideScoreOverlay();
   } catch (error) {
     hideScoreProgress();
     console.warn("score pdf failed", error);

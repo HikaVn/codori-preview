@@ -148,13 +148,130 @@ function findStaves(hseg, pageWidth, pageHeight) {
 // 符頭y → トレブル譜の音程（bottom line=E4=64、half-spacing=1ダイアトニック）
 const PDF_LETTERS = ["E", "F", "G", "A", "B", "C", "D"];
 const PDF_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function staffStepFromY(y, staff) {
+  return Math.round((staff.bottom - y) / (staff.spacing / 2)); // 0=bottom line E4
+}
 function midiFromStaffY(y, staff) {
-  const step = Math.round((staff.bottom - y) / (staff.spacing / 2)); // 0=bottom line E4
+  const step = staffStepFromY(y, staff);
   const li = ((step % 7) + 7) % 7;
   const letter = PDF_LETTERS[li];
   // E4起点。E,F,G,A,B は同オクターブ、C,D は次オクターブへ繰り上がる
   const octave = 4 + Math.floor((step + 2) / 7);
   return PDF_SEMI[letter] + (octave + 1) * 12;
+}
+
+// ===== 調号 =====
+// step（E4=0）→ C基準の幹音インデックス（C=0..B=6）
+function pdfLetterCFromStep(step) {
+  return [2, 3, 4, 5, 6, 0, 1][((step % 7) + 7) % 7];
+}
+const PDF_NATURAL_PC = [0, 2, 4, 5, 7, 9, 11]; // C,D,E,F,G,A,B
+const PDF_SHARP_ORDER = [3, 0, 4, 1, 5, 2, 6]; // F,C,G,D,A,E,B
+const PDF_FLAT_ORDER = [6, 2, 5, 1, 4, 0, 3];  // B,E,A,D,G,C,F
+
+// 調号 K（五度圏: ♯=正/♭=負）が幹音 letterC に与える変化（-1/0/+1）
+function pdfKeyAlter(letterC, K) {
+  if (K > 0) return PDF_SHARP_ORDER.slice(0, K).includes(letterC) ? 1 : 0;
+  if (K < 0) return PDF_FLAT_ORDER.slice(0, -K).includes(letterC) ? -1 : 0;
+  return 0;
+}
+
+// 調号グリフの検出。多くのエンジン出力で調号は同一グリフ（font+code）の繰り返し。
+// このタイプのPDFでは個々のY座標が潰れて記録されるため、位置でなく
+// 「クレフと最初の音符の間に、同じグリフが n 個」という形で個数だけを取る。
+// ♭か♯かはあとで調推定（Krumhansl-Kessler）との整合で決める。
+function detectKeySigGlyph(glyphs, staves, noteheadKeys) {
+  const perStaff = [];
+  for (const s of staves) {
+    const mine = glyphs.filter((g) => {
+      let best = null; let bestD = Infinity;
+      for (const t of staves) {
+        const d = Math.abs(g.y - (t.top + t.bottom) / 2);
+        if (d < bestD) { bestD = d; best = t; }
+      }
+      return best === s && bestD < s.spacing * 10;
+    }).sort((a, b) => a.x - b.x);
+    if (!mine.length) continue;
+    const heads = mine.filter((g) => noteheadKeys.has(`${g.font}/${g.code}`));
+    const firstNoteX = heads.length ? heads[0].x : Infinity;
+    const leftmostX = mine[0].x;
+    // クレフ（左端グリフ）と最初の音符の間のグリフを font+code でグループ化
+    const groups = new Map();
+    for (const g of mine) {
+      if (g.x <= leftmostX + 2 || g.x >= firstNoteX - 2) continue;
+      const k = `${g.font}/${g.code}`;
+      if (noteheadKeys.has(k)) continue;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(g);
+    }
+    for (const [k, gs] of groups) {
+      const xs = gs.map((g) => g.x);
+      const spread = Math.max(...xs) - Math.min(...xs);
+      if (gs.length >= 1 && gs.length <= 7 && spread < staves[0].spacing * 8) {
+        perStaff.push({ key: k, count: gs.length, x: Math.min(...xs) });
+      }
+    }
+  }
+  if (!perStaff.length) return null;
+  // 全段で一貫して現れる（過半数）グループが調号。拍子の数字は最初の段にしか出ない。
+  const tally = new Map();
+  for (const c of perStaff) {
+    const k = `${c.key}#${c.count}`;
+    tally.set(k, (tally.get(k) || 0) + 1);
+  }
+  let best = null;
+  for (const [k, n] of tally) {
+    if (n >= Math.max(2, staves.length * 0.6) && (!best || n > best.n)) {
+      const [key, count] = [k.slice(0, k.lastIndexOf("#")), Number(k.slice(k.lastIndexOf("#") + 1))];
+      best = { key, count, n };
+    }
+  }
+  return best ? { glyphKey: best.key, count: best.count } : null;
+}
+
+// Krumhansl-Kessler 調プロファイル
+const PDF_KK_MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const PDF_KK_MIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+// 長調主音pc → 調号（五度圏）。異名同音は複数許容。
+const PDF_SIG_OF_MAJOR_PC = [[0], [-5, 7], [2], [-3], [4], [-1], [6, -6], [1], [-4], [3], [-2], [5, -7]];
+
+function pdfCorrelate(hist, profile, tonic) {
+  const n = 12;
+  let sa = 0; let sb = 0;
+  for (let i = 0; i < n; i += 1) { sa += hist[i]; sb += profile[i]; }
+  const ma = sa / n; const mb = sb / n;
+  let num = 0; let da = 0; let db = 0;
+  for (let i = 0; i < n; i += 1) {
+    const a = hist[i] - ma;
+    const b = profile[((i - tonic) % 12 + 12) % 12] - mb;
+    num += a * b; da += a * a; db += b * b;
+  }
+  return da > 0 && db > 0 ? num / Math.sqrt(da * db) : 0;
+}
+
+// 仮説調号 K ごとに「letters＋K で復元したメロディ」の調をKK推定し、
+// 推定調の調号が K 自身と一致する（自己整合する）仮説のうち相関最大を採用。
+function choosePdfKeySignature(steps, hypotheses) {
+  let best = null;
+  for (const K of hypotheses) {
+    const hist = new Array(12).fill(0);
+    for (const s of steps) {
+      const letterC = pdfLetterCFromStep(s.step);
+      const pc = ((PDF_NATURAL_PC[letterC] + pdfKeyAlter(letterC, K)) % 12 + 12) % 12;
+      hist[pc] += s.beats || 1;
+    }
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      const candidates = [
+        { r: pdfCorrelate(hist, PDF_KK_MAJ, tonic), majorPc: tonic, mode: "major" },
+        { r: pdfCorrelate(hist, PDF_KK_MIN, tonic), majorPc: (tonic + 3) % 12, mode: "minor" }
+      ];
+      for (const c of candidates) {
+        if (!PDF_SIG_OF_MAJOR_PC[c.majorPc].includes(K)) continue;
+        if (!best || c.r > best.r) best = { r: c.r, fifths: K, tonic, mode: c.mode };
+      }
+    }
+  }
+  return best;
 }
 
 // ページ単位でベクター譜を読む → メロディノート（実験的）。音価も推定する。
@@ -212,7 +329,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     } else {
       beats = 1;                       // 塗り＋幹=4分（既定）
     }
-    notes.push({ x: h.x, staffTop: staff.top, midi, beats });
+    notes.push({ x: h.x, y: h.y, staffTop: staff.top, step: staffStepFromY(h.y, staff), midi, beats });
   }
   // 重複符頭の除去
   notes.sort((a, b) => (a.staffTop - b.staffTop) || (a.x - b.x));
@@ -240,7 +357,24 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     }
     return { top: s.top, bottom: s.bottom, bars, notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x) };
   });
-  return { systems, staves: staves.length };
+
+  // 調号グリフ（個数）と、音符の左に付く同グリフの臨時記号
+  const noteheadKeys = new Set(headList.map((g) => `${g.font}/${g.code}`));
+  const keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
+  if (keyCand) {
+    const keyGlyphs = glyphs.filter((g) => `${g.font}/${g.code}` === keyCand.glyphKey);
+    // 同一座標に重なったグリフ（調号本体）を除き、単独のものだけ臨時記号候補に
+    const stacks = new Map();
+    for (const g of keyGlyphs) {
+      const k = `${Math.round(g.x)}/${Math.round(g.y)}`;
+      stacks.set(k, (stacks.get(k) || 0) + 1);
+    }
+    const singles = keyGlyphs.filter((g) => (stacks.get(`${Math.round(g.x)}/${Math.round(g.y)}`) || 0) < 2);
+    for (const n of deduped) {
+      n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
+    }
+  }
+  return { systems, staves: staves.length, keyCand };
 }
 
 // PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
@@ -252,26 +386,50 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const pageW = viewport0.viewBox[2];
   const bpb = Number(beatsPerBar) || 4;
   const allSystems = [];
+  const keyCands = [];
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { systems } = readVectorScorePage(ol, OPS, pageH, pageW);
-    systems.forEach((s) => allSystems.push(s));
+    const { systems, keyCand } = readVectorScorePage(ol, OPS, pageH, pageW);
+    if (keyCand) keyCands.push(keyCand);
+    systems.forEach((s) => allSystems.push({ ...s, page: p }));
   }
+
+  // 調号: グリフ個数（ページ多数決）で仮説を絞り、♭か♯かはKK調推定との自己整合で決める
+  const allNotes = allSystems.flatMap((s) => s.notes);
+  let sigCount = null;
+  if (keyCands.length) {
+    const tally = new Map();
+    for (const c of keyCands) tally.set(c.count, (tally.get(c.count) || 0) + 1);
+    sigCount = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }
+  const hypotheses = sigCount ? [-sigCount, sigCount] : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+  const keyPick = allNotes.length ? choosePdfKeySignature(allNotes, hypotheses) : null;
+  const fifths = keyPick ? keyPick.fifths : 0;
 
   // 各システムを上から、システム内は小節（小節線区切り）ごとに。
   // 空小節は休符として beatsPerBar ぶん進める＝出だしの休符小節も正しく前に入る。
   const melody = [];
   let beat = 0;
   let noteCount = 0;
+  const keyedMidi = (n) => {
+    // 調号による変化。音符の左に調号と同じグリフ（臨時記号）があればそちらを優先
+    let alter = pdfKeyAlter(pdfLetterCFromStep(n.step), fifths);
+    if (n.accSame && fifths !== 0) alter = fifths < 0 ? -1 : 1;
+    return n.midi + alter;
+  };
   for (const sys of allSystems) {
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
+    const place = (n, startBeat) => {
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y });
+      noteCount += 1;
+    };
     // 小節範囲 [edges[i], edges[i+1]]。小節線が無い場合はシステム全体を1小節扱い。
     if (edges.length < 2) {
       // 小節線なし: 音符を音価順に詰める
-      sys.notes.forEach((n) => { melody.push({ startBeat: beat, beats: n.beats || 1, midi: n.midi }); beat += n.beats || 1; noteCount += 1; });
+      sys.notes.forEach((n) => { place(n, beat); beat += n.beats || 1; });
       continue;
     }
     // 各システムは「最初の小節線より前の領域」も1小節（行頭の小節：ト音記号・調号・拍子・出だしの休符を含む）。
@@ -280,9 +438,8 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       let local = 0;
       for (const n of inBar) {
-        melody.push({ startBeat: beat + local, beats: n.beats || 1, midi: n.midi });
+        place(n, beat + local);
         local += n.beats || 1;
-        noteCount += 1;
       }
       beat += bpb; // 小節1つぶん進める（空小節＝休符でも進む）
     };
@@ -291,5 +448,6 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       placeBar(edges[i], edges[i + 1]);
     }
   }
-  return { melody, noteCount };
+  const keySig = keyPick ? { fifths, mode: keyPick.mode, tonic: keyPick.tonic } : null;
+  return { melody, noteCount, keySig, pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH };
 }

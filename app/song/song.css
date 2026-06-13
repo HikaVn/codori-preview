@@ -1730,6 +1730,38 @@ button {
   touch-action: none;
 }
 
+/* PDF重ね合わせ（検出位置の確認） */
+.score-overlay {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f4f6f8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.overlay-page {
+  position: relative;
+  line-height: 0;
+  box-shadow: 0 1px 4px rgba(31, 41, 51, 0.15);
+}
+
+.overlay-page canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.overlay-page .overlay-marks {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
 .word-chips {
   display: flex;
   gap: 6px;

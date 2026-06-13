@@ -3,16 +3,26 @@
 // 音符クリックで選択（onSelect で対応表と連動）、上下ドラッグで線・間にスナップして音高を変更（onChange）。
 // song.js（playTone, ensureAudioContext, midiToFrequency）の後に読み込む。
 
-// midi → 五線上の位置（ト音記号、下第1線=E4 を step 0 とする幹音段数と♯の有無）
-const NOTATION_PC_LETTER = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C基準の幹音インデックス
-const NOTATION_PC_SHARP = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+// midi → 五線上の位置（ト音記号、下第1線=E4 を step 0 とする幹音段数と変化記号）
+// ♯系（既定）と♭系（フラット調）の2通りの綴りに対応する。
+const NOTATION_PC_LETTER = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];       // C基準の幹音（♯綴り）
+const NOTATION_PC_ALT = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];          // ♯綴りでの変化（+1）
+const NOTATION_PC_LETTER_FLAT = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];  // ♭綴り
+const NOTATION_PC_ALT_FLAT = [0, -1, 0, -1, 0, 0, -1, 0, -1, 0, -1, 0];
 const NOTATION_E_OFFSETS = [0, 1, 3, 5, 7, 8, 10]; // E,F,G,A,B,C,D の E からの半音数
+const NOTATION_STEP_LETTER_C = [2, 3, 4, 5, 6, 0, 1]; // step%7 → C基準の幹音
+const NOTATION_SHARP_LETTERS = [3, 0, 4, 1, 5, 2, 6]; // F,C,G,D,A,E,B
+const NOTATION_FLAT_LETTERS = [6, 2, 5, 1, 4, 0, 3];  // B,E,A,D,G,C,F
+const NOTATION_SHARP_STEPS = [8, 5, 9, 6, 3, 7, 4];   // 調号の♯の描画位置（step）
+const NOTATION_FLAT_STEPS = [4, 7, 3, 6, 2, 5, 1];    // 調号の♭の描画位置（step）
 
-function notationMidiToStaff(midi) {
+function notationMidiToStaff(midi, useFlats) {
   const pc = ((midi % 12) + 12) % 12;
   const oct = Math.floor(midi / 12) - 1;
-  const step = (oct - 4) * 7 + (NOTATION_PC_LETTER[pc] - 2); // E4 = step 0
-  return { step, sharp: NOTATION_PC_SHARP[pc] === 1 };
+  const letter = useFlats ? NOTATION_PC_LETTER_FLAT[pc] : NOTATION_PC_LETTER[pc];
+  const alt = useFlats ? NOTATION_PC_ALT_FLAT[pc] : NOTATION_PC_ALT[pc];
+  const step = (oct - 4) * 7 + (letter - 2); // E4 = step 0
+  return { step, alt };
 }
 
 function notationStaffStepToMidi(step) {
@@ -21,11 +31,19 @@ function notationStaffStepToMidi(step) {
   return 64 + oct * 12 + NOTATION_E_OFFSETS[idx];
 }
 
+// 調号（五度圏 fifths）が幹音に与える変化
+function notationKeyAlter(letterC, fifths) {
+  if (fifths > 0) return NOTATION_SHARP_LETTERS.slice(0, fifths).includes(letterC) ? 1 : 0;
+  if (fifths < 0) return NOTATION_FLAT_LETTERS.slice(0, -fifths).includes(letterC) ? -1 : 0;
+  return 0;
+}
+
 function createScoreNotation(canvas, options = {}) {
   const ctx = canvas.getContext("2d");
   const state = {
     melody: [],
     beatsPerBar: options.beatsPerBar || 4,
+    fifths: options.keySig?.fifths || 0,   // 調号（五度圏: ♯=正/♭=負）
     onChange: options.onChange || (() => {}),
     onSelect: options.onSelect || (() => {}),
     selected: null,   // note オブジェクト参照
@@ -41,6 +59,10 @@ function createScoreNotation(canvas, options = {}) {
   const CLEF_W = 30;
   const MIN_MEASURE_W = 110;
 
+  function leftW() {
+    return CLEF_W + Math.abs(state.fifths) * 7 + (state.fifths ? 6 : 0);
+  }
+
   function totalBars() {
     const end = state.melody.reduce((m, n) => Math.max(m, n.startBeat + (n.beats || 1)), 0);
     return Math.max(1, Math.ceil(end / state.beatsPerBar || 1));
@@ -49,16 +71,17 @@ function createScoreNotation(canvas, options = {}) {
   function layoutMetrics() {
     const cssW = Math.max(canvas.parentElement?.clientWidth || 320, 280);
     const bars = totalBars();
-    const perLine = Math.max(1, Math.min(bars, Math.floor((cssW - CLEF_W - 6) / MIN_MEASURE_W)));
-    const measureW = (cssW - CLEF_W - 6) / perLine;
+    const lw = leftW();
+    const perLine = Math.max(1, Math.min(bars, Math.floor((cssW - lw - 6) / MIN_MEASURE_W)));
+    const measureW = (cssW - lw - 6) / perLine;
     const lines = Math.ceil(bars / perLine);
-    return { cssW, cssH: lines * LINE_H + 6, bars, perLine, measureW, lines };
+    return { cssW, cssH: lines * LINE_H + 6, bars, perLine, measureW, lines, lw };
   }
 
   function barOrigin(bar, m) {
     const line = Math.floor(bar / m.perLine);
     const col = bar % m.perLine;
-    return { x: CLEF_W + col * m.measureW, top: line * LINE_H + TOP_PAD, col, line };
+    return { x: m.lw + col * m.measureW, top: line * LINE_H + TOP_PAD, col, line };
   }
 
   function stepToY(step, staffTop) {
@@ -103,7 +126,7 @@ function createScoreNotation(canvas, options = {}) {
     for (let line = 0; line < m.lines; line += 1) {
       const top = line * LINE_H + TOP_PAD;
       const barsInLine = Math.min(m.perLine, m.bars - line * m.perLine);
-      const right = CLEF_W + barsInLine * m.measureW;
+      const right = m.lw + barsInLine * m.measureW;
       ctx.strokeStyle = "#9aa7b0";
       ctx.lineWidth = 1;
       for (let i = 0; i < 5; i += 1) {
@@ -118,8 +141,18 @@ function createScoreNotation(canvas, options = {}) {
       ctx.lineTo(4, top + STAFF_H);
       ctx.stroke();
       drawClef(6, top);
+      // 調号
+      if (state.fifths) {
+        const steps = state.fifths > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
+        const sym = state.fifths > 0 ? "♯" : "♭";
+        ctx.fillStyle = "#1f2933";
+        ctx.font = "12px sans-serif";
+        for (let i = 0; i < Math.abs(state.fifths); i += 1) {
+          ctx.fillText(sym, CLEF_W + i * 7, stepToY(steps[i], top) + 4);
+        }
+      }
       for (let c = 0; c <= barsInLine; c += 1) {
-        const x = CLEF_W + c * m.measureW;
+        const x = m.lw + c * m.measureW;
         ctx.beginPath();
         ctx.moveTo(x, top);
         ctx.lineTo(x, top + STAFF_H);
@@ -129,7 +162,7 @@ function createScoreNotation(canvas, options = {}) {
       ctx.fillStyle = "#62717d";
       ctx.font = "9px sans-serif";
       for (let c = 0; c < barsInLine; c += 1) {
-        ctx.fillText(String(line * m.perLine + c + 1), CLEF_W + c * m.measureW + 2, top - 6);
+        ctx.fillText(String(line * m.perLine + c + 1), m.lw + c * m.measureW + 2, top - 6);
       }
     }
 
@@ -160,7 +193,7 @@ function createScoreNotation(canvas, options = {}) {
   }
 
   function drawNote(note, x, staffTop) {
-    const { step, sharp } = notationMidiToStaff(note.midi);
+    const { step, alt } = notationMidiToStaff(note.midi, state.fifths < 0);
     const y = stepToY(step, staffTop);
     const beats = Number(note.beats) || 1;
     const changed = Number.isFinite(note.origMidi) && note.origMidi !== note.midi;
@@ -178,11 +211,12 @@ function createScoreNotation(canvas, options = {}) {
       ctx.beginPath(); ctx.moveTo(x - 7, ly); ctx.lineTo(x + 7, ly); ctx.stroke();
     }
 
-    // 臨時記号
-    if (sharp) {
+    // 臨時記号（調号で説明できる変化は描かない。調号の変化を打ち消すときは♮）
+    const keyA = notationKeyAlter(NOTATION_STEP_LETTER_C[((step % 7) + 7) % 7], state.fifths);
+    if (alt !== keyA) {
       ctx.fillStyle = color;
       ctx.font = "11px sans-serif";
-      ctx.fillText("♯", x - 14, y + 4);
+      ctx.fillText(alt === 1 ? "♯" : alt === -1 ? "♭" : "♮", x - 14, y + 4);
     }
 
     // 符頭（2拍以上は白玉、4拍以上は全音符=符幹なし）
@@ -264,9 +298,11 @@ function createScoreNotation(canvas, options = {}) {
     }
     const dSteps = Math.round((state.drag.startY - my) / (SPACING / 2));
     if (dSteps !== 0) state.drag.moved = true;
-    // 線・間にスナップ（幹音）。半音の微調整は対応表の±で。
-    const startStep = notationMidiToStaff(state.drag.startMidi).step;
-    state.drag.layout.note.midi = notationStaffStepToMidi(startStep + dSteps);
+    // 線・間にスナップ（調号を反映した音）。半音の微調整は対応表の±で。
+    const startStep = notationMidiToStaff(state.drag.startMidi, state.fifths < 0).step;
+    const step = startStep + dSteps;
+    const keyA = notationKeyAlter(NOTATION_STEP_LETTER_C[((step % 7) + 7) % 7], state.fifths);
+    state.drag.layout.note.midi = notationStaffStepToMidi(step) + keyA;
     render();
   });
 
@@ -296,6 +332,7 @@ function createScoreNotation(canvas, options = {}) {
     setMelody(melody, opts = {}) {
       state.melody = melody;
       if (opts.beatsPerBar) state.beatsPerBar = opts.beatsPerBar;
+      if (opts.keySig !== undefined) state.fifths = opts.keySig?.fifths || 0;
       if (!melody.includes(state.selected)) state.selected = null;
       render();
     },
@@ -312,5 +349,5 @@ function createScoreNotation(canvas, options = {}) {
 
 // Nodeテスト用
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { notationMidiToStaff, notationStaffStepToMidi };
+  module.exports = { notationMidiToStaff, notationStaffStepToMidi, notationKeyAlter };
 }

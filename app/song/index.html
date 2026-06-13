@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260612-notation-v1">
+    <link rel="stylesheet" href="./song.css?v=20260613-keysig-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -561,6 +561,12 @@
             <canvas id="score-notation" class="notation-canvas"></canvas>
           </div>
 
+          <div class="is-hidden" id="score-overlay-block">
+            <h3 class="score-subhead">PDFと見くらべ（検出位置）</h3>
+            <p class="hint">読み取れた音符の位置を、元のPDFに丸で重ねたよ。<b>丸が無いところは読み取れなかった音符</b>。丸をクリックすると下の表へ飛ぶ（青=そのまま、緑=修正済み、オレンジ=選択中）。</p>
+            <div class="score-overlay" id="score-overlay"></div>
+          </div>
+
           <h3 class="score-subhead">コード</h3>
           <div class="import-chord-editor" id="score-chord-editor"></div>
 
@@ -585,15 +591,15 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260612-notation-v1"></script>
-    <script src="./dsp.js?v=20260612-notation-v1"></script>
-    <script src="./pianoroll.js?v=20260612-notation-v1"></script>
-    <script src="./notation.js?v=20260612-notation-v1"></script>
-    <script src="./musicxml.js?v=20260612-notation-v1"></script>
-    <script src="./pdfscore.js?v=20260612-notation-v1"></script>
-    <script src="./import.js?v=20260612-notation-v1"></script>
-    <script src="./transcribe.js?v=20260612-notation-v1"></script>
-    <script src="./score.js?v=20260612-notation-v1"></script>
-    <script src="./practice.js?v=20260612-notation-v1"></script>
+    <script src="./song.js?v=20260613-keysig-v1"></script>
+    <script src="./dsp.js?v=20260613-keysig-v1"></script>
+    <script src="./pianoroll.js?v=20260613-keysig-v1"></script>
+    <script src="./notation.js?v=20260613-keysig-v1"></script>
+    <script src="./musicxml.js?v=20260613-keysig-v1"></script>
+    <script src="./pdfscore.js?v=20260613-keysig-v1"></script>
+    <script src="./import.js?v=20260613-keysig-v1"></script>
+    <script src="./transcribe.js?v=20260613-keysig-v1"></script>
+    <script src="./score.js?v=20260613-keysig-v1"></script>
+    <script src="./practice.js?v=20260613-keysig-v1"></script>
   </body>
 </html>
