@@ -65,7 +65,7 @@ function createScoreNotation(canvas, options = {}) {
     return mx;
   }
   function leftW() {
-    return CLEF_W + maxAbsFifths() * 7 + (maxAbsFifths() ? 6 : 0);
+    return CLEF_W + maxAbsFifths() * 11 + (maxAbsFifths() ? 9 : 0);
   }
 
   function totalBars() {
@@ -169,9 +169,9 @@ function createScoreNotation(canvas, options = {}) {
         const steps = lf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
         const sym = lf > 0 ? "♯" : "♭";
         ctx.fillStyle = "#1f2933";
-        ctx.font = "12px sans-serif";
+        ctx.font = "18px sans-serif";
         for (let i = 0; i < Math.abs(lf); i += 1) {
-          ctx.fillText(sym, CLEF_W + i * 7, stepToY(steps[i], top) + 4);
+          ctx.fillText(sym, CLEF_W + i * 11, stepToY(steps[i], top) + 6);
         }
       }
       for (let c = 0; c <= barsInLine; c += 1) {
