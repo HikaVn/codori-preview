@@ -537,10 +537,15 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   // ===== SMuFL があれば、休符の拍数・臨時記号・付点を確定する =====
   const hasSmufl = glyphs.some((g) => isSmuflNotehead(g.smufl));
   if (hasSmufl) {
-    // 休符は SMuFL コードで拾い直す（拍数つき・五線中段・左端ゾーン除外）
+    // 休符は SMuFL コードで拾い直す（拍数つき・五線中段・左端ゾーン除外）。
+    // 付点休符（付点4分休符など）は右の付点グリフで1.5倍にする（音符と同じ扱い）。
     restList = glyphs
       .filter((g) => SMUFL_REST_BEATS[g.smufl] !== undefined && restQualifies(g))
-      .map((g) => ({ ...g, restBeats: SMUFL_REST_BEATS[g.smufl] }));
+      .map((g) => {
+        const dot = glyphs.find((d) => d.smufl === SMUFL.augmentationDot &&
+          d.x - g.x > 1.5 && d.x - g.x < 12 && Math.abs(d.y - g.y) < spacing * 1.2);
+        return { ...g, restBeats: SMUFL_REST_BEATS[g.smufl] * (dot ? 1.5 : 1), dotted: !!dot };
+      });
     for (const n of deduped) {
       // 臨時記号: 音符の左 1.5〜13px・ほぼ同高（調号ゾーンは離れているので拾わない）
       const acc = glyphs.find((g) => SMUFL_ACC_ALTER[g.smufl] !== undefined &&
