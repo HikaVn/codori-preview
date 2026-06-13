@@ -26,7 +26,9 @@ function extractPageVectors(ol, OPS, pageH) {
   const hseg = [];
   const vseg = [];
   const beams = [];
+  const arcs = []; // タイ/スラー候補（曲線パス）
   let pend = [];
+  let hasCurve = false;
   let bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
   for (let i = 0; i < ol.fnArray.length; i += 1) {
     const fn = ol.fnArray[i];
@@ -55,6 +57,7 @@ function extractPageVectors(ol, OPS, pageH) {
       let k = 0;
       let cur = null;
       pend = [];
+      hasCurve = false;
       bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
       const track = (p) => {
         bbox.minx = Math.min(bbox.minx, p[0]); bbox.maxx = Math.max(bbox.maxx, p[0]);
@@ -63,7 +66,7 @@ function extractPageVectors(ol, OPS, pageH) {
       for (const op of ops) {
         if (op === OPS.moveTo) { cur = pdfApply(ctm, co[k], co[k + 1]); k += 2; track(cur); }
         else if (op === OPS.lineTo) { const p = pdfApply(ctm, co[k], co[k + 1]); k += 2; if (cur) pend.push([cur, p]); cur = p; track(p); }
-        else if (op === OPS.curveTo) { k += 6; cur = pdfApply(ctm, co[k - 2], co[k - 1]); track(cur); }
+        else if (op === OPS.curveTo) { hasCurve = true; k += 6; cur = pdfApply(ctm, co[k - 2], co[k - 1]); track(cur); }
         else if (op === OPS.rectangle) { const x = co[k]; const y = co[k + 1]; const w = co[k + 2]; const h = co[k + 3]; k += 4; const a = pdfApply(ctm, x, y); const b = pdfApply(ctm, x + w, y + h); pend.push([a, [b[0], a[1]]]); pend.push([a, [a[0], b[1]]]); track(a); track(b); }
       }
     } else if (fn === OPS.stroke || fn === OPS.eoFillStroke || fn === OPS.fill || fn === OPS.eoFill) {
@@ -81,10 +84,14 @@ function extractPageVectors(ol, OPS, pageH) {
           beams.push({ x0: bbox.minx, x1: bbox.maxx, y: pageH - (bbox.miny + bbox.maxy) / 2 });
         }
       }
+      // タイ/スラー候補: 曲線を含む横長・薄い弧
+      if (hasCurve && bbox.maxx - bbox.minx > 8 && bbox.maxx - bbox.minx < 120 && bbox.maxy - bbox.miny < 8) {
+        arcs.push({ x0: bbox.minx, x1: bbox.maxx, y: pageH - (bbox.miny + bbox.maxy) / 2 });
+      }
       pend = [];
     }
   }
-  return { glyphs, hseg, vseg, beams };
+  return { glyphs, hseg, vseg, beams, arcs };
 }
 
 // ===== SMuFL（音楽記号の標準コードポイント）=====
@@ -326,7 +333,7 @@ function choosePdfKeySignature(steps, hypotheses) {
 //  ・白玉/黒玉 = 連桁・旗と共起しないコードが白玉（2分・全音符）
 //  ・休符 = 五線の中段に居て符幹に付かないグリフ → 小節内の拍配分に使う
 function readVectorScorePage(ol, OPS, pageH, pageW) {
-  const { glyphs: rawGlyphs, hseg, vseg, beams } = extractPageVectors(ol, OPS, pageH);
+  const { glyphs: rawGlyphs, hseg, vseg, beams, arcs } = extractPageVectors(ol, OPS, pageH);
   const staves = findStaves(hseg, pageW, pageH);
   if (!staves.length || !rawGlyphs.length) {
     return { systems: [], staves: 0, keyCand: null };
@@ -465,6 +472,19 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       continue;
     }
     deduped.push(n);
+  }
+
+  // タイ: 横長の弧の両端に「同じ高さの符頭」があれば、右の音を左の音へつなぐ。
+  // （高さが違えばスラー＝音価に影響しないので無視）。タイは小節をまたぐこともある。
+  for (const a of arcs || []) {
+    const near = (x) => deduped
+      .filter((n) => Math.abs(n.y - a.y) < spacing * 1.2 && n.x > x - 8 && n.x < x + 8)
+      .sort((p, q) => Math.abs(p.x - x) - Math.abs(q.x - x))[0];
+    const left = near(a.x0);
+    const right = near(a.x1);
+    if (left && right && left !== right && left.x < right.x && Math.abs(left.midi - right.midi) === 0) {
+      right.tiedFromPrev = true;
+    }
   }
 
   // 休符候補: 符頭と同じ音楽フォントで、五線の中段に居て、符幹に付かないコード。
@@ -690,7 +710,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -764,7 +784,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const next = noteItems[i + 1];
         const limit = (next && next.onset > it.onset ? next.onset : bpb) - it.onset;
         const beats = Math.min(it.n.beats || 1, Math.max(0.25, limit));
-        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y });
+        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y, tiedFromPrev: it.n.tiedFromPrev });
         noteCount += 1;
       }
       beat += bpb;
@@ -775,6 +795,23 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     }
     assignChords();
   }
+
+  // タイの結合: タイ印のある音を、直前の同音へまとめる（音価を加算し、別onsetを消す）
+  melody.sort((a, b) => a.startBeat - b.startBeat);
+  const tied = [];
+  for (const n of melody) {
+    const prev = tied[tied.length - 1];
+    if (n.tiedFromPrev && prev && prev.midi === n.midi &&
+        Math.abs(prev.startBeat + prev.beats - n.startBeat) < 0.3) {
+      prev.beats += n.beats; // 1音に結合
+      noteCount -= 1;
+      continue;
+    }
+    tied.push(n);
+  }
+  melody.length = 0;
+  melody.push(...tied);
+
   // 同じ小節に重複するコードは1つに（最初のもの）
   chordEvents.sort((a, b) => a.startBeat - b.startBeat);
   const dedupChords = [];

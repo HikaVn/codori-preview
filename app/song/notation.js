@@ -174,13 +174,26 @@ function createScoreNotation(canvas, options = {}) {
       if (!byBar.has(bar)) byBar.set(bar, []);
       byBar.get(bar).push(n);
     });
+    // タイ等で前の小節から保持される音が、この小節をどこまで覆うか（拍）
+    const heldCoverEnd = (barStart) => {
+      let end = barStart;
+      for (const n of state.melody) {
+        if (n.startBeat < barStart && n.startBeat + (n.beats || 1) > end) {
+          end = Math.min(barStart + bpb, n.startBeat + n.beats);
+        }
+      }
+      return end - barStart; // 0〜bpb
+    };
     for (let bar = 0; bar < m.bars; bar += 1) {
       const o = barOrigin(bar, m);
       const notes = byBar.get(bar);
+      const held = heldCoverEnd(bar * bpb); // この小節の頭から覆われている拍
       if (!notes || !notes.length) {
-        // 全休符（上から2本目の線の下にぶら下げる）
-        ctx.fillStyle = "#1f2933";
-        ctx.fillRect(o.x + m.measureW / 2 - 6, o.top + SPACING, 12, SPACING * 0.5);
+        // 保持音で小節全体が覆われていれば休符は描かない（タイの続き）
+        if (held < bpb - 0.15) {
+          ctx.fillStyle = "#1f2933";
+          ctx.fillRect(o.x + m.measureW / 2 - 6, o.top + SPACING, 12, SPACING * 0.5);
+        }
         continue;
       }
       const pad = 14;
@@ -191,8 +204,8 @@ function createScoreNotation(canvas, options = {}) {
         const local = note.startBeat - bar * bpb;
         return { note, local, x: localToX(local), base: baseOf(Number(note.beats) || 1) };
       });
-      // 休符（音符間・小節端の隙間）
-      let cursor = 0;
+      // 休符（音符間・小節端の隙間）。小節頭が保持音で覆われている分は飛ばす。
+      let cursor = held;
       for (const d of placed) {
         if (d.local - cursor > 0.15) drawRest(localToX((cursor + d.local) / 2), o.top, d.local - cursor);
         cursor = Math.max(cursor, d.local + (Number(d.note.beats) || 1));
