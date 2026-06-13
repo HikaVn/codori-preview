@@ -380,10 +380,11 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   const stat = new Map();
   for (const g of glyphs) {
     const k = keyOf(g);
-    if (!stat.has(k)) stat.set(k, { count: 0, ys: new Set(), stemEnd: 0, beamEnd: 0, flagLike: 0 });
+    if (!stat.has(k)) stat.set(k, { count: 0, ys: new Set(), xs: new Set(), stemEnd: 0, beamEnd: 0, flagLike: 0 });
     const s = stat.get(k);
     s.count += 1;
     s.ys.add(Math.round(g.y));
+    s.xs.add(Math.round(g.x));
   }
   for (const g of glyphs) {
     const v = stemAt(g);
@@ -427,9 +428,29 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       openKey = k;
     }
   }
+  // 全音符（符幹なしの開放符頭）= 符幹がほぼ無く、音高(y)も位置(x)もばらける符頭。
+  // フォントは符頭コードを近い番号に固めるので、黒玉/白玉に番号が近いものを選ぶ
+  // （調号の♭やクレフは同じxに固まる＝xがばらけない、で除外できる）。
+  const fontOf = (k) => k.slice(0, k.lastIndexOf("/"));
+  const numOf = (k) => parseInt(k.slice(k.lastIndexOf("/") + 1), 10) || 0;
+  const fNum = numOf(filledKey);
+  const oNum = openKey ? numOf(openKey) : fNum;
+  let wholeKey = null;
+  let wholeDist = Infinity;
+  for (const [k, s] of stat) {
+    if (k === filledKey || k === openKey) continue;
+    if (fontOf(k) !== fontOf(filledKey)) continue;
+    const stemRate = s.stemEnd / s.count;
+    const yDiv = s.ys.size / s.count;
+    const xDiv = s.xs.size / s.count;
+    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6) {
+      const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
+      if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
+    }
+  }
 
   const headList = glyphs
-    .filter((g) => keyOf(g) === filledKey || keyOf(g) === openKey)
+    .filter((g) => keyOf(g) === filledKey || keyOf(g) === openKey || keyOf(g) === wholeKey)
     .map((g) => ({ ...g, filled: keyOf(g) === filledKey }));
 
   // 重なり合うグリフ（調号・拍子の数字などは同座標に積まれる）
