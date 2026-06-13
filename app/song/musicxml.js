@@ -305,28 +305,35 @@ function parseScoreText(rawText) {
   let bpm = null;
   let title = "";
   const sectionRe = /^[A-Z]$/; // 単独の大文字＝セクション記号
+  // タイトル・サブタイトル・作曲者は譜面の最上部（最初の音楽要素より前）にある。
+  // 最初の音楽要素（テンポ/コード行/小節番号）が出るまでの日本語はタイトル群として歌詞から除外。
+  let seenMusic = false;
   lines.forEach((line, i) => {
     // テンポは「♩= 120」「= 120」のように＝を伴う最初の数字だけ採用（小節番号や単独数字は拾わない）
     const tempoMatch = line.match(/[=＝]\s*(\d{2,3})\b/);
     if (bpm === null && tempoMatch && Number(tempoMatch[1]) >= 40 && Number(tempoMatch[1]) <= 240) {
       bpm = Number(tempoMatch[1]);
+      seenMusic = true;
       return;
     }
     if (/^\d{1,3}$/.test(line)) {
+      seenMusic = true;
       return; // 小節番号・ページ番号は捨てる
-    }
-    if (!title && i <= 1 && /[ぁ-んァ-ヶ一-龠]/.test(line)) {
-      title = line;
-      return;
     }
     if (sectionRe.test(line) || /^(Swing|Slow|Fast|Ballad|Bossa)$/i.test(line)) {
       return; // セクション/スタイル表記は捨てる
     }
     if (looksLikeChordRun(line)) {
+      seenMusic = true;
       tokenizeChordRun(line).forEach((c) => chords.push(c));
       return;
     }
-    // 日本語を含む行＝歌詞とみなす
+    // 最初の音楽要素より前の日本語＝タイトル/サブタイトル（最初の1つだけタイトルに記録）
+    if (!seenMusic && /[ぁ-んァ-ヶ一-龠]/.test(line)) {
+      if (!title) title = line;
+      return;
+    }
+    // 音楽が始まって以降の日本語を含む行＝歌詞とみなす
     if (/[ぁ-んァ-ヶ一-龠ー]/.test(line) && line.length >= 2) {
       lyricLines.push(line);
     }
