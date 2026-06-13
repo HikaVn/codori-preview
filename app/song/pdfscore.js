@@ -422,33 +422,38 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     deduped.push(n);
   }
 
-  // 休符候補: 符頭と同じ音楽フォントで、五線の中段に居て、符幹に付かず、
-  // 重なりグリフ（調号・拍子）でも、符頭の直前の臨時記号でもないコード
+  // 休符候補: 符頭と同じ音楽フォントで、五線の中段に居て、符幹に付かないコード。
+  // 臨時記号(♯♭♮)との区別はコード単位で行う＝臨時記号は「直後に必ず同じ高さの符頭が付く」
+  // （accFrac≈1.0）。8分休符は直後に音符が来ることはあっても一部だけ（accFrac≈0.3）。
+  // 以前は per-instance で「直後に符頭→除外」していたため、音符の直前に置かれた
+  // 8分休符まで臨時記号と誤判定して落としていた。
   const musicFont = filledKey.slice(0, filledKey.indexOf("/"));
+  const leftmostOf = (staff) => glyphs.reduce((m, o) => {
+    const ns = nearestStaff(o.y).staff;
+    return ns === staff && o.x < m ? o.x : m;
+  }, Infinity);
   const restQualifies = (g) => {
     const { staff, d } = nearestStaff(g.y);
     if (!staff || d > spacing * 6) return false;
     const mid = (staff.top + staff.bottom) / 2;
     if (Math.abs(g.y - mid) > spacing * 1.9) return false;
     if (stemAt(g) || isStacked(g)) return false;
-    // 直後に符頭がある → 臨時記号
-    if (deduped.some((n) => n.x - g.x > 1.5 && n.x - g.x < 11 && Math.abs(n.y - g.y) < 3)) return false;
-    // 段の左端（クレフ・調号ゾーン）は除外
-    const leftmost = glyphs.reduce((m, o) => {
-      const ns = nearestStaff(o.y).staff;
-      return ns === staff && o.x < m ? o.x : m;
-    }, Infinity);
-    if (g.x < leftmost + spacing * 4) return false;
+    // 段の左端（クレフ・調号・拍子ゾーン）は除外
+    if (g.x < leftmostOf(staff) + spacing * 4) return false;
     return true;
   };
+  // そのコードが「臨時記号」か（直後に同じ高さの符頭が付く割合）
+  const accidentalFrac = (occ) => occ.filter((g) =>
+    deduped.some((n) => n.x - g.x > 1.5 && n.x - g.x < 12 && Math.abs(n.y - g.y) < 3)).length / Math.max(1, occ.length);
   const restCodes = new Set();
   for (const [k, s] of stat) {
     if (k === filledKey || k === openKey) continue;
     if (!k.startsWith(musicFont + "/")) continue;
-    if (s.count < 3 || s.flagLike > s.count * 0.2) continue;
+    if (s.count < 3) continue;
     const occ = glyphs.filter((g) => keyOf(g) === k);
+    if (accidentalFrac(occ) >= 0.5) continue; // 臨時記号コードは休符にしない
     const q = occ.filter(restQualifies);
-    if (q.length >= occ.length * 0.7) restCodes.add(k);
+    if (q.length >= occ.length * 0.6) restCodes.add(k);
   }
   const restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
 
