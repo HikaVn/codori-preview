@@ -242,9 +242,33 @@ function createScoreNotation(canvas, options = {}) {
         ctx.lineWidth = 1;
       }
     }
+
+    // スラー: 同じ slurId の始点・終点（同じ行のみ）を曲線で結ぶ
+    drawSlurs();
   }
 
-  // 休符記号（簡易）。隙間の拍数に応じて 8分／4分／2分休符を描き分ける。
+  // スラー描画（state.layouts の start/end を結ぶ。行が違う場合は省略）
+  function drawSlurs() {
+    const byId = new Map();
+    for (const l of state.layouts) {
+      if (!l.note.slurId) continue;
+      if (!byId.has(l.note.slurId)) byId.set(l.note.slurId, {});
+      byId.get(l.note.slurId)[l.note.slurRole] = l;
+    }
+    ctx.strokeStyle = "#62717d";
+    ctx.lineWidth = 1.3;
+    for (const { start, end } of byId.values()) {
+      if (!start || !end) continue;
+      if (Math.abs(start.staffTop - end.staffTop) > 1 || end.x <= start.x) continue; // 行またぎは省略
+      const yTop = Math.min(start.y, end.y) - 9;
+      const midX = (start.x + end.x) / 2;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y - 6);
+      ctx.quadraticCurveTo(midX, yTop, end.x, end.y - 6);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+  }
   function drawRest(x, staffTop, beats) {
     const midY = staffTop + 2 * SPACING; // 第3線
     ctx.fillStyle = "#8a96a0";

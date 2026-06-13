@@ -474,16 +474,28 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     deduped.push(n);
   }
 
-  // タイ: 横長の弧の両端に「同じ高さの符頭」があれば、右の音を左の音へつなぐ。
-  // （高さが違えばスラー＝音価に影響しないので無視）。タイは小節をまたぐこともある。
+  // タイ/スラー: 横長の弧。
+  //  ・両端が同じ高さの符頭（横線）＝タイ → 音価を結合
+  //  ・それ以外（音をまたいで弧を描く）＝スラー → x範囲の音にIDを付け、表示だけ曲線で結ぶ
+  let slurSeq = 0;
   for (const a of arcs || []) {
-    const near = (x) => deduped
+    const nearSameY = (x) => deduped
       .filter((n) => Math.abs(n.y - a.y) < spacing * 1.2 && n.x > x - 8 && n.x < x + 8)
       .sort((p, q) => Math.abs(p.x - x) - Math.abs(q.x - x))[0];
-    const left = near(a.x0);
-    const right = near(a.x1);
-    if (left && right && left !== right && left.x < right.x && Math.abs(left.midi - right.midi) === 0) {
-      right.tiedFromPrev = true;
+    const tl = nearSameY(a.x0);
+    const tr = nearSameY(a.x1);
+    if (tl && tr && tl !== tr && tl.x < tr.x && tl.midi === tr.midi) {
+      tr.tiedFromPrev = true;
+      continue;
+    }
+    // スラー: 弧のx範囲・近い高さ帯にある音符をまとめ、先頭と末尾に同じIDを振る
+    const inSpan = deduped
+      .filter((n) => n.x >= a.x0 - 5 && n.x <= a.x1 + 5 && Math.abs(n.y - a.y) < spacing * 7)
+      .sort((p, q) => p.x - q.x);
+    if (inSpan.length >= 2) {
+      const id = `slur:${Math.round(a.x0)}:${Math.round(a.y)}:${++slurSeq}`;
+      inSpan[0].slurId = id; inSpan[0].slurRole = "start";
+      inSpan[inSpan.length - 1].slurId = id; inSpan[inSpan.length - 1].slurRole = "end";
     }
   }
 
@@ -710,7 +722,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -784,7 +796,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const next = noteItems[i + 1];
         const limit = (next && next.onset > it.onset ? next.onset : bpb) - it.onset;
         const beats = Math.min(it.n.beats || 1, Math.max(0.25, limit));
-        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y, tiedFromPrev: it.n.tiedFromPrev });
+        melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(it.n), page: sys.page, x: it.n.x, y: it.n.y, tiedFromPrev: it.n.tiedFromPrev, slurId: it.n.slurId, slurRole: it.n.slurRole });
         noteCount += 1;
       }
       beat += bpb;
