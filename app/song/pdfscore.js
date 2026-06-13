@@ -44,7 +44,9 @@ function extractPageVectors(ol, OPS, pageH) {
         if (typeof g === "number") { adv -= (g / 1000) * (m[0] || 1); continue; }
         const p = pdfApply(m, adv, 0);
         const code = g.fontChar ? g.fontChar.codePointAt(0) : g.unicode;
-        glyphs.push({ font: curFont, code, x: p[0], y: pageH - p[1] });
+        // SMuFL コードポイント（音楽フォントの意味コード）。あれば記号の種類が確定する。
+        const smufl = g.unicode ? g.unicode.codePointAt(0) : 0;
+        glyphs.push({ font: curFont, code, smufl, x: p[0], y: pageH - p[1] });
         adv += ((g.width || 0) / 1000) * (m[0] || 1);
       }
     } else if (fn === OPS.constructPath) {
@@ -84,6 +86,29 @@ function extractPageVectors(ol, OPS, pageH) {
   }
   return { glyphs, hseg, vseg, beams };
 }
+
+// ===== SMuFL（音楽記号の標準コードポイント）=====
+// 多くの記譜ソフトの書き出しPDFは、グリフに標準SMuFLコードを unicode として持つ。
+// あれば符頭・休符・臨時記号・付点・拍子が確実に判別できる。
+const SMUFL = {
+  noteheadBlack: 0xe0a4, noteheadHalf: 0xe0a3, noteheadWhole: 0xe0a2, noteheadDoubleWhole: 0xe0a0,
+  flag8thUp: 0xe240, flag8thDown: 0xe241, flag16thUp: 0xe242, flag16thDown: 0xe243,
+  flag32ndUp: 0xe244, flag32ndDown: 0xe245,
+  accFlat: 0xe260, accNatural: 0xe261, accSharp: 0xe262, accDoubleSharp: 0xe263, accDoubleFlat: 0xe264,
+  augmentationDot: 0xe1e7,
+  restWhole: 0xe4e3, restHalf: 0xe4e4, restQuarter: 0xe4e5, rest8th: 0xe4e6, rest16th: 0xe4e7,
+  gClef: 0xe050, fClef: 0xe062
+};
+// 臨時記号 → 半音変化（♮は0＝幹音そのもの、調号を打ち消す）
+const SMUFL_ACC_ALTER = { 0xe260: -1, 0xe261: 0, 0xe262: 1, 0xe263: 2, 0xe264: -2 };
+// 休符 → 拍数（4分=1）
+const SMUFL_REST_BEATS = { 0xe4e3: 4, 0xe4e4: 2, 0xe4e5: 1, 0xe4e6: 0.5, 0xe4e7: 0.25 };
+const SMUFL_FLAG_BEATS = { 0xe240: 0.5, 0xe241: 0.5, 0xe242: 0.25, 0xe243: 0.25, 0xe244: 0.125, 0xe245: 0.125 };
+function isSmuflNotehead(u) { return u === SMUFL.noteheadBlack || u === SMUFL.noteheadHalf || u === SMUFL.noteheadWhole || u === SMUFL.noteheadDoubleWhole; }
+function isSmuflFilled(u) { return u === SMUFL.noteheadBlack; }
+
+// 拍子グリフ（U+E080〜E089 = timeSig 0〜9）→ 数字
+function smuflTimeSigDigit(u) { return (u >= 0xe080 && u <= 0xe089) ? u - 0xe080 : null; }
 
 function medianOfArray(arr) {
   if (!arr.length) return 0;
@@ -455,7 +480,41 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const q = occ.filter(restQualifies);
     if (q.length >= occ.length * 0.6) restCodes.add(k);
   }
-  const restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
+  let restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
+
+  // ===== SMuFL があれば、休符の拍数・臨時記号・付点を確定する =====
+  const hasSmufl = glyphs.some((g) => isSmuflNotehead(g.smufl));
+  if (hasSmufl) {
+    // 休符は SMuFL コードで拾い直す（拍数つき・五線中段・左端ゾーン除外）
+    restList = glyphs
+      .filter((g) => SMUFL_REST_BEATS[g.smufl] !== undefined && restQualifies(g))
+      .map((g) => ({ ...g, restBeats: SMUFL_REST_BEATS[g.smufl] }));
+    for (const n of deduped) {
+      // 臨時記号: 音符の左 1.5〜13px・ほぼ同高（調号ゾーンは離れているので拾わない）
+      const acc = glyphs.find((g) => SMUFL_ACC_ALTER[g.smufl] !== undefined &&
+        n.x - g.x > 1.5 && n.x - g.x < 13 && Math.abs(g.y - n.y) < 3);
+      if (acc) n.accidental = SMUFL_ACC_ALTER[acc.smufl];
+      // 付点: 音符の右 2〜11px・同高〜やや上（線上の音符は半間上にずれる）
+      const dot = glyphs.find((g) => g.smufl === SMUFL.augmentationDot &&
+        g.x - n.x > 2 && g.x - n.x < 11 && Math.abs(g.y - n.y) < spacing * 0.85);
+      if (dot) { n.beats = (n.beats || 1) * 1.5; n.dotted = true; }
+    }
+  }
+
+  // 拍子（SMuFL timeSig 数字）: 段の左端付近に縦に並ぶ2桁＝分子/分母
+  let timeSig = null;
+  if (hasSmufl) {
+    const tsDigits = glyphs
+      .map((g) => ({ d: smuflTimeSigDigit(g.smufl), x: g.x, y: g.y }))
+      .filter((t) => t.d !== null)
+      .sort((a, b) => a.x - b.x || a.y - b.y);
+    if (tsDigits.length >= 2) {
+      // 同じx付近の上下2つ＝分子(上=yが小)・分母(下=yが大)
+      const x0 = tsDigits[0].x;
+      const col = tsDigits.filter((t) => Math.abs(t.x - x0) < 6).sort((a, b) => a.y - b.y);
+      if (col.length >= 2) timeSig = { numerator: col[0].d, denominator: col[col.length - 1].d };
+    }
+  }
 
   // 段（システム）ごとに、小節線で区切る。
   // 小節線＝五線をほぼ縦断する縦線のうち、どちらの端にも符頭が付いていないもの。
@@ -487,47 +546,90 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     };
   });
 
-  // 調号グリフ（個数）と、音符の左に付く同グリフの臨時記号
+  // 調号グリフ（個数）。SMuFL があれば調号は♭(E260)/♯(E262)の個数で直接わかる。
   const noteheadKeys = new Set([filledKey, openKey].filter(Boolean));
-  const keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
-  if (keyCand) {
+  let keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
+  if (hasSmufl) {
+    // 調号ゾーン（各段の左端付近）の♭/♯の数を段ごとに数え、多数決
+    const counts = new Map();
+    for (const s of staves) {
+      const leftX = leftmostStaffX(glyphs, staves, nearestStaff, s);
+      const flats = glyphs.filter((g) => g.smufl === SMUFL.accFlat && nearestStaff(g.y).staff === s && g.x < leftX + spacing * 9 && g.x > leftX);
+      const sharps = glyphs.filter((g) => g.smufl === SMUFL.accSharp && nearestStaff(g.y).staff === s && g.x < leftX + spacing * 9 && g.x > leftX);
+      const key = sharps.length > flats.length ? sharps.length : -flats.length;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    let bestKey = 0; let bestN = 0;
+    for (const [k, n] of counts) if (n > bestN && k !== 0) { bestN = n; bestKey = k; }
+    if (bestKey !== 0) keyCand = { smuflFifths: bestKey };
+  } else if (keyCand) {
     const keyGlyphs = glyphs.filter((g) => keyOf(g) === keyCand.glyphKey);
     const singles = keyGlyphs.filter((g) => !isStacked(g));
     for (const n of deduped) {
       n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
     }
   }
-  return { systems, staves: staves.length, keyCand };
+  return { systems, staves: staves.length, keyCand, timeSig };
+}
+
+// 段 s の五線の左端x（クレフ・調号の開始位置の目安）
+function leftmostStaffX(glyphs, staves, nearestStaff, s) {
+  let min = Infinity;
+  for (const g of glyphs) {
+    if (nearestStaff(g.y).staff === s && g.x < min) min = g.x;
+  }
+  return min;
 }
 
 // PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
-async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsPerBar = 4) {
+async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsPerBar = null) {
   const data = await file.arrayBuffer();
   const pdf = await getDocument({ data }).promise;
   const viewport0 = (await pdf.getPage(1)).getViewport({ scale: 1 });
   const pageH = viewport0.viewBox[3];
   const pageW = viewport0.viewBox[2];
-  const bpb = Number(beatsPerBar) || 4;
   const allSystems = [];
   const keyCands = [];
+  let detectedTS = null;
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { systems, keyCand } = readVectorScorePage(ol, OPS, pageH, pageW);
+    const { systems, keyCand, timeSig } = readVectorScorePage(ol, OPS, pageH, pageW);
     if (keyCand) keyCands.push(keyCand);
+    if (timeSig && !detectedTS) detectedTS = timeSig;
     systems.forEach((s) => allSystems.push({ ...s, page: p }));
   }
 
-  // 調号: グリフ個数（ページ多数決）で仮説を絞り、♭か♯かはKK調推定との自己整合で決める
+  // テンポ: 1ページ目のテキストから「= 120」を拾う
+  let tempo = null;
+  try {
+    const tc = await (await pdf.getPage(1)).getTextContent();
+    for (const it of tc.items) {
+      const mt = /=\s*(\d{2,3})\b/.exec(it.str || "");
+      if (mt) { tempo = Number(mt[1]); break; }
+    }
+  } catch (e) { /* テンポ無しでもよい */ }
+
+  // 拍子: SMuFLで検出できていれば分子を採用。明示指定があればそちら優先。
+  const bpb = Number(beatsPerBar) > 0 ? Number(beatsPerBar) : (detectedTS && detectedTS.numerator) || 4;
+
+  // 調号: SMuFLの♭/♯個数があれば最優先、無ければグリフ個数（ページ多数決）。
+  // ♭か♯か・長短調は KK 調推定で確定する。
   const allNotes = allSystems.flatMap((s) => s.notes);
-  let sigCount = null;
-  if (keyCands.length) {
-    const tally = new Map();
-    for (const c of keyCands) tally.set(c.count, (tally.get(c.count) || 0) + 1);
-    sigCount = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const smuflKey = keyCands.find((c) => c.smuflFifths !== undefined);
+  let hypotheses;
+  if (smuflKey) {
+    hypotheses = [smuflKey.smuflFifths];
+  } else {
+    let sigCount = null;
+    if (keyCands.length) {
+      const tally = new Map();
+      for (const c of keyCands) tally.set(c.count, (tally.get(c.count) || 0) + 1);
+      sigCount = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    }
+    hypotheses = sigCount ? [-sigCount, sigCount] : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
   }
-  const hypotheses = sigCount ? [-sigCount, sigCount] : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
   const keyPick = allNotes.length ? choosePdfKeySignature(allNotes, hypotheses) : null;
   const fifths = keyPick ? keyPick.fifths : 0;
 
@@ -537,7 +639,9 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   let beat = 0;
   let noteCount = 0;
   const keyedMidi = (n) => {
-    // 調号による変化。音符の左に調号と同じグリフ（臨時記号）があればそちらを優先
+    // 明示的な臨時記号(♯♭♮)があれば絶対指定として最優先（調号を上書き）
+    if (n.accidental !== undefined) return n.midi + n.accidental;
+    // 調号による変化。SMuFL無しPDF用フォールバック（同グリフが左にあれば調号方向に変化）
     let alter = pdfKeyAlter(pdfLetterCFromStep(n.step), fifths);
     if (n.accSame && fifths !== 0) alter = fifths < 0 ? -1 : 1;
     return n.midi + alter;
@@ -565,20 +669,23 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       const inRests = (sys.rests || []).filter((r) => r.x >= xL - 2 && r.x < xR);
       const items = inBar.map((n) => ({ rest: false, x: n.x, n }))
-        .concat(inRests.map((r) => ({ rest: true, x: r.x })))
+        .concat(inRests.map((r) => ({ rest: true, x: r.x, restBeats: r.restBeats })))
         .sort((a, b) => a.x - b.x);
       if (!items.length) {
         beat += bpb; // 空小節＝休符でも進む
         return;
       }
-      // 記号ベース: 音価を累積し、休符に余り拍を等分
+      // 記号ベース: 音価を累積。休符の拍数はSMuFLで分かればそれを使い、
+      // 不明な休符は「小節合計=拍子」から残り拍を等分する。
       const noteSum = inBar.reduce((s, n) => s + (n.beats || 1), 0);
-      const gap = bpb - noteSum;
-      const restBeats = inRests.length && gap > 0 ? gap / inRests.length : 0;
+      const knownRest = inRests.reduce((s, r) => s + (r.restBeats || 0), 0);
+      const unknownRests = inRests.filter((r) => !(r.restBeats > 0)).length;
+      const gap = bpb - noteSum - knownRest;
+      const fillBeats = unknownRests && gap > 0 ? gap / unknownRests : 0;
       let acc = 0;
       for (const it of items) {
         it.symOnset = acc;
-        acc += it.rest ? restBeats : (it.n.beats || 1);
+        acc += it.rest ? (it.restBeats > 0 ? it.restBeats : fillBeats) : (it.n.beats || 1);
       }
       // 実時間比ベース: 小節は先頭アイテム（拍0）〜小節線で拍子ぶん、と線形対応。
       // 記号の足し算が自己整合する小節（合計=拍子）は記号を信頼し、
@@ -586,7 +693,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const x0 = items[0].x;
       const span = xR - x0;
       const useX = Number.isFinite(span) && span > 4;
-      const symTotal = noteSum + restBeats * inRests.length;
+      const symTotal = noteSum + knownRest + fillBeats * unknownRests;
       const consistent = Math.abs(bpb - symTotal) < 0.26;
       const wX = useX && !consistent ? 0.6 : 0;
       let prev = 0;
@@ -615,5 +722,9 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     }
   }
   const keySig = keyPick ? { fifths, mode: keyPick.mode, tonic: keyPick.tonic } : null;
-  return { melody, noteCount, keySig, pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH };
+  return {
+    melody, noteCount, keySig, tempo,
+    timeSig: detectedTS, beatsPerBar: bpb,
+    pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
+  };
 }

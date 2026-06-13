@@ -274,15 +274,27 @@ function createScoreNotation(canvas, options = {}) {
     }
     ctx.restore();
 
+    // 付点（付点音価は基準値×1.5）。符頭の右に小さな丸を描く。
+    const dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
+    const base = dotted ? beats / 1.5 : beats;
+    if (dotted) {
+      ctx.fillStyle = color;
+      // 線上の音符は間（半間上）に付点を置く
+      const onLine = ((step % 2) + 2) % 2 === 0;
+      ctx.beginPath();
+      ctx.arc(x + 9, y - (onLine ? SPACING / 2 : 0), 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // 符幹と旗
-    if (beats < 4) {
+    if (base < 4) {
       const up = step < 4; // 第3線(B4)より下は上向き
       const sx = up ? x + 4.6 : x - 4.6;
       const sy = up ? y - 26 : y + 26;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, sy); ctx.stroke();
-      const flags = beats <= 0.26 ? 2 : beats <= 0.51 ? 1 : 0;
+      const flags = base <= 0.26 ? 2 : base <= 0.51 ? 1 : 0;
       for (let f = 0; f < flags; f += 1) {
         const fy = sy + (up ? f * 5 : -f * 5);
         ctx.beginPath();

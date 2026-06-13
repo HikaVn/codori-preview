@@ -404,18 +404,23 @@ async function scoreLoadMusicXml(file) {
 async function scoreLoadPdf(file, beatsPerBar) {
   setScoreProgress("PDFを読み込んでる…（pdf.jsをダウンロード）");
   scoreState.lastPdfFile = file;
-  const bpb = beatsPerBar || Number(scoreEl.beatsPerBar.value) || 4;
+  // beatsPerBar 明示指定があれば固定、なければ拍子を自動検出させる（null）
+  const explicit = Number(beatsPerBar) > 0 ? Number(beatsPerBar) : null;
   try {
     const text = await extractPdfLyrics(file);
     const parsed = parseScoreText(text);
     let vectorMelody = [];
     let keySig = null;
     let pdfLib = null;
+    let bpb = explicit || 4;
+    let bpm = parsed.bpm || 100;
     try {
       pdfLib = await loadPdfjs();
-      const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, bpb);
+      const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, explicit);
       vectorMelody = res.melody || [];
       keySig = res.keySig || null;
+      if (res.beatsPerBar) bpb = res.beatsPerBar;     // 自動検出した拍子
+      if (res.tempo) bpm = res.tempo;                 // 自動検出したテンポ
     } catch (e) {
       console.warn("vector note read failed", e);
     }
@@ -426,7 +431,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
     }
     loadScoreData({
       title: parsed.title,
-      bpm: parsed.bpm,
+      bpm,
       beatsPerBar: bpb,
       keySig,
       melody: vectorMelody,
