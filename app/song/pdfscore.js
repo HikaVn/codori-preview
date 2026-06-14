@@ -195,12 +195,20 @@ function findStaves(hseg, pageWidth, pageHeight) {
     return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
   });
   // スラー/タイは「真ん中ほど太い」弧で、水平部分が五線候補に混入する（部分幅）。
-  // 五線は段の全幅に渡る最長級の線なので、最長線の8割未満の短い線は除外する。
-  const maxObserved = valid.reduce((m, c) => Math.max(m, c.x1 - c.x0), 1);
-  const lineYs = valid
-    .filter((c) => (c.x1 - c.x0) > maxObserved * 0.8)
+  // 五線は用紙幅の広い範囲（段の全幅）に渡る線なので、用紙幅の7割未満の短い線は除外する。
+  const pw = pageWidth || 595;
+  let lineYs = valid
+    .filter((c) => (c.x1 - c.x0) > pw * 0.7)
     .map((c) => c.y)
     .sort((a, b) => a - b);
+  // 段組みが細く（余白が広く）7割に満たない譜面では、検出された最長線基準にフォールバック
+  if (lineYs.length < 5) {
+    const maxObserved = valid.reduce((m, c) => Math.max(m, c.x1 - c.x0), 1);
+    lineYs = valid
+      .filter((c) => (c.x1 - c.x0) > maxObserved * 0.8)
+      .map((c) => c.y)
+      .sort((a, b) => a - b);
+  }
   if (lineYs.length < 5) {
     return [];
   }
