@@ -15,6 +15,7 @@ const scoreState = {
   melody: [],       // [{startBeat, beats, midi, origMidi, lyric}]
   lyricLines: [],
   keySig: null,     // {fifths, mode, tonic} | null（PDF読み取りの調号）
+  chordEvents: [],  // 認識どおりの絶対拍位置のコード [{startBeat, chord}]（試聴用）
   repeatStructure: null, // 繰り返し構造（リピート/D.C./D.S.）| null
   playOrder: null,  // 繰り返し展開した再生順（拍区間の並び）| null
   pianoRoll: null,
@@ -109,6 +110,9 @@ function loadScoreData(parsed, kind) {
     ? expandRepeats(scoreState.repeatStructure) : null;
   // コード列 → events（startBeatは隣との差で拍数化）
   const chords = [...(parsed.chordEvents || [])].sort((a, b) => a.startBeat - b.startBeat);
+  // 試聴用に「認識どおりの絶対拍位置」も保持する（events のギャップ拍数化では
+  // 先頭コードの絶対位置が失われ、メロディ（絶対拍）と試聴がずれるため）。
+  scoreState.chordEvents = chords.map((c) => ({ startBeat: c.startBeat, chord: c.chord }));
   scoreState.events = [{ type: "section", label: kind, beats: 0, lineIndex: 0 }];
   if (chords.length) {
     chords.forEach((c, i) => {
@@ -506,16 +510,23 @@ function scorePreviewStart(mode) {
     maxBeat = Math.max(maxBeat, nt.startBeat + beats);
   }
   if (mode === "chords") {
-    let chordList = scoreState.events
-      .filter((e) => e.type === "chord" && e.chord)
-      .map((e) => ({ startBeat: e.startBeat, beats: Number(e.beats) || scoreState.beatsPerBar, chord: e.chord }));
-    if (playOrder && typeof applyPlayOrder === "function") chordList = applyPlayOrder(chordList, playOrder);
-    for (const e of chordList) {
-      const freqs = typeof chordFrequencies === "function" ? chordFrequencies(e.chord) : null;
-      if (!freqs) continue;
-      for (const f of freqs) scorePreviewVoice(f, start + e.startBeat * spb, e.beats * spb, 0.05, CHORD_PARTIALS);
-      maxBeat = Math.max(maxBeat, e.startBeat + e.beats);
-    }
+    // 認識どおりの絶対拍位置でコードを鳴らす（メロディと同じ拍スケール）。
+    // 各コードは次のコードまで持続。最後のコードはメロディ末尾まで伸ばして
+    // 伴奏とメロディの長さを合わせる。
+    const melodyEnd = melody.reduce((m, n) => Math.max(m, (Number(n.startBeat) || 0) + (Number(n.beats) || 0)), 0);
+    let src = (scoreState.chordEvents || []).filter((c) => c.chord)
+      .map((c) => ({ startBeat: c.startBeat, chord: c.chord }))
+      .sort((a, b) => a.startBeat - b.startBeat);
+    if (playOrder && typeof applyPlayOrder === "function") src = applyPlayOrder(src, playOrder);
+    src.forEach((c, i) => {
+      const next = src[i + 1];
+      const end = next ? next.startBeat : Math.max(melodyEnd, c.startBeat + scoreState.beatsPerBar);
+      const beats = Math.max(0.25, end - c.startBeat);
+      const freqs = typeof chordFrequencies === "function" ? chordFrequencies(c.chord) : null;
+      if (!freqs) return;
+      for (const f of freqs) scorePreviewVoice(f, start + c.startBeat * spb, beats * spb, 0.05, CHORD_PARTIALS);
+      maxBeat = Math.max(maxBeat, c.startBeat + beats);
+    });
   }
   if (!scorePreview.nodes.length) return; // 鳴らすものが無い
   scorePreview.playing = true;
