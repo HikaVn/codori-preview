@@ -594,6 +594,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     deduped.push(n);
   }
 
+  // 連符（3連符など）: SMuFLの連符数字グリフ(U+E880-E889)があれば、その近くの音符の
+  // 音価を normal/actual 倍する（3連符なら×2/3）。連符グリフが無ければ何もしない＝安全。
+  applyTuplets(deduped, glyphs, nearestStaff, spacing);
+
   // タイ/スラー: 横長の弧。
   //  ・隣り合う同じ高さ(=同音)の2符頭の間に弧の中心があれば タイ → 音価を結合
   //    （弧の端を符頭に対応づける方式だと、弧が左右にずれたとき両端が同じ符頭に
@@ -803,6 +807,30 @@ function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   const f = countKeySig(SMUFL.accFlat);
   const s = countKeySig(SMUFL.accSharp);
   return s > f ? s : -f;
+}
+
+// 連符（3連符など）の音価補正。SMuFLの連符数字グリフ(U+E880=0 … U+E889=9)の近くの
+// 音符を actual 個、音価を normal/actual 倍する（3連符 actual=3 → normal=2 → ×2/3）。
+// 連符グリフが無ければ何もしない（既存譜面に無影響）。
+function applyTuplets(notes, glyphs, nearestStaff, spacing) {
+  const tupGlyphs = (glyphs || []).filter((g) => g.smufl >= 0xe880 && g.smufl <= 0xe889);
+  for (const tg of tupGlyphs) {
+    const actual = tg.smufl - 0xe880; // 連符の数（3=3連符）
+    if (actual < 2) continue;
+    const normal = Math.pow(2, Math.floor(Math.log2(actual))); // 3→2, 5→4, 6→4, 7→4, 9→8
+    const ratio = normal / actual;
+    const st = nearestStaff(tg.y).staff;
+    if (!st) continue;
+    // 同じ段で連符数字のxに近い音符を actual 個集めて連符化
+    const group = notes
+      .filter((n) => n.staffTop === st.top && Math.abs(n.x - tg.x) < spacing * 9)
+      .sort((a, b) => Math.abs(a.x - tg.x) - Math.abs(b.x - tg.x))
+      .slice(0, actual);
+    for (const n of group) {
+      n.beats = Math.round(n.beats * ratio * 1000) / 1000;
+      n.tuplet = actual;
+    }
+  }
 }
 
 // PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
