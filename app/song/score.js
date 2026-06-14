@@ -119,7 +119,7 @@ function loadScoreData(parsed, kind) {
   }
   // メロディ（元推定値 origMidi と、PDF上の位置 page/x/y を保持）
   scoreState.melody = (parsed.melody || [])
-    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y, keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole }))
+    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y, keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, artic: n.artic }))
     .sort((a, b) => a.startBeat - b.startBeat);
   // 歌詞
   if (parsed.words && parsed.words.length) {
@@ -404,7 +404,7 @@ function scoreToSong() {
     transpose: 0,
     source: "",
     events,
-    melody: playMelody.map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi })),
+    melody: playMelody.map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, artic: n.artic })),
     rhythmPattern: "whole"
   }, null);
   setMode("edit");
@@ -538,7 +538,7 @@ function scoreExportSvg() {
     repeatStructure: scoreState.repeatStructure || undefined,
     melody: scoreState.melody.map((n) => ({
       startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
-      keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, lyric: n.lyric, page: n.page, x: n.x, y: n.y
+      keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, artic: n.artic, lyric: n.lyric, page: n.page, x: n.x, y: n.y
     })),
     chordEvents: scoreState.events.filter((e) => e.type === "chord" && e.chord).map((e) => ({ startBeat: e.startBeat, chord: e.chord })),
     lyricLines: scoreState.lyricLines

@@ -476,6 +476,20 @@ function strumChord(chord, time, beats, strumGain = 1) {
   });
 }
 
+// アーティキュレーションを再生に反映する係数。gate=鳴る長さ比、gain=音量比。
+// 既定（記号なし）は従来どおり gate0.95・gain1.0。
+function articFactors(artic) {
+  switch (artic) {
+    case "staccato": return { gate: 0.5, gain: 1.0 };
+    case "staccatissimo": return { gate: 0.3, gain: 1.0 };
+    case "tenuto": return { gate: 1.0, gain: 1.0 };
+    case "accent": return { gate: 0.92, gain: 1.6 };
+    case "marcato": return { gate: 0.7, gain: 1.7 };
+    case "fermata": return { gate: 1.8, gain: 1.0 };
+    default: return { gate: 0.95, gain: 1.0 };
+  }
+}
+
 function playTone(frequency, time, duration, gain, type = "sine", registerAsChord = false) {
   if (!frequency) {
     return;
@@ -607,7 +621,8 @@ function schedulerTick() {
         break;
       }
       if (time >= audioCtx.currentTime - 0.05) {
-        playTone(midiToFrequency(note.midi + (song.transpose || 0)), time, note.beats * secPerBeat() * 0.95, 0.12, "triangle");
+        const art = articFactors(note.artic);
+        playTone(midiToFrequency(note.midi + (song.transpose || 0)), time, note.beats * secPerBeat() * art.gate, 0.12 * art.gain, "triangle");
       }
       player.nextMelodyIdx += 1;
     }

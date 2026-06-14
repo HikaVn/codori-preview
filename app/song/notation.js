@@ -489,6 +489,32 @@ function createScoreNotation(canvas, options = {}) {
     if (dotted) ctx.smufl(SMUFL.dot, x + HEAD_HALF + 1, midY - SPACING * 0.5, MUSIC, "start", "#8a96a0");
   }
 
+  // アーティキュレーション記号をベクターで描く（フォント非依存）。
+  function drawArtic(artic, x, y, stemUp, staffTop, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.1;
+    if (artic === "fermata") {
+      const ay = staffTop - SPACING * 1.6;
+      ctx.beginPath(); ctx.moveTo(x - 6, ay + 2); ctx.quadraticCurveTo(x, ay - 7, x + 6, ay + 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, ay - 1.5, 1.2); ctx.fill();
+      return;
+    }
+    // 符幹と反対側（符幹が上なら下、下なら上）に置く
+    const ay = stemUp ? y + SPACING * 1.7 : y - SPACING * 1.7;
+    if (artic === "staccato") {
+      ctx.beginPath(); ctx.arc(x, ay, 1.3); ctx.fill();
+    } else if (artic === "staccatissimo") {
+      const d = stemUp ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(x, ay - 3 * d); ctx.lineTo(x - 2, ay + 2 * d); ctx.lineTo(x + 2, ay + 2 * d); ctx.fill();
+    } else if (artic === "tenuto") {
+      ctx.beginPath(); ctx.moveTo(x - 3.5, ay); ctx.lineTo(x + 3.5, ay); ctx.stroke();
+    } else if (artic === "accent") {
+      ctx.beginPath(); ctx.moveTo(x - 4, ay - 2.5); ctx.lineTo(x + 4, ay); ctx.lineTo(x - 4, ay + 2.5); ctx.stroke();
+    } else if (artic === "marcato") {
+      const d = stemUp ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(x - 3, ay + 3 * d); ctx.lineTo(x, ay - 3 * d); ctx.lineTo(x + 3, ay + 3 * d); ctx.stroke();
+    }
+  }
+
   function drawNote(note, x, staffTop, beam) {
     const fifths = Number.isFinite(note.keyFifths) ? note.keyFifths : state.fifths;
     const { step, alt } = notationMidiToStaff(note.midi, fifths < 0);
@@ -555,6 +581,13 @@ function createScoreNotation(canvas, options = {}) {
             : base <= 0.51 ? (up ? SMUFL.flag8Up : SMUFL.flag8Down) : null;
         if (flagCode) ctx.smufl(flagCode, sx, sy, MUSIC, "start", color);
       }
+    }
+
+    // アーティキュレーション記号（符頭の符幹と反対側、フェルマータは五線の上）。
+    // フォントサブセット非依存にするためベクター原図形で描く。
+    if (note.artic) {
+      const stemUp = base < 4 ? (beam ? beam.up : step < 4) : step < 4;
+      drawArtic(note.artic, x, y, stemUp, staffTop, color);
     }
 
     // 歌詞

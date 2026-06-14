@@ -598,6 +598,9 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   // 音価を normal/actual 倍する（3連符なら×2/3）。連符グリフが無ければ何もしない＝安全。
   applyTuplets(deduped, glyphs, nearestStaff, spacing);
 
+  // アーティキュレーション（スタッカート/アクセント/テヌート/マルカート/フェルマータ）を符頭に付与。
+  applyArticulations(deduped, glyphs, nearestStaff, spacing);
+
   // タイ/スラー: 横長の弧。
   //  ・隣り合う同じ高さ(=同音)の2符頭の間に弧の中心があれば タイ → 音価を結合
   //    （弧の端を符頭に対応づける方式だと、弧が左右にずれたとき両端が同じ符頭に
@@ -851,6 +854,36 @@ function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   return s > f ? s : -f;
 }
 
+// アーティキュレーション（スタッカート・アクセント・テヌート・マルカート・フェルマータ）。
+// 記号は符頭の真上/真下に置かれるので、同じ段でxが最も近い符頭へ artic を付ける。
+// 記号が無ければ何もしない（既存譜面に無影響）。再生はscore/songが gate/強さに反映する。
+function applyArticulations(notes, glyphs, nearestStaff, spacing) {
+  const AM = {
+    0xe4a0: "accent", 0xe4a1: "accent",
+    0xe4a2: "staccato", 0xe4a3: "staccato",
+    0xe4a4: "tenuto", 0xe4a5: "tenuto",
+    0xe4a6: "staccatissimo", 0xe4a7: "staccatissimo",
+    0xe4a8: "staccatissimo", 0xe4a9: "staccatissimo",
+    0xe4aa: "staccatissimo", 0xe4ab: "staccatissimo",
+    0xe4ac: "marcato", 0xe4ad: "marcato",
+    0xe4c0: "fermata", 0xe4c1: "fermata"
+  };
+  for (const g of (glyphs || [])) {
+    const kind = AM[g.smufl];
+    if (!kind) continue;
+    const st = nearestStaff(g.y).staff;
+    if (!st) continue;
+    let best = null; let bd = Infinity;
+    for (const n of notes) {
+      if (n.staffTop !== st.top) continue;
+      const dx = Math.abs(n.x - g.x);
+      if (dx < spacing * 1.4 && dx < bd) { bd = dx; best = n; }
+    }
+    // フェルマータは最強、それ以外は短い記号が優先（スタッカート＋アクセント等）
+    if (best && (!best.artic || kind === "fermata")) best.artic = kind;
+  }
+}
+
 // 連符（3連符など）の音価補正。SMuFLの連符数字グリフ(U+E880=0 … U+E889=9)の近くの
 // 音符を actual 個、音価を normal/actual 倍する（3連符 actual=3 → normal=2 → ×2/3）。
 // 連符グリフが無ければ何もしない（既存譜面に無影響）。
@@ -954,7 +987,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -1046,7 +1079,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const limit = Math.max(0.25, (nextItem ? nextItem.onset : bpb) - it.onset);
         for (const n of it.ns) {
           const beats = consistent ? Math.min(n.beats || 1, limit) : limit;
-          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
           noteCount += 1;
         }
       }
