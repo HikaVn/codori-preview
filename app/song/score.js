@@ -467,7 +467,57 @@ function scoreRouteFile(file) {
   if (!file) return;
   if (/\.(xml|musicxml|mxl)$/i.test(file.name)) scoreLoadMusicXml(file);
   else if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") scoreLoadPdf(file);
-  else window.alert("MusicXML か PDF を入れてね。");
+  else if (/\.svg$/i.test(file.name) || file.type === "image/svg+xml") scoreLoadSvg(file);
+  else window.alert("MusicXML / PDF / SVG を入れてね。");
+}
+
+// 自己完結SVG（楽譜データ埋め込み）→ 楽譜を復元
+async function scoreLoadSvg(file) {
+  try {
+    const text = await file.text();
+    const data = typeof parseScoreSVG === "function" ? parseScoreSVG(text) : null;
+    if (!data || !data.melody) { window.alert("このSVGには楽譜データが埋め込まれていないよ。Codoriで書き出したSVGを入れてね。"); return; }
+    loadScoreData({
+      title: data.title || file.name.replace(/\.svg$/i, ""),
+      bpm: data.bpm || scoreState.bpm || 100,
+      beatsPerBar: data.beatsPerBar || 4,
+      keySig: data.keySig || null,
+      melody: data.melody,
+      chordEvents: data.chordEvents || [],
+      words: [],
+      lyricLines: data.lyricLines || []
+    }, "SVG楽譜");
+    hideScoreOverlay();
+  } catch (e) {
+    window.warn?.("svg load failed", e);
+    window.alert("SVGを読めなかった。");
+  }
+}
+
+// 楽譜データを埋め込んだ自己完結SVGを書き出す（表示＋完全復元できる可逆フォーマット）
+function scoreExportSvg() {
+  if (!scoreState.notation || !scoreState.melody.length) { window.alert("先に楽譜を読み込んでね。"); return; }
+  let svg = scoreState.notation.getSVG();
+  // 描画器が埋めた melody だけのデータを、コード・歌詞・テンポも含む完全版に差し替え
+  const full = {
+    format: "codori-notation", version: 1,
+    title: scoreState.title, bpm: scoreState.bpm,
+    beatsPerBar: scoreState.beatsPerBar, fifths: scoreState.keySig?.fifths, keySig: scoreState.keySig,
+    melody: scoreState.melody.map((n) => ({
+      startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
+      keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, lyric: n.lyric, page: n.page, x: n.x, y: n.y
+    })),
+    chordEvents: scoreState.events.filter((e) => e.type === "chord" && e.chord).map((e) => ({ startBeat: e.startBeat, chord: e.chord })),
+    lyricLines: scoreState.lyricLines
+  };
+  const json = JSON.stringify(full).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  svg = svg.replace(/<metadata id="codori-score-data">[\s\S]*?<\/metadata>/, `<metadata id="codori-score-data">${json}</metadata>`);
+  const blob = new Blob([svg], { type: "image/svg+xml" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${(scoreState.title || "score").replace(/[\\/:*?"<>|]/g, "_")}.svg`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ===== イベント =====
@@ -475,6 +525,9 @@ scoreEl.musicxmlButton?.addEventListener("click", () => scoreEl.musicxmlInput.cl
 scoreEl.musicxmlInput?.addEventListener("change", (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scoreLoadMusicXml(f); });
 scoreEl.pdfButton?.addEventListener("click", () => scoreEl.pdfInput.click());
 scoreEl.pdfInput?.addEventListener("change", (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scoreLoadPdf(f); });
+document.querySelector("#score-export-svg")?.addEventListener("click", scoreExportSvg);
+document.querySelector("#score-import-svg-button")?.addEventListener("click", () => document.querySelector("#score-import-svg").click());
+document.querySelector("#score-import-svg")?.addEventListener("change", (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scoreLoadSvg(f); });
 
 scoreEl.bpm?.addEventListener("change", () => { scoreState.bpm = Number(scoreEl.bpm.value) || 100; syncScorePianoRoll(); });
 scoreEl.beatsPerBar?.addEventListener("change", () => {

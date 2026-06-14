@@ -72,7 +72,15 @@ function makeSvgCtx() {
     fill() { if (pend) { out.push(ellSvg(`fill="${cur.fill}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="${cur.fill}"/>`); },
     fillText(t, x, y) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${cur.fill}" font-size="${cur.font}" font-family="sans-serif">${esc(t)}</text>`); },
     // SMuFL音楽グリフ（Bravura）。codeはコードポイント。anchor: start/middle/end。
-    smufl(code, x, y, size, anchor, fill) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${fill || cur.fill}" font-size="${r2(size)}" font-family="BravuraSub" text-anchor="${anchor || "start"}">&#x${code.toString(16)};</text>`); },
+    // attrs を渡すと data-* 等の属性を付けられる（可逆性: 符頭に音楽データを持たせる）。
+    smufl(code, x, y, size, anchor, fill, attrs) {
+      const p = ap(x, y);
+      let a = "";
+      if (attrs) for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) a += ` ${k}="${esc(String(attrs[k]))}"`;
+      out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${fill || cur.fill}" font-size="${r2(size)}" font-family="BravuraSub" text-anchor="${anchor || "start"}"${a}>&#x${code.toString(16)};</text>`);
+    },
+    // 生のSVGマークアップを直接追加（metadata等）
+    raw(s) { out.push(s); },
     save() { stack.push({ ...cur, t: cur.t.slice() }); },
     restore() { const s = stack.pop(); if (s) cur = s; },
     translate(x, y) { cur.t = mul(cur.t, [1, 0, 0, 1, x, y]); },
@@ -156,7 +164,25 @@ function createScoreNotation(canvas, options = {}) {
     canvas.setAttribute("viewBox", `0 0 ${m.cssW} ${m.cssH}`);
     canvas.style.width = `${m.cssW}px`;
     canvas.style.height = `${m.cssH}px`;
-    canvas.innerHTML = ctx.flush();
+    // 可逆性: 全音楽データを <metadata> にJSONで埋め込む（SVG単体から完全復元できる）
+    canvas.innerHTML = buildMetadata() + ctx.flush();
+  }
+
+  // SVGに埋め込む権威データ（これだけで楽譜を完全復元できる）
+  function buildMetadata() {
+    const data = {
+      format: "codori-notation",
+      version: 1,
+      beatsPerBar: state.beatsPerBar,
+      fifths: state.fifths,
+      melody: state.melody.map((n) => ({
+        startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
+        keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole,
+        lyric: n.lyric, page: n.page, x: n.x, y: n.y
+      }))
+    };
+    const json = JSON.stringify(data).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    return `<metadata id="codori-score-data">${json}</metadata>`;
   }
 
   function render() {
@@ -366,9 +392,19 @@ function createScoreNotation(canvas, options = {}) {
       ctx.smufl(accCode, x - SPACING * 1.7, y, MUSIC, "start", color);
     }
 
-    // 符頭（SMuFL: 4拍以上=全音符、2拍以上=2分、それ未満=黒玉）
+    // 符頭（SMuFL: 4拍以上=全音符、2拍以上=2分、それ未満=黒玉）。
+    // 可逆性: 各符頭に音楽データ(data-*)を持たせ、SVG単体から音を識別できるようにする。
     const headCode = beats >= 4 ? SMUFL.headWhole : beats >= 2 ? SMUFL.headHalf : SMUFL.headBlack;
-    ctx.smufl(headCode, x, y, MUSIC, "middle", color);
+    ctx.smufl(headCode, x, y, MUSIC, "middle", color, {
+      "class": "note-head",
+      "data-midi": note.midi,
+      "data-beat": Math.round(note.startBeat * 1000) / 1000,
+      "data-beats": note.beats,
+      "data-key-fifths": Number.isFinite(note.keyFifths) ? note.keyFifths : undefined,
+      "data-lyric": note.lyric || undefined,
+      "data-slur-id": note.slurId || undefined,
+      "data-slur-role": note.slurRole || undefined
+    });
 
     // 付点（付点音価は基準値×1.5）。符頭の右に付点グリフ。
     const dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
@@ -487,11 +523,45 @@ function createScoreNotation(canvas, options = {}) {
     getSelected() {
       return state.selected;
     },
+    // 自己完結SVG（音楽データ埋め込み済み）を文字列で取り出す
+    getSVG() {
+      render();
+      return new XMLSerializer().serializeToString(canvas);
+    },
     render
   };
 }
 
+// SVG（自己完結フォーマット）→ 音楽データへ可逆復元する。
+// 文字列でもSVG要素でも受け取れる。{ beatsPerBar, fifths, melody } を返す（無ければ null）。
+function parseScoreSVG(svgOrText) {
+  let json = null;
+  if (typeof svgOrText === "string") {
+    const m = svgOrText.match(/<metadata id="codori-score-data">([\s\S]*?)<\/metadata>/);
+    if (m) json = m[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  } else if (svgOrText && svgOrText.querySelector) {
+    const el = svgOrText.querySelector("#codori-score-data");
+    if (el) json = el.textContent;
+  }
+  if (!json) return null;
+  try {
+    const data = JSON.parse(json);
+    return {
+      title: data.title,
+      bpm: data.bpm,
+      beatsPerBar: data.beatsPerBar,
+      fifths: data.fifths,
+      keySig: data.keySig || (Number.isFinite(data.fifths) ? { fifths: data.fifths } : null),
+      melody: data.melody || [],
+      chordEvents: data.chordEvents || [],
+      lyricLines: data.lyricLines || []
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 // Nodeテスト用
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { notationMidiToStaff, notationStaffStepToMidi, notationKeyAlter };
+  module.exports = { notationMidiToStaff, notationStaffStepToMidi, notationKeyAlter, parseScoreSVG };
 }
