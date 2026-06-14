@@ -98,6 +98,7 @@ function createScoreNotation(canvas, options = {}) {
     onSelect: options.onSelect || (() => {}),
     selected: null,   // note オブジェクト参照
     drag: null,
+    layout: options.layout || null, // 学習した元譜の配置（あれば元の配置で描く）
     layouts: []       // render 時に確定した {note, x, y, step}
   };
 
@@ -175,6 +176,7 @@ function createScoreNotation(canvas, options = {}) {
       version: 1,
       beatsPerBar: state.beatsPerBar,
       fifths: state.fifths,
+      layout: state.layout || undefined,
       melody: state.melody.map((n) => ({
         startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
         keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole,
@@ -186,6 +188,12 @@ function createScoreNotation(canvas, options = {}) {
   }
 
   function render() {
+    // 学習レイアウトがあれば、元譜の配置（システム・x位置・小節線）で再現する。
+    // 音高はMIDIから音楽的に再構築するので模写ではない。位置が無い場合は拍ベースで構築。
+    if (state.layout && state.layout.systems && state.layout.systems.length && state.melody.length) {
+      renderFromLayout();
+      return;
+    }
     const m = layoutMetrics();
     ctx.clear();
     state.layouts = [];
@@ -330,6 +338,111 @@ function createScoreNotation(canvas, options = {}) {
     // スラー: 同じ slurId の始点・終点（同じ行のみ）を曲線で結ぶ
     drawSlurs();
 
+    flush(m);
+  }
+
+  // 学習レイアウトでの描画。元譜のシステム構成・x位置・小節線・休符・コードを使い、
+  // 音高(縦位置)はMIDIから音楽的に再構築する（＝模写でなく、音楽的理解＋元の配置）。
+  function renderFromLayout() {
+    const layout = state.layout;
+    const systems = layout.systems;
+    const cssW = Math.max(canvas.parentElement?.clientWidth || 320, 280);
+    const lw = leftW();
+    const renderRight = cssW - 12;
+    const m = { cssW, cssH: systems.length * LINE_H + 6 };
+    ctx.clear();
+    state.layouts = [];
+
+    // 各音符を「同じページで縦位置(y)が最も近いシステム」へ割り当てる
+    const notesBySys = systems.map(() => []);
+    for (const n of state.melody) {
+      if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) continue;
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < systems.length; i += 1) {
+        if (systems[i].page !== n.page) continue;
+        const c = (systems[i].top + systems[i].bottom) / 2;
+        const d = Math.abs(n.y - c);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (best >= 0) notesBySys[best].push(n);
+    }
+
+    for (let si = 0; si < systems.length; si += 1) {
+      const sys = systems[si];
+      const top = si * LINE_H + TOP_PAD;
+      const notes = notesBySys[si].slice().sort((a, b) => a.x - b.x);
+      // コンテンツのx範囲（音符・小節線・休符）→ 描画幅へ線形写像（元の相対間隔を保つ）
+      const xs = [];
+      for (const n of notes) xs.push(n.x);
+      for (const b of sys.bars || []) xs.push(b);
+      for (const r of sys.rests || []) xs.push(r.x);
+      const contentLeft = (xs.length ? Math.min(...xs) : (sys.clefX + 30)) - 3;
+      const contentRight = (xs.length ? Math.max(...xs) : (layout.pageWidth - 20)) + 7;
+      const span = Math.max(1, contentRight - contentLeft);
+      const mapX = (x) => lw + ((x - contentLeft) / span) * (renderRight - lw);
+
+      // 五線
+      ctx.strokeStyle = "#9aa7b0"; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i += 1) {
+        const y = top + i * SPACING;
+        ctx.beginPath(); ctx.moveTo(4, y); ctx.lineTo(renderRight, y); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(4, top); ctx.lineTo(4, top + STAFF_H); ctx.stroke();
+      drawClef(6, top);
+      // 調号
+      const lf = sys.fifths || 0;
+      if (lf) {
+        const steps = lf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
+        const accCode = lf > 0 ? SMUFL.accSharp : SMUFL.accFlat;
+        for (let i = 0; i < Math.abs(lf); i += 1) ctx.smufl(accCode, CLEF_W + i * 8, stepToY(steps[i], top), MUSIC, "start", "#1f2933");
+      }
+      // 小節線
+      ctx.strokeStyle = "#9aa7b0"; ctx.lineWidth = 1;
+      for (const bx of sys.bars || []) {
+        const x = mapX(bx);
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + STAFF_H); ctx.stroke();
+      }
+      // 段番号
+      ctx.fillStyle = "#62717d"; ctx.font = "9px sans-serif";
+      ctx.fillText(String(si + 1), 6, top - 6);
+      // 休符（学習位置）
+      for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats);
+      // コード（学習位置・五線の上）
+      if (sys.chords && sys.chords.length) {
+        ctx.fillStyle = "#1f6f4f"; ctx.font = "11px sans-serif";
+        for (const c of sys.chords) ctx.fillText(c.text, mapX(c.x) - 4, top - 16);
+      }
+      // 音符: 連桁は「同じ拍で連続する8分以下」でまとめる（音楽的グルーピング）
+      const placed = notes.map((n) => ({
+        note: n, x: mapX(n.x),
+        base: (n.beats === 0.75 || n.beats === 1.5 || n.beats === 3 || n.beats === 6) ? n.beats / 1.5 : n.beats
+      }));
+      const groups = [];
+      let run = null;
+      for (const d of placed) {
+        const beamable = d.base <= 0.5 + 1e-6;
+        const beat = Math.floor((d.note.startBeat || 0) + 1e-6);
+        if (beamable && run && run.beat === beat) run.items.push(d);
+        else { if (run) groups.push(run); run = beamable ? { beat, items: [d] } : null; if (!beamable) groups.push({ items: [d], single: true }); }
+      }
+      if (run) groups.push(run);
+      for (const g of groups) {
+        if (g.single || g.items.length < 2) { for (const d of g.items) drawNote(d.note, d.x, top, null); continue; }
+        const steps = g.items.map((d) => notationMidiToStaff(d.note.midi, (Number.isFinite(d.note.keyFifths) ? d.note.keyFifths : state.fifths) < 0).step);
+        const up = steps.reduce((s, v) => s + v, 0) / steps.length < 4;
+        const ys = g.items.map((d, i) => stepToY(steps[i], top));
+        const tipY = up ? Math.min(...ys) - 24 : Math.max(...ys) + 24;
+        for (const d of g.items) drawNote(d.note, d.x, top, { up, tipY });
+        const x0 = up ? g.items[0].x + HEAD_HALF : g.items[0].x - HEAD_HALF;
+        const x1 = up ? g.items[g.items.length - 1].x + HEAD_HALF : g.items[g.items.length - 1].x - HEAD_HALF;
+        ctx.strokeStyle = state.selected && g.items.some((d) => d.note === state.selected) ? "#d89b2b" : "#1f2933";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.moveTo(x0, tipY); ctx.lineTo(x1, tipY); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+    drawSlurs();
     flush(m);
   }
 
@@ -513,6 +626,7 @@ function createScoreNotation(canvas, options = {}) {
       state.melody = melody;
       if (opts.beatsPerBar) state.beatsPerBar = opts.beatsPerBar;
       if (opts.keySig !== undefined) state.fifths = opts.keySig?.fifths || 0;
+      if (opts.layout !== undefined) state.layout = opts.layout;
       if (!melody.includes(state.selected)) state.selected = null;
       render();
     },
@@ -552,6 +666,7 @@ function parseScoreSVG(svgOrText) {
       beatsPerBar: data.beatsPerBar,
       fifths: data.fifths,
       keySig: data.keySig || (Number.isFinite(data.fifths) ? { fifths: data.fifths } : null),
+      layout: data.layout || null,
       melody: data.melody || [],
       chordEvents: data.chordEvents || [],
       lyricLines: data.lyricLines || []

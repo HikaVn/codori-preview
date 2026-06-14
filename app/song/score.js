@@ -160,7 +160,7 @@ function syncScoreNotation() {
       onSelect: (note) => { renderScoreNoteTable(); drawScoreOverlayMarks(); scrollScoreNoteIntoView(note); }
     });
   }
-  scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar, keySig: scoreState.keySig });
+  scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar, keySig: scoreState.keySig, layout: scoreState.layout });
 }
 
 function scrollScoreNoteIntoView(note) {
@@ -425,12 +425,14 @@ async function scoreLoadPdf(file, beatsPerBar) {
     let bpm = parsed.bpm || 100;
     let vectorChords = null;
     let vectorBeatCheck = null;
+    let vectorLayout = null;
     try {
       pdfLib = await loadPdfjs();
       const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, explicit);
       vectorMelody = res.melody || [];
       keySig = res.keySig || null;
       vectorBeatCheck = res.beatCheck || null;        // 拍検算サマリ
+      vectorLayout = res.layout || null;              // 学習レイアウト（元の配置）
       if (res.beatsPerBar) bpb = res.beatsPerBar;     // 自動検出した拍子
       if (res.tempo) bpm = res.tempo;                 // 自動検出したテンポ
       if (res.chordEvents && res.chordEvents.length) vectorChords = res.chordEvents; // ♭グリフ込みのコード
@@ -452,6 +454,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
       melody: vectorMelody,
       chordEvents,
       beatCheck: vectorBeatCheck,
+      layout: vectorLayout,
       words: [],
       lyricLines: parsed.lyricLines
     }, "PDF楽譜");
@@ -485,6 +488,7 @@ async function scoreLoadSvg(file) {
       keySig: data.keySig || null,
       melody: data.melody,
       chordEvents: data.chordEvents || [],
+      layout: data.layout || null,
       words: [],
       lyricLines: data.lyricLines || []
     }, "SVG楽譜");
@@ -504,6 +508,7 @@ function scoreExportSvg() {
     format: "codori-notation", version: 1,
     title: scoreState.title, bpm: scoreState.bpm,
     beatsPerBar: scoreState.beatsPerBar, fifths: scoreState.keySig?.fifths, keySig: scoreState.keySig,
+    layout: scoreState.layout || undefined,
     melody: scoreState.melody.map((n) => ({
       startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
       keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, lyric: n.lyric, page: n.page, x: n.x, y: n.y
