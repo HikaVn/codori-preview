@@ -824,7 +824,9 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       for (const c of keyCands) tally.set(c.count, (tally.get(c.count) || 0) + 1);
       sigCount = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
     }
-    hypotheses = sigCount ? [-sigCount, sigCount] : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+    // 調号グリフの数はヒント（♭か♯か不明）。ただし非SMuFLでは誤検出もあるので
+    // 無調号(0)も必ず候補に入れ、KK推定で最も合う調を選ぶ（無調号曲の誤検出対策）。
+    hypotheses = sigCount ? [-sigCount, 0, sigCount] : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
   }
   const keyPick = allNotes.length ? choosePdfKeySignature(allNotes, hypotheses) : null;
   const fifths = keyPick ? keyPick.fifths : 0;
