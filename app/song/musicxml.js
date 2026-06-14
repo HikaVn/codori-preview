@@ -135,6 +135,9 @@ function parseMusicXmlDoc(doc) {
   let beatsPerBar = 4;
   let bpm = 100;
   let gotTempo = false;
+  let fifths = 0;        // 調号（五度圏: ♯=正/♭=負）
+  let firstFifths = null; // 曲頭の調号（keySig表示用）
+  let gotTime = false;   // 拍子は曲頭のものを採用
 
   const melody = [];
   const chordEvents = []; // {startBeat, chord}
@@ -152,7 +155,9 @@ function parseMusicXmlDoc(doc) {
       const div = text(a, "divisions");
       if (div) divisions = parseInt(div, 10) || divisions;
       const beats = text(a, "beats");
-      if (beats) beatsPerBar = parseInt(beats, 10) || beatsPerBar;
+      if (beats && !gotTime) { beatsPerBar = parseInt(beats, 10) || beatsPerBar; gotTime = true; } // 曲頭の拍子を採用
+      const fEl = a.getElementsByTagName("fifths")[0];
+      if (fEl) { fifths = parseInt(fEl.textContent, 10) || 0; if (firstFifths === null) firstFifths = fifths; }
     }
     // tempo（sound/metronome）
     if (!gotTempo) {
@@ -183,18 +188,26 @@ function parseMusicXmlDoc(doc) {
         const beats = dur / divisions;
         const isRest = node.getElementsByTagName("rest").length > 0;
         const noteStart = isChordMember ? cursorBeat - beats : cursorBeat; // chordは直前と同時
+        // タイ: type="stop" は直前の同音へ結合する
+        let tieStop = false;
+        for (const tieEl of node.getElementsByTagName("tie")) if (tieEl.getAttribute("type") === "stop") tieStop = true;
         if (!isRest) {
           const pitchEl = node.getElementsByTagName("pitch")[0];
           const midi = pitchEl ? pitchToMidi(pitchEl) : null;
           // 歌詞はメロディ（chordメンバー以外）から拾う
           if (!isChordMember && midi != null) {
-            const lyricEl = node.getElementsByTagName("lyric")[0];
-            if (lyricEl) {
-              const t = text(lyricEl, "text");
-              const syl = text(lyricEl, "syllabic") || "single";
-              if (t) lyricFrags.push({ startBeat: noteStart, text: t, syllabic: syl });
+            const prev = melody[melody.length - 1];
+            if (tieStop && prev && prev.midi === midi && Math.abs(prev.startBeat + prev.beats - noteStart) < 0.05) {
+              prev.beats = round4(prev.beats + beats); // タイ結合（1音に伸ばす）
+            } else {
+              const lyricEl = node.getElementsByTagName("lyric")[0];
+              if (lyricEl) {
+                const t = text(lyricEl, "text");
+                const syl = text(lyricEl, "syllabic") || "single";
+                if (t) lyricFrags.push({ startBeat: noteStart, text: t, syllabic: syl });
+              }
+              melody.push({ startBeat: round4(noteStart), beats: round4(beats), midi, keyFifths: fifths });
             }
-            melody.push({ startBeat: round4(noteStart), beats: round4(beats), midi });
           }
         }
         if (!isChordMember) {
@@ -229,6 +242,7 @@ function parseMusicXmlDoc(doc) {
     title,
     bpm: Math.max(40, Math.min(240, bpm)),
     beatsPerBar,
+    keySig: firstFifths !== null ? { fifths: firstFifths } : null,
     melody: melody.filter((n) => n.startBeat >= 0),
     chordEvents,
     words
@@ -236,7 +250,8 @@ function parseMusicXmlDoc(doc) {
 }
 
 function round4(x) {
-  return Math.round(x * 16) / 16;
+  // 1/48拍グリッド: 1/16(=3/48)も3連符(1/3=16/48・1/6・1/12)も表せる
+  return Math.round(x * 48) / 48;
 }
 
 function parseMusicXmlString(xml) {

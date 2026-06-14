@@ -190,13 +190,25 @@ function findStaves(hseg, pageWidth, pageHeight) {
     }
   }
   // 五線らしい線（横長・ページ枠でない）だけ
-  const lineYs = clusters
-    .filter((c) => {
-      const span = c.x1 - c.x0;
-      return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
-    })
+  const valid = clusters.filter((c) => {
+    const span = c.x1 - c.x0;
+    return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
+  });
+  // スラー/タイは「真ん中ほど太い」弧で、水平部分が五線候補に混入する（部分幅）。
+  // 五線は用紙幅の広い範囲（段の全幅）に渡る線なので、用紙幅の7割未満の短い線は除外する。
+  const pw = pageWidth || 595;
+  let lineYs = valid
+    .filter((c) => (c.x1 - c.x0) > pw * 0.7)
     .map((c) => c.y)
     .sort((a, b) => a - b);
+  // 段組みが細く（余白が広く）7割に満たない譜面では、検出された最長線基準にフォールバック
+  if (lineYs.length < 5) {
+    const maxObserved = valid.reduce((m, c) => Math.max(m, c.x1 - c.x0), 1);
+    lineYs = valid
+      .filter((c) => (c.x1 - c.x0) > maxObserved * 0.8)
+      .map((c) => c.y)
+      .sort((a, b) => a - b);
+  }
   if (lineYs.length < 5) {
     return [];
   }
@@ -423,6 +435,12 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       filledKey = k;
     }
   }
+  // 音符が少ないページ（最終ページなど）は構造ヒューリスティック(ys≥8)が効かない。
+  // SMuFLコードがあれば黒玉コードを直接決める（取りこぼし防止）。
+  if (!filledKey) {
+    const sb = glyphs.find((g) => g.smufl === SMUFL.noteheadBlack);
+    if (sb) filledKey = keyOf(sb);
+  }
   if (!filledKey) {
     return { systems: [], staves: staves.length, keyCand: null };
   }
@@ -448,6 +466,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       openKey = k;
     }
   }
+  if (!openKey) { // SMuFLフォールバック（疎なページ）
+    const sh = glyphs.find((g) => g.smufl === SMUFL.noteheadHalf);
+    if (sh) openKey = keyOf(sh);
+  }
   // 全音符（符幹なしの開放符頭）= 符幹がほぼ無く、音高(y)も位置(x)もばらける符頭。
   // フォントは符頭コードを近い番号に固めるので、黒玉/白玉に番号が近いものを選ぶ
   // （調号の♭やクレフは同じxに固まる＝xがばらけない、で除外できる）。
@@ -467,6 +489,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
       if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
     }
+  }
+  if (!wholeKey) { // SMuFLフォールバック（疎なページ）
+    const sw = glyphs.find((g) => g.smufl === SMUFL.noteheadWhole);
+    if (sw) wholeKey = keyOf(sw);
   }
 
   const headList = glyphs
@@ -567,6 +593,13 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     }
     deduped.push(n);
   }
+
+  // 連符（3連符など）: SMuFLの連符数字グリフ(U+E880-E889)があれば、その近くの音符の
+  // 音価を normal/actual 倍する（3連符なら×2/3）。連符グリフが無ければ何もしない＝安全。
+  applyTuplets(deduped, glyphs, nearestStaff, spacing);
+
+  // アーティキュレーション（スタッカート/アクセント/テヌート/マルカート/フェルマータ）を符頭に付与。
+  applyArticulations(deduped, glyphs, nearestStaff, spacing);
 
   // タイ/スラー: 横長の弧。
   //  ・隣り合う同じ高さ(=同音)の2符頭の間に弧の中心があれば タイ → 音価を結合
@@ -719,6 +752,8 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     return {
       top: s.top,
       bottom: s.bottom,
+      spacing,
+      clefX: leftmostStaffX(glyphs, staves, nearestStaff, s),
       bars,
       chords,
       fifths: hasSmufl ? detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped) : null,
@@ -744,7 +779,49 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
     }
   }
-  return { systems, staves: staves.length, keyCand, timeSig };
+  // 繰り返し記号（SMuFL）: 反復バーライン・segno・coda・D.S.・D.C.、および
+  // テキスト "Fine"/"Coda"/"D.C."/"D.S." を拾う（再生順の展開に使う）。
+  const repeatMarks = detectRepeatMarks(glyphs, staves, nearestStaff, spacing);
+  return { systems, staves: staves.length, keyCand, timeSig, repeatMarks };
+}
+
+// 繰り返し記号の検出。各マークの {type, x, y} を返す（type: repeatStart/repeatEnd/
+// segno/coda/dalSegno/daCapo/fine/toCoda）。見つからなければ空＝既存譜面に無影響。
+function detectRepeatMarks(glyphs, staves, nearestStaff, spacing) {
+  const marks = [];
+  const SM = { 0xe040: "repeatStart", 0xe041: "repeatEnd", 0xe045: "dalSegno", 0xe046: "daCapo", 0xe047: "segno", 0xe048: "coda" };
+  for (const g of glyphs) {
+    if (SM[g.smufl]) marks.push({ type: SM[g.smufl], x: g.x, y: g.y });
+  }
+  // 反復ドット（repeatDots E043）が小節線の左右にある場合も反復バーライン
+  for (const g of glyphs) {
+    if (g.smufl === 0xe043) marks.push({ type: "repeatDots", x: g.x, y: g.y });
+  }
+  // テキストの "Fine"/"Coda"/"D.C."/"D.S."/"To Coda"（ASCIIグリフを近接連結）
+  const asc = glyphs.filter((g) => g.code >= 0x20 && g.code <= 0x7e && (!g.smufl || g.smufl < 0xe000))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  let run = null;
+  const flush = () => {
+    if (!run) return;
+    const t = run.text.replace(/\s+/g, " ").trim();
+    const lc = t.toLowerCase();
+    let type = null;
+    if (/^fine\b/i.test(t)) type = "fine";
+    else if (/to\s*coda/i.test(t)) type = "toCoda";
+    else if (/d\.?\s*c\./i.test(t) || /da\s*capo/i.test(t)) type = "daCapo";
+    else if (/d\.?\s*s\./i.test(t) || /dal\s*segno/i.test(t)) type = "dalSegno";
+    else if (/^coda\b/i.test(t)) type = "coda";
+    if (type) marks.push({ type, x: run.x0, y: run.y });
+    run = null;
+  };
+  for (const g of asc) {
+    const ch = String.fromCodePoint(g.code);
+    if (run && Math.abs(g.y - run.y) < 3 && g.x - run.lastX < spacing * 2.5) {
+      run.text += (g.x - run.lastX > spacing ? " " : "") + ch; run.lastX = g.x;
+    } else { flush(); run = { text: ch, x0: g.x, lastX: g.x, y: g.y }; }
+  }
+  flush();
+  return marks;
 }
 
 // 段 s の五線の左端x（クレフ・調号の開始位置の目安）
@@ -777,6 +854,60 @@ function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   return s > f ? s : -f;
 }
 
+// アーティキュレーション（スタッカート・アクセント・テヌート・マルカート・フェルマータ）。
+// 記号は符頭の真上/真下に置かれるので、同じ段でxが最も近い符頭へ artic を付ける。
+// 記号が無ければ何もしない（既存譜面に無影響）。再生はscore/songが gate/強さに反映する。
+function applyArticulations(notes, glyphs, nearestStaff, spacing) {
+  const AM = {
+    0xe4a0: "accent", 0xe4a1: "accent",
+    0xe4a2: "staccato", 0xe4a3: "staccato",
+    0xe4a4: "tenuto", 0xe4a5: "tenuto",
+    0xe4a6: "staccatissimo", 0xe4a7: "staccatissimo",
+    0xe4a8: "staccatissimo", 0xe4a9: "staccatissimo",
+    0xe4aa: "staccatissimo", 0xe4ab: "staccatissimo",
+    0xe4ac: "marcato", 0xe4ad: "marcato",
+    0xe4c0: "fermata", 0xe4c1: "fermata"
+  };
+  for (const g of (glyphs || [])) {
+    const kind = AM[g.smufl];
+    if (!kind) continue;
+    const st = nearestStaff(g.y).staff;
+    if (!st) continue;
+    let best = null; let bd = Infinity;
+    for (const n of notes) {
+      if (n.staffTop !== st.top) continue;
+      const dx = Math.abs(n.x - g.x);
+      if (dx < spacing * 1.4 && dx < bd) { bd = dx; best = n; }
+    }
+    // フェルマータは最強、それ以外は短い記号が優先（スタッカート＋アクセント等）
+    if (best && (!best.artic || kind === "fermata")) best.artic = kind;
+  }
+}
+
+// 連符（3連符など）の音価補正。SMuFLの連符数字グリフ(U+E880=0 … U+E889=9)の近くの
+// 音符を actual 個、音価を normal/actual 倍する（3連符 actual=3 → normal=2 → ×2/3）。
+// 連符グリフが無ければ何もしない（既存譜面に無影響）。
+function applyTuplets(notes, glyphs, nearestStaff, spacing) {
+  const tupGlyphs = (glyphs || []).filter((g) => g.smufl >= 0xe880 && g.smufl <= 0xe889);
+  for (const tg of tupGlyphs) {
+    const actual = tg.smufl - 0xe880; // 連符の数（3=3連符）
+    if (actual < 2) continue;
+    const normal = Math.pow(2, Math.floor(Math.log2(actual))); // 3→2, 5→4, 6→4, 7→4, 9→8
+    const ratio = normal / actual;
+    const st = nearestStaff(tg.y).staff;
+    if (!st) continue;
+    // 同じ段で連符数字のxに近い音符を actual 個集めて連符化
+    const group = notes
+      .filter((n) => n.staffTop === st.top && Math.abs(n.x - tg.x) < spacing * 9)
+      .sort((a, b) => Math.abs(a.x - tg.x) - Math.abs(b.x - tg.x))
+      .slice(0, actual);
+    for (const n of group) {
+      n.beats = Math.round(n.beats * ratio * 1000) / 1000;
+      n.tuplet = actual;
+    }
+  }
+}
+
 // PDF全ページのベクター譜 → 拍つきメロディ（音価＋小節線で配置。空小節＝休符が前に入る）。
 async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsPerBar = null) {
   const data = await file.arrayBuffer();
@@ -786,15 +917,17 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const pageW = viewport0.viewBox[2];
   const allSystems = [];
   const keyCands = [];
+  const allRepeatMarks = []; // {type, x, y, page}
   let detectedTS = null;
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { systems, keyCand, timeSig } = readVectorScorePage(ol, OPS, pageH, pageW);
+    const { systems, keyCand, timeSig, repeatMarks } = readVectorScorePage(ol, OPS, pageH, pageW);
     if (keyCand) keyCands.push(keyCand);
     if (timeSig && !detectedTS) detectedTS = timeSig;
     systems.forEach((s) => allSystems.push({ ...s, page: p }));
+    for (const m of repeatMarks || []) allRepeatMarks.push({ ...m, page: p });
   }
 
   // テンポ: 1ページ目のテキストから「= 120」を拾う
@@ -836,6 +969,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const melody = [];
   const chordEvents = [];
   const barChecks = []; // 拍検算: 各小節の記号音価合計が拍子ぶんに合うか
+  const barlineBeats = []; // 各小節線の {page, x, beat}（繰り返し検出用）
   let beat = 0;
   let noteCount = 0;
   // 段ごとの調号 fifths を適用（転調対応）。段に検出値が無ければ代表調号 fifths。
@@ -853,7 +987,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -945,11 +1079,12 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const limit = Math.max(0.25, (nextItem ? nextItem.onset : bpb) - it.onset);
         for (const n of it.ns) {
           const beats = consistent ? Math.min(n.beats || 1, limit) : limit;
-          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths });
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
           noteCount += 1;
         }
       }
       beat += bpb;
+      if (Number.isFinite(xR)) barlineBeats.push({ page: sys.page, x: xR, beat });
     };
     placeBar(-Infinity, edges[0]); // 行頭の小節
     for (let i = 0; i < edges.length - 1; i += 1) {
@@ -1002,8 +1137,59 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     problemCount: problems.length,
     problems: problems.slice(0, 50)
   };
+  // 繰り返し構造: 検出した反復記号(allRepeatMarks)を拍位置に写像し、再生順展開用の
+  // structure を組み立てる。記号が無ければ空（既存譜面に無影響）。
+  const totalEnd = melody.reduce((m, n) => Math.max(m, n.startBeat + n.beats), 0);
+  const markBeat = (m) => {
+    // 同ページの小節線のうち x が最も近いものの拍位置（反復記号は小節線上にある）
+    let best = null; let bestDx = Infinity;
+    for (const b of barlineBeats) {
+      if (b.page !== m.page) continue;
+      const dx = Math.abs(b.x - m.x);
+      if (dx < bestDx) { bestDx = dx; best = b; }
+    }
+    return best ? best.beat : null;
+  };
+  const beatsOf = (type) => allRepeatMarks.filter((m) => m.type === type)
+    .map(markBeat).filter((b) => b !== null).sort((a, b) => a - b);
+  const repeatStartBeats = beatsOf("repeatStart");
+  const repeatEndBeats = beatsOf("repeatEnd");
+  const repeats = [];
+  for (const e of repeatEndBeats) {
+    // この反復終端より手前で最も近い開始（無ければ曲頭0）
+    const starts = repeatStartBeats.filter((s) => s <= e + 1e-6);
+    const start = starts.length ? starts[starts.length - 1] : 0;
+    if (e > start + 1e-6) repeats.push({ start, end: e, times: 2 });
+  }
+  const first = (type) => { const a = beatsOf(type); return a.length ? a[0] : null; };
+  const daCapoAt = first("daCapo");
+  const dalSegnoAt = first("dalSegno");
+  const fineAt = first("fine");
+  const segnoAt = first("segno");
+  const toCodaAt = first("toCoda");
+  const codaAt = first("coda");
+  let dcAlFine = null; let dsAlCoda = null;
+  if (daCapoAt !== null && fineAt !== null) dcAlFine = { dcAt: daCapoAt, fineAt };
+  else if (dalSegnoAt !== null && segnoAt !== null && toCodaAt !== null && codaAt !== null) {
+    dsAlCoda = { dsAt: dalSegnoAt, segnoAt, toCodaAt, codaAt };
+  }
+  const repeatStructure = (repeats.length || dcAlFine || dsAlCoda)
+    ? { end: totalEnd, repeats, dcAlFine, dsAlCoda } : null;
+  // レイアウト（学習した元譜の配置）: 各システムの五線位置・小節線・調号・休符・コードを
+  // そのまま渡し、描画側で「拍から再構築」せず元の配置で再現できるようにする。
+  const layout = {
+    pageWidth: pageW, pageHeight: pageH, pages: pdf.numPages,
+    systems: allSystems.map((s) => ({
+      page: s.page, top: s.top, bottom: s.bottom, spacing: s.spacing, clefX: s.clefX,
+      fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
+      bars: s.bars,
+      chords: s.chords,
+      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1, smufl: r.smufl, dotted: !!r.dotted }))
+    }))
+  };
   return {
-    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck, layout,
+    repeatStructure,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };

@@ -72,7 +72,15 @@ function makeSvgCtx() {
     fill() { if (pend) { out.push(ellSvg(`fill="${cur.fill}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="${cur.fill}"/>`); },
     fillText(t, x, y) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${cur.fill}" font-size="${cur.font}" font-family="sans-serif">${esc(t)}</text>`); },
     // SMuFL音楽グリフ（Bravura）。codeはコードポイント。anchor: start/middle/end。
-    smufl(code, x, y, size, anchor, fill) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${fill || cur.fill}" font-size="${r2(size)}" font-family="BravuraSub" text-anchor="${anchor || "start"}">&#x${code.toString(16)};</text>`); },
+    // attrs を渡すと data-* 等の属性を付けられる（可逆性: 符頭に音楽データを持たせる）。
+    smufl(code, x, y, size, anchor, fill, attrs) {
+      const p = ap(x, y);
+      let a = "";
+      if (attrs) for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) a += ` ${k}="${esc(String(attrs[k]))}"`;
+      out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${fill || cur.fill}" font-size="${r2(size)}" font-family="BravuraSub" text-anchor="${anchor || "start"}"${a}>&#x${code.toString(16)};</text>`);
+    },
+    // 生のSVGマークアップを直接追加（metadata等）
+    raw(s) { out.push(s); },
     save() { stack.push({ ...cur, t: cur.t.slice() }); },
     restore() { const s = stack.pop(); if (s) cur = s; },
     translate(x, y) { cur.t = mul(cur.t, [1, 0, 0, 1, x, y]); },
@@ -90,6 +98,7 @@ function createScoreNotation(canvas, options = {}) {
     onSelect: options.onSelect || (() => {}),
     selected: null,   // note オブジェクト参照
     drag: null,
+    layout: options.layout || null, // 学習した元譜の配置（あれば元の配置で描く）
     layouts: []       // render 時に確定した {note, x, y, step}
   };
 
@@ -109,6 +118,7 @@ function createScoreNotation(canvas, options = {}) {
     restWhole: 0xe4e3, restHalf: 0xe4e4, restQuarter: 0xe4e5, rest8: 0xe4e6, rest16: 0xe4e7,
     accFlat: 0xe260, accNatural: 0xe261, accSharp: 0xe262, dot: 0xe1e7
   };
+  const SMUFL_REST_CODES = new Set([0xe4e3, 0xe4e4, 0xe4e5, 0xe4e6, 0xe4e7]);
   const MIN_MEASURE_W = 110;
 
   function maxAbsFifths() {
@@ -156,10 +166,35 @@ function createScoreNotation(canvas, options = {}) {
     canvas.setAttribute("viewBox", `0 0 ${m.cssW} ${m.cssH}`);
     canvas.style.width = `${m.cssW}px`;
     canvas.style.height = `${m.cssH}px`;
-    canvas.innerHTML = ctx.flush();
+    // 可逆性: 全音楽データを <metadata> にJSONで埋め込む（SVG単体から完全復元できる）
+    canvas.innerHTML = buildMetadata() + ctx.flush();
+  }
+
+  // SVGに埋め込む権威データ（これだけで楽譜を完全復元できる）
+  function buildMetadata() {
+    const data = {
+      format: "codori-notation",
+      version: 1,
+      beatsPerBar: state.beatsPerBar,
+      fifths: state.fifths,
+      layout: state.layout || undefined,
+      melody: state.melody.map((n) => ({
+        startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
+        keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole,
+        lyric: n.lyric, page: n.page, x: n.x, y: n.y
+      }))
+    };
+    const json = JSON.stringify(data).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    return `<metadata id="codori-score-data">${json}</metadata>`;
   }
 
   function render() {
+    // 学習レイアウトがあれば、元譜の配置（システム・x位置・小節線）で再現する。
+    // 音高はMIDIから音楽的に再構築するので模写ではない。位置が無い場合は拍ベースで構築。
+    if (state.layout && state.layout.systems && state.layout.systems.length && state.melody.length) {
+      renderFromLayout();
+      return;
+    }
     const m = layoutMetrics();
     ctx.clear();
     state.layouts = [];
@@ -307,6 +342,111 @@ function createScoreNotation(canvas, options = {}) {
     flush(m);
   }
 
+  // 学習レイアウトでの描画。元譜のシステム構成・x位置・小節線・休符・コードを使い、
+  // 音高(縦位置)はMIDIから音楽的に再構築する（＝模写でなく、音楽的理解＋元の配置）。
+  function renderFromLayout() {
+    const layout = state.layout;
+    const systems = layout.systems;
+    const cssW = Math.max(canvas.parentElement?.clientWidth || 320, 280);
+    const lw = leftW();
+    const renderRight = cssW - 12;
+    const m = { cssW, cssH: systems.length * LINE_H + 6 };
+    ctx.clear();
+    state.layouts = [];
+
+    // 各音符を「同じページで縦位置(y)が最も近いシステム」へ割り当てる
+    const notesBySys = systems.map(() => []);
+    for (const n of state.melody) {
+      if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) continue;
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < systems.length; i += 1) {
+        if (systems[i].page !== n.page) continue;
+        const c = (systems[i].top + systems[i].bottom) / 2;
+        const d = Math.abs(n.y - c);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (best >= 0) notesBySys[best].push(n);
+    }
+
+    for (let si = 0; si < systems.length; si += 1) {
+      const sys = systems[si];
+      const top = si * LINE_H + TOP_PAD;
+      const notes = notesBySys[si].slice().sort((a, b) => a.x - b.x);
+      // コンテンツのx範囲（音符・小節線・休符）→ 描画幅へ線形写像（元の相対間隔を保つ）
+      const xs = [];
+      for (const n of notes) xs.push(n.x);
+      for (const b of sys.bars || []) xs.push(b);
+      for (const r of sys.rests || []) xs.push(r.x);
+      const contentLeft = (xs.length ? Math.min(...xs) : (sys.clefX + 30)) - 3;
+      const contentRight = (xs.length ? Math.max(...xs) : (layout.pageWidth - 20)) + 7;
+      const span = Math.max(1, contentRight - contentLeft);
+      const mapX = (x) => lw + ((x - contentLeft) / span) * (renderRight - lw);
+
+      // 五線
+      ctx.strokeStyle = "#9aa7b0"; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i += 1) {
+        const y = top + i * SPACING;
+        ctx.beginPath(); ctx.moveTo(4, y); ctx.lineTo(renderRight, y); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(4, top); ctx.lineTo(4, top + STAFF_H); ctx.stroke();
+      drawClef(6, top);
+      // 調号
+      const lf = sys.fifths || 0;
+      if (lf) {
+        const steps = lf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
+        const accCode = lf > 0 ? SMUFL.accSharp : SMUFL.accFlat;
+        for (let i = 0; i < Math.abs(lf); i += 1) ctx.smufl(accCode, CLEF_W + i * 8, stepToY(steps[i], top), MUSIC, "start", "#1f2933");
+      }
+      // 小節線
+      ctx.strokeStyle = "#9aa7b0"; ctx.lineWidth = 1;
+      for (const bx of sys.bars || []) {
+        const x = mapX(bx);
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + STAFF_H); ctx.stroke();
+      }
+      // 段番号
+      ctx.fillStyle = "#62717d"; ctx.font = "9px sans-serif";
+      ctx.fillText(String(si + 1), 6, top - 6);
+      // 休符（学習位置・学習した休符の種類で）
+      for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats, r);
+      // コード（学習位置・五線の上）
+      if (sys.chords && sys.chords.length) {
+        ctx.fillStyle = "#1f6f4f"; ctx.font = "11px sans-serif";
+        for (const c of sys.chords) ctx.fillText(c.text, mapX(c.x) - 4, top - 16);
+      }
+      // 音符: 連桁は「同じ拍で連続する8分以下」でまとめる（音楽的グルーピング）
+      const placed = notes.map((n) => ({
+        note: n, x: mapX(n.x),
+        base: (n.beats === 0.75 || n.beats === 1.5 || n.beats === 3 || n.beats === 6) ? n.beats / 1.5 : n.beats
+      }));
+      const groups = [];
+      let run = null;
+      for (const d of placed) {
+        const beamable = d.base <= 0.5 + 1e-6;
+        const beat = Math.floor((d.note.startBeat || 0) + 1e-6);
+        if (beamable && run && run.beat === beat) run.items.push(d);
+        else { if (run) groups.push(run); run = beamable ? { beat, items: [d] } : null; if (!beamable) groups.push({ items: [d], single: true }); }
+      }
+      if (run) groups.push(run);
+      for (const g of groups) {
+        if (g.single || g.items.length < 2) { for (const d of g.items) drawNote(d.note, d.x, top, null); continue; }
+        const steps = g.items.map((d) => notationMidiToStaff(d.note.midi, (Number.isFinite(d.note.keyFifths) ? d.note.keyFifths : state.fifths) < 0).step);
+        const up = steps.reduce((s, v) => s + v, 0) / steps.length < 4;
+        const ys = g.items.map((d, i) => stepToY(steps[i], top));
+        const tipY = up ? Math.min(...ys) - 24 : Math.max(...ys) + 24;
+        for (const d of g.items) drawNote(d.note, d.x, top, { up, tipY });
+        const x0 = up ? g.items[0].x + HEAD_HALF : g.items[0].x - HEAD_HALF;
+        const x1 = up ? g.items[g.items.length - 1].x + HEAD_HALF : g.items[g.items.length - 1].x - HEAD_HALF;
+        ctx.strokeStyle = state.selected && g.items.some((d) => d.note === state.selected) ? "#d89b2b" : "#1f2933";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.moveTo(x0, tipY); ctx.lineTo(x1, tipY); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+    drawSlurs();
+    flush(m);
+  }
+
   // スラー描画（state.layouts の start/end を結ぶ。行が違う場合は省略）
   function drawSlurs() {
     const byId = new Map();
@@ -329,14 +469,50 @@ function createScoreNotation(canvas, options = {}) {
     }
     ctx.lineWidth = 1;
   }
-  function drawRest(x, staffTop, beats) {
+  // info（学習した休符）= {smufl, dotted}。あればその種類で描く。無ければ拍数から推定。
+  function drawRest(x, staffTop, beats, info) {
     const midY = staffTop + 2 * SPACING; // 第3線（SMuFL休符の基準）
-    const code = beats >= 3 ? SMUFL.restWhole
-      : beats >= 1.5 ? SMUFL.restHalf
-        : beats >= 0.75 ? SMUFL.restQuarter
-          : beats >= 0.4 ? SMUFL.rest8
-            : SMUFL.rest16;
+    let code;
+    let dotted;
+    if (info && info.smufl && SMUFL_REST_CODES.has(info.smufl)) {
+      code = info.smufl;       // 学習した実際の休符グリフ（付点4分休符=4分休符＋点 など）
+      dotted = !!info.dotted;
+    } else if (Math.abs(beats - state.beatsPerBar) < 0.1) {
+      code = SMUFL.restWhole;  // 1小節まるごと＝全休符の慣習
+      dotted = false;
+    } else {
+      dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
+      const base = dotted ? beats / 1.5 : beats;
+      code = base >= 4 ? SMUFL.restWhole : base >= 2 ? SMUFL.restHalf : base >= 1 ? SMUFL.restQuarter : base >= 0.5 ? SMUFL.rest8 : SMUFL.rest16;
+    }
     ctx.smufl(code, x, midY, MUSIC, "middle", "#8a96a0");
+    if (dotted) ctx.smufl(SMUFL.dot, x + HEAD_HALF + 1, midY - SPACING * 0.5, MUSIC, "start", "#8a96a0");
+  }
+
+  // アーティキュレーション記号をベクターで描く（フォント非依存）。
+  function drawArtic(artic, x, y, stemUp, staffTop, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.1;
+    if (artic === "fermata") {
+      const ay = staffTop - SPACING * 1.6;
+      ctx.beginPath(); ctx.moveTo(x - 6, ay + 2); ctx.quadraticCurveTo(x, ay - 7, x + 6, ay + 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, ay - 1.5, 1.2); ctx.fill();
+      return;
+    }
+    // 符幹と反対側（符幹が上なら下、下なら上）に置く
+    const ay = stemUp ? y + SPACING * 1.7 : y - SPACING * 1.7;
+    if (artic === "staccato") {
+      ctx.beginPath(); ctx.arc(x, ay, 1.3); ctx.fill();
+    } else if (artic === "staccatissimo") {
+      const d = stemUp ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(x, ay - 3 * d); ctx.lineTo(x - 2, ay + 2 * d); ctx.lineTo(x + 2, ay + 2 * d); ctx.fill();
+    } else if (artic === "tenuto") {
+      ctx.beginPath(); ctx.moveTo(x - 3.5, ay); ctx.lineTo(x + 3.5, ay); ctx.stroke();
+    } else if (artic === "accent") {
+      ctx.beginPath(); ctx.moveTo(x - 4, ay - 2.5); ctx.lineTo(x + 4, ay); ctx.lineTo(x - 4, ay + 2.5); ctx.stroke();
+    } else if (artic === "marcato") {
+      const d = stemUp ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(x - 3, ay + 3 * d); ctx.lineTo(x, ay - 3 * d); ctx.lineTo(x + 3, ay + 3 * d); ctx.stroke();
+    }
   }
 
   function drawNote(note, x, staffTop, beam) {
@@ -366,9 +542,19 @@ function createScoreNotation(canvas, options = {}) {
       ctx.smufl(accCode, x - SPACING * 1.7, y, MUSIC, "start", color);
     }
 
-    // 符頭（SMuFL: 4拍以上=全音符、2拍以上=2分、それ未満=黒玉）
+    // 符頭（SMuFL: 4拍以上=全音符、2拍以上=2分、それ未満=黒玉）。
+    // 可逆性: 各符頭に音楽データ(data-*)を持たせ、SVG単体から音を識別できるようにする。
     const headCode = beats >= 4 ? SMUFL.headWhole : beats >= 2 ? SMUFL.headHalf : SMUFL.headBlack;
-    ctx.smufl(headCode, x, y, MUSIC, "middle", color);
+    ctx.smufl(headCode, x, y, MUSIC, "middle", color, {
+      "class": "note-head",
+      "data-midi": note.midi,
+      "data-beat": Math.round(note.startBeat * 1000) / 1000,
+      "data-beats": note.beats,
+      "data-key-fifths": Number.isFinite(note.keyFifths) ? note.keyFifths : undefined,
+      "data-lyric": note.lyric || undefined,
+      "data-slur-id": note.slurId || undefined,
+      "data-slur-role": note.slurRole || undefined
+    });
 
     // 付点（付点音価は基準値×1.5）。符頭の右に付点グリフ。
     const dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
@@ -395,6 +581,13 @@ function createScoreNotation(canvas, options = {}) {
             : base <= 0.51 ? (up ? SMUFL.flag8Up : SMUFL.flag8Down) : null;
         if (flagCode) ctx.smufl(flagCode, sx, sy, MUSIC, "start", color);
       }
+    }
+
+    // アーティキュレーション記号（符頭の符幹と反対側、フェルマータは五線の上）。
+    // フォントサブセット非依存にするためベクター原図形で描く。
+    if (note.artic) {
+      const stemUp = base < 4 ? (beam ? beam.up : step < 4) : step < 4;
+      drawArtic(note.artic, x, y, stemUp, staffTop, color);
     }
 
     // 歌詞
@@ -477,6 +670,7 @@ function createScoreNotation(canvas, options = {}) {
       state.melody = melody;
       if (opts.beatsPerBar) state.beatsPerBar = opts.beatsPerBar;
       if (opts.keySig !== undefined) state.fifths = opts.keySig?.fifths || 0;
+      if (opts.layout !== undefined) state.layout = opts.layout;
       if (!melody.includes(state.selected)) state.selected = null;
       render();
     },
@@ -487,11 +681,47 @@ function createScoreNotation(canvas, options = {}) {
     getSelected() {
       return state.selected;
     },
+    // 自己完結SVG（音楽データ埋め込み済み）を文字列で取り出す
+    getSVG() {
+      render();
+      return new XMLSerializer().serializeToString(canvas);
+    },
     render
   };
 }
 
+// SVG（自己完結フォーマット）→ 音楽データへ可逆復元する。
+// 文字列でもSVG要素でも受け取れる。{ beatsPerBar, fifths, melody } を返す（無ければ null）。
+function parseScoreSVG(svgOrText) {
+  let json = null;
+  if (typeof svgOrText === "string") {
+    const m = svgOrText.match(/<metadata id="codori-score-data">([\s\S]*?)<\/metadata>/);
+    if (m) json = m[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  } else if (svgOrText && svgOrText.querySelector) {
+    const el = svgOrText.querySelector("#codori-score-data");
+    if (el) json = el.textContent;
+  }
+  if (!json) return null;
+  try {
+    const data = JSON.parse(json);
+    return {
+      title: data.title,
+      bpm: data.bpm,
+      beatsPerBar: data.beatsPerBar,
+      fifths: data.fifths,
+      keySig: data.keySig || (Number.isFinite(data.fifths) ? { fifths: data.fifths } : null),
+      layout: data.layout || null,
+      repeatStructure: data.repeatStructure || null,
+      melody: data.melody || [],
+      chordEvents: data.chordEvents || [],
+      lyricLines: data.lyricLines || []
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 // Nodeテスト用
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { notationMidiToStaff, notationStaffStepToMidi, notationKeyAlter };
+  module.exports = { notationMidiToStaff, notationStaffStepToMidi, notationKeyAlter, parseScoreSVG };
 }

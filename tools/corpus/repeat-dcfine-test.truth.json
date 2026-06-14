@@ -1,0 +1,179 @@
+{
+  "format": "codori-test-truth",
+  "version": 1,
+  "beatsPerBar": 4,
+  "fifths": 0,
+  "noteCount": 12,
+  "restCount": 0,
+  "notes": [
+    {
+      "beat": 0,
+      "beats": 1,
+      "midi": 60
+    },
+    {
+      "beat": 1,
+      "beats": 1,
+      "midi": 62
+    },
+    {
+      "beat": 2,
+      "beats": 1,
+      "midi": 64
+    },
+    {
+      "beat": 3,
+      "beats": 1,
+      "midi": 65
+    },
+    {
+      "beat": 4,
+      "beats": 1,
+      "midi": 67
+    },
+    {
+      "beat": 5,
+      "beats": 1,
+      "midi": 69
+    },
+    {
+      "beat": 6,
+      "beats": 1,
+      "midi": 71
+    },
+    {
+      "beat": 7,
+      "beats": 1,
+      "midi": 72
+    },
+    {
+      "beat": 8,
+      "beats": 1,
+      "midi": 74
+    },
+    {
+      "beat": 9,
+      "beats": 1,
+      "midi": 76
+    },
+    {
+      "beat": 10,
+      "beats": 1,
+      "midi": 77
+    },
+    {
+      "beat": 11,
+      "beats": 1,
+      "midi": 79
+    }
+  ],
+  "rests": [],
+  "cases": [
+    {
+      "measure": 1,
+      "label": "頭（Fineはこの小節末）",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "type": "4分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "4分",
+          "midi": 62
+        },
+        {
+          "pitch": "E4",
+          "type": "4分",
+          "midi": 64
+        },
+        {
+          "pitch": "F4",
+          "type": "4分",
+          "midi": 65
+        }
+      ],
+      "rests": [],
+      "startBeat": 0
+    },
+    {
+      "measure": 2,
+      "label": "中間",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "G4",
+          "type": "4分",
+          "midi": 67
+        },
+        {
+          "pitch": "A4",
+          "type": "4分",
+          "midi": 69
+        },
+        {
+          "pitch": "B4",
+          "type": "4分",
+          "midi": 71
+        },
+        {
+          "pitch": "C5",
+          "type": "4分",
+          "midi": 72
+        }
+      ],
+      "rests": [],
+      "startBeat": 4
+    },
+    {
+      "measure": 3,
+      "label": "末（D.C. al Fine）",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "D5",
+          "type": "4分",
+          "midi": 74
+        },
+        {
+          "pitch": "E5",
+          "type": "4分",
+          "midi": 76
+        },
+        {
+          "pitch": "F5",
+          "type": "4分",
+          "midi": 77
+        },
+        {
+          "pitch": "G5",
+          "type": "4分",
+          "midi": 79
+        }
+      ],
+      "rests": [],
+      "startBeat": 8
+    }
+  ],
+  "repeatStructure": {
+    "end": 12,
+    "dcAlFine": {
+      "fineAt": 4
+    }
+  },
+  "playOrder": [
+    [
+      0,
+      12
+    ],
+    [
+      0,
+      4
+    ]
+  ]
+}

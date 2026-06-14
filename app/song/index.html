@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260614-key0-v1">
+    <link rel="stylesheet" href="./song.css?v=20260614-artic-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -557,6 +557,12 @@
 
           <h3 class="score-subhead">楽譜（読み取り再現）</h3>
           <p class="hint">読み取った音符を五線譜で再現するよ。元のPDFと見くらべて、音符をクリックで選択（下の表と連動）、上下にドラッグで線・間にスナップして直せる。半音の微調整は下の表の±でね。</p>
+          <div class="library-buttons">
+            <button class="ghost-button" id="score-export-svg" type="button">SVG書き出し</button>
+            <button class="ghost-button" id="score-import-svg-button" type="button">SVG読み込み</button>
+            <input type="file" id="score-import-svg" accept=".svg,image/svg+xml,text/xml,application/xml" hidden>
+            <span class="hint">SVGに楽譜データを埋め込むので、書き出したSVGから完全に復元できる（表示も編集もそのまま）。</span>
+          </div>
           <div class="notation-wrap">
             <svg id="score-notation" class="notation-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
           </div>
@@ -591,15 +597,16 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260614-key0-v1"></script>
-    <script src="./dsp.js?v=20260614-key0-v1"></script>
-    <script src="./pianoroll.js?v=20260614-key0-v1"></script>
-    <script src="./notation.js?v=20260614-key0-v1"></script>
-    <script src="./musicxml.js?v=20260614-key0-v1"></script>
-    <script src="./pdfscore.js?v=20260614-key0-v1"></script>
-    <script src="./import.js?v=20260614-key0-v1"></script>
-    <script src="./transcribe.js?v=20260614-key0-v1"></script>
-    <script src="./score.js?v=20260614-key0-v1"></script>
-    <script src="./practice.js?v=20260614-key0-v1"></script>
+    <script src="./song.js?v=20260614-artic-v1"></script>
+    <script src="./dsp.js?v=20260614-artic-v1"></script>
+    <script src="./pianoroll.js?v=20260614-artic-v1"></script>
+    <script src="./notation.js?v=20260614-artic-v1"></script>
+    <script src="./musicxml.js?v=20260614-artic-v1"></script>
+    <script src="./pdfscore.js?v=20260614-artic-v1"></script>
+    <script src="./repeats.js?v=20260614-artic-v1"></script>
+    <script src="./import.js?v=20260614-artic-v1"></script>
+    <script src="./transcribe.js?v=20260614-artic-v1"></script>
+    <script src="./score.js?v=20260614-artic-v1"></script>
+    <script src="./practice.js?v=20260614-artic-v1"></script>
   </body>
 </html>
