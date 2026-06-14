@@ -991,9 +991,12 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       noteCount += 1;
     };
     const assignChords = () => {
+      // 小節線のすぐ際にあるコードは「次の小節の頭」として扱う（譜面の慣習）。
+      // xを少し右へ寄せてから含む小節を探すことで、境界での所属の揺れを抑える。
+      const SNAP = 8;
       for (const c of sys.chords || []) {
-        // コードのxを含む小節（左に少し余裕）に割り当て、無ければ最も近い小節
-        let m = sysMeasures.find((mm) => c.x >= mm.xL - 6 && c.x < mm.xR);
+        const cx = c.x + SNAP;
+        let m = sysMeasures.find((mm) => cx >= mm.xL && cx < mm.xR);
         if (!m && sysMeasures.length) {
           m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
         }
