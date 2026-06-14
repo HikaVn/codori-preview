@@ -607,9 +607,11 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     deduped.some((n) => n.x - g.x > 1.5 && n.x - g.x < 12 && Math.abs(n.y - g.y) < 3)).length / Math.max(1, occ.length);
   const restCodes = new Set();
   for (const [k, s] of stat) {
-    if (k === filledKey || k === openKey) continue;
+    if (k === filledKey || k === openKey || k === wholeKey) continue; // 符頭は休符にしない
     if (!k.startsWith(musicFont + "/")) continue;
     if (s.count < 3) continue;
+    // 調号の♭/♯は段ごとに同じx列に固まる（x分散が小さい）。休符は小節内の色々なxに出る。
+    if (s.xs.size / s.count < 0.35) continue;
     const occ = glyphs.filter((g) => keyOf(g) === k);
     if (accidentalFrac(occ) >= 0.5) continue; // 臨時記号コードは休符にしない
     const q = occ.filter(restQualifies);

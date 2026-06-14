@@ -139,7 +139,7 @@ function renderScore() {
   if (bc && bc.measures) {
     beatNote = bc.problemCount === 0
       ? ` / 拍検算: 全${bc.measures}小節OK`
-      : ` / 拍検算: ${bc.problemCount}小節が拍子と不一致（要確認）`;
+      : ` / 拍検算: ${bc.balanced}/${bc.measures}小節OK（残り${bc.problemCount}はリズムを自動補正）`;
   }
   scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}`;
   renderScoreChordEditor();
