@@ -678,6 +678,7 @@ function parseScoreSVG(svgOrText) {
       fifths: data.fifths,
       keySig: data.keySig || (Number.isFinite(data.fifths) ? { fifths: data.fifths } : null),
       layout: data.layout || null,
+      repeatStructure: data.repeatStructure || null,
       melody: data.melody || [],
       chordEvents: data.chordEvents || [],
       lyricLines: data.lyricLines || []

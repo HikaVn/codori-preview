@@ -776,7 +776,49 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
     }
   }
-  return { systems, staves: staves.length, keyCand, timeSig };
+  // 繰り返し記号（SMuFL）: 反復バーライン・segno・coda・D.S.・D.C.、および
+  // テキスト "Fine"/"Coda"/"D.C."/"D.S." を拾う（再生順の展開に使う）。
+  const repeatMarks = detectRepeatMarks(glyphs, staves, nearestStaff, spacing);
+  return { systems, staves: staves.length, keyCand, timeSig, repeatMarks };
+}
+
+// 繰り返し記号の検出。各マークの {type, x, y} を返す（type: repeatStart/repeatEnd/
+// segno/coda/dalSegno/daCapo/fine/toCoda）。見つからなければ空＝既存譜面に無影響。
+function detectRepeatMarks(glyphs, staves, nearestStaff, spacing) {
+  const marks = [];
+  const SM = { 0xe040: "repeatStart", 0xe041: "repeatEnd", 0xe045: "dalSegno", 0xe046: "daCapo", 0xe047: "segno", 0xe048: "coda" };
+  for (const g of glyphs) {
+    if (SM[g.smufl]) marks.push({ type: SM[g.smufl], x: g.x, y: g.y });
+  }
+  // 反復ドット（repeatDots E043）が小節線の左右にある場合も反復バーライン
+  for (const g of glyphs) {
+    if (g.smufl === 0xe043) marks.push({ type: "repeatDots", x: g.x, y: g.y });
+  }
+  // テキストの "Fine"/"Coda"/"D.C."/"D.S."/"To Coda"（ASCIIグリフを近接連結）
+  const asc = glyphs.filter((g) => g.code >= 0x20 && g.code <= 0x7e && (!g.smufl || g.smufl < 0xe000))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  let run = null;
+  const flush = () => {
+    if (!run) return;
+    const t = run.text.replace(/\s+/g, " ").trim();
+    const lc = t.toLowerCase();
+    let type = null;
+    if (/^fine\b/i.test(t)) type = "fine";
+    else if (/to\s*coda/i.test(t)) type = "toCoda";
+    else if (/d\.?\s*c\./i.test(t) || /da\s*capo/i.test(t)) type = "daCapo";
+    else if (/d\.?\s*s\./i.test(t) || /dal\s*segno/i.test(t)) type = "dalSegno";
+    else if (/^coda\b/i.test(t)) type = "coda";
+    if (type) marks.push({ type, x: run.x0, y: run.y });
+    run = null;
+  };
+  for (const g of asc) {
+    const ch = String.fromCodePoint(g.code);
+    if (run && Math.abs(g.y - run.y) < 3 && g.x - run.lastX < spacing * 2.5) {
+      run.text += (g.x - run.lastX > spacing ? " " : "") + ch; run.lastX = g.x;
+    } else { flush(); run = { text: ch, x0: g.x, lastX: g.x, y: g.y }; }
+  }
+  flush();
+  return marks;
 }
 
 // 段 s の五線の左端x（クレフ・調号の開始位置の目安）
@@ -842,15 +884,17 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const pageW = viewport0.viewBox[2];
   const allSystems = [];
   const keyCands = [];
+  const allRepeatMarks = []; // {type, x, y, page}
   let detectedTS = null;
   for (let p = 1; p <= pdf.numPages; p += 1) {
     if (onProgress) onProgress(p / pdf.numPages);
     const page = await pdf.getPage(p);
     const ol = await page.getOperatorList();
-    const { systems, keyCand, timeSig } = readVectorScorePage(ol, OPS, pageH, pageW);
+    const { systems, keyCand, timeSig, repeatMarks } = readVectorScorePage(ol, OPS, pageH, pageW);
     if (keyCand) keyCands.push(keyCand);
     if (timeSig && !detectedTS) detectedTS = timeSig;
     systems.forEach((s) => allSystems.push({ ...s, page: p }));
+    for (const m of repeatMarks || []) allRepeatMarks.push({ ...m, page: p });
   }
 
   // テンポ: 1ページ目のテキストから「= 120」を拾う
@@ -892,6 +936,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   const melody = [];
   const chordEvents = [];
   const barChecks = []; // 拍検算: 各小節の記号音価合計が拍子ぶんに合うか
+  const barlineBeats = []; // 各小節線の {page, x, beat}（繰り返し検出用）
   let beat = 0;
   let noteCount = 0;
   // 段ごとの調号 fifths を適用（転調対応）。段に検出値が無ければ代表調号 fifths。
@@ -1006,6 +1051,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         }
       }
       beat += bpb;
+      if (Number.isFinite(xR)) barlineBeats.push({ page: sys.page, x: xR, beat });
     };
     placeBar(-Infinity, edges[0]); // 行頭の小節
     for (let i = 0; i < edges.length - 1; i += 1) {
@@ -1058,6 +1104,44 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     problemCount: problems.length,
     problems: problems.slice(0, 50)
   };
+  // 繰り返し構造: 検出した反復記号(allRepeatMarks)を拍位置に写像し、再生順展開用の
+  // structure を組み立てる。記号が無ければ空（既存譜面に無影響）。
+  const totalEnd = melody.reduce((m, n) => Math.max(m, n.startBeat + n.beats), 0);
+  const markBeat = (m) => {
+    // 同ページの小節線のうち x が最も近いものの拍位置（反復記号は小節線上にある）
+    let best = null; let bestDx = Infinity;
+    for (const b of barlineBeats) {
+      if (b.page !== m.page) continue;
+      const dx = Math.abs(b.x - m.x);
+      if (dx < bestDx) { bestDx = dx; best = b; }
+    }
+    return best ? best.beat : null;
+  };
+  const beatsOf = (type) => allRepeatMarks.filter((m) => m.type === type)
+    .map(markBeat).filter((b) => b !== null).sort((a, b) => a - b);
+  const repeatStartBeats = beatsOf("repeatStart");
+  const repeatEndBeats = beatsOf("repeatEnd");
+  const repeats = [];
+  for (const e of repeatEndBeats) {
+    // この反復終端より手前で最も近い開始（無ければ曲頭0）
+    const starts = repeatStartBeats.filter((s) => s <= e + 1e-6);
+    const start = starts.length ? starts[starts.length - 1] : 0;
+    if (e > start + 1e-6) repeats.push({ start, end: e, times: 2 });
+  }
+  const first = (type) => { const a = beatsOf(type); return a.length ? a[0] : null; };
+  const daCapoAt = first("daCapo");
+  const dalSegnoAt = first("dalSegno");
+  const fineAt = first("fine");
+  const segnoAt = first("segno");
+  const toCodaAt = first("toCoda");
+  const codaAt = first("coda");
+  let dcAlFine = null; let dsAlCoda = null;
+  if (daCapoAt !== null && fineAt !== null) dcAlFine = { dcAt: daCapoAt, fineAt };
+  else if (dalSegnoAt !== null && segnoAt !== null && toCodaAt !== null && codaAt !== null) {
+    dsAlCoda = { dsAt: dalSegnoAt, segnoAt, toCodaAt, codaAt };
+  }
+  const repeatStructure = (repeats.length || dcAlFine || dsAlCoda)
+    ? { end: totalEnd, repeats, dcAlFine, dsAlCoda } : null;
   // レイアウト（学習した元譜の配置）: 各システムの五線位置・小節線・調号・休符・コードを
   // そのまま渡し、描画側で「拍から再構築」せず元の配置で再現できるようにする。
   const layout = {
@@ -1072,6 +1156,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   };
   return {
     melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck, layout,
+    repeatStructure,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };

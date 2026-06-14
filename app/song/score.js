@@ -15,6 +15,8 @@ const scoreState = {
   melody: [],       // [{startBeat, beats, midi, origMidi, lyric}]
   lyricLines: [],
   keySig: null,     // {fifths, mode, tonic} | null（PDF読み取りの調号）
+  repeatStructure: null, // 繰り返し構造（リピート/D.C./D.S.）| null
+  playOrder: null,  // 繰り返し展開した再生順（拍区間の並び）| null
   pianoRoll: null,
   notation: null,
   overlayPages: []  // PDF重ね合わせの {pageNum, marks, scale, dispScale}
@@ -99,6 +101,10 @@ function loadScoreData(parsed, kind) {
   scoreState.keySig = parsed.keySig || null;
   scoreState.beatCheck = parsed.beatCheck || null; // 拍検算（小節ごとの拍合計が拍子に合うか）
   scoreState.layout = parsed.layout || null;       // 学習した元譜の配置（あれば元の配置で再現）
+  scoreState.repeatStructure = parsed.repeatStructure || null; // 繰り返し構造（リピート/D.C./D.S.）
+  // 繰り返しの「再生順」（拍区間の並び）。記号があれば展開、無ければnull（通常再生）。
+  scoreState.playOrder = (scoreState.repeatStructure && typeof expandRepeats === "function")
+    ? expandRepeats(scoreState.repeatStructure) : null;
   // コード列 → events（startBeatは隣との差で拍数化）
   const chords = [...(parsed.chordEvents || [])].sort((a, b) => a.startBeat - b.startBeat);
   scoreState.events = [{ type: "section", label: kind, beats: 0, lineIndex: 0 }];
@@ -142,7 +148,16 @@ function renderScore() {
       ? ` / 拍検算: 全${bc.measures}小節OK`
       : ` / 拍検算: ${bc.balanced}/${bc.measures}小節OK（残り${bc.problemCount}はリズムを自動補正）`;
   }
-  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}`;
+  let repeatNote = "";
+  const rs = scoreState.repeatStructure;
+  if (rs) {
+    const parts = [];
+    if (rs.repeats && rs.repeats.length) parts.push(`リピート${rs.repeats.length}`);
+    if (rs.dcAlFine) parts.push("D.C. al Fine");
+    if (rs.dsAlCoda) parts.push("D.S. al Coda");
+    if (parts.length) repeatNote = ` / 繰り返し: ${parts.join("・")}（再生時に展開）`;
+  }
+  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}${repeatNote}`;
   renderScoreChordEditor();
   syncScoreNotation();
   syncScorePianoRoll();
@@ -367,6 +382,13 @@ function scoreToSong() {
   recomputeScoreStartBeats();
   const bpm = Math.max(40, Math.min(240, Number(scoreEl.bpm.value) || 100));
   const events = scoreState.events.map((e) => ({ ...e }));
+  // 繰り返し記号があれば、再生順(playOrder)に従ってメロディを展開する。
+  // 記号が無ければ playOrder=null で従来どおり（無影響）。
+  let playMelody = scoreState.melody;
+  if (scoreState.playOrder && scoreState.playOrder.length && typeof applyPlayOrder === "function") {
+    const exp = applyPlayOrder(scoreState.melody, scoreState.playOrder);
+    if (exp.length) playMelody = exp;
+  }
   // 歌詞: 行イベントがあればタイミング割り付け、なければ貼り付けをN小節割り付け
   if (scoreState.lyricEvents && scoreState.lyricEvents.length) {
     assignTimedLyricsToEvents(events, scoreState.lyricEvents.map((w) => ({ startBeat: w.startBeat, text: w.text })));
@@ -382,7 +404,7 @@ function scoreToSong() {
     transpose: 0,
     source: "",
     events,
-    melody: scoreState.melody.map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi })),
+    melody: playMelody.map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi })),
     rhythmPattern: "whole"
   }, null);
   setMode("edit");
@@ -426,6 +448,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
     let vectorChords = null;
     let vectorBeatCheck = null;
     let vectorLayout = null;
+    let vectorRepeats = null;
     try {
       pdfLib = await loadPdfjs();
       const res = await extractPdfVectorMelody(file, pdfLib.getDocument.bind(pdfLib), pdfLib.OPS, null, explicit);
@@ -433,6 +456,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
       keySig = res.keySig || null;
       vectorBeatCheck = res.beatCheck || null;        // 拍検算サマリ
       vectorLayout = res.layout || null;              // 学習レイアウト（元の配置）
+      vectorRepeats = res.repeatStructure || null;    // 繰り返し構造
       if (res.beatsPerBar) bpb = res.beatsPerBar;     // 自動検出した拍子
       if (res.tempo) bpm = res.tempo;                 // 自動検出したテンポ
       if (res.chordEvents && res.chordEvents.length) vectorChords = res.chordEvents; // ♭グリフ込みのコード
@@ -455,6 +479,7 @@ async function scoreLoadPdf(file, beatsPerBar) {
       chordEvents,
       beatCheck: vectorBeatCheck,
       layout: vectorLayout,
+      repeatStructure: vectorRepeats,
       words: [],
       lyricLines: parsed.lyricLines
     }, "PDF楽譜");
@@ -489,6 +514,7 @@ async function scoreLoadSvg(file) {
       melody: data.melody,
       chordEvents: data.chordEvents || [],
       layout: data.layout || null,
+      repeatStructure: data.repeatStructure || null,
       words: [],
       lyricLines: data.lyricLines || []
     }, "SVG楽譜");
@@ -509,6 +535,7 @@ function scoreExportSvg() {
     title: scoreState.title, bpm: scoreState.bpm,
     beatsPerBar: scoreState.beatsPerBar, fifths: scoreState.keySig?.fifths, keySig: scoreState.keySig,
     layout: scoreState.layout || undefined,
+    repeatStructure: scoreState.repeatStructure || undefined,
     melody: scoreState.melody.map((n) => ({
       startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.origMidi,
       keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, lyric: n.lyric, page: n.page, x: n.x, y: n.y
