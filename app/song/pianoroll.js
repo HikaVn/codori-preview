@@ -14,6 +14,7 @@ function createPianoRoll(canvas, options = {}) {
     quantUnit: options.quantUnit || 0.25,
     pxPerBeat: options.pxPerBeat || 64,
     rowH: 14,
+    playheadBeat: null,   // 再生位置（拍）。nullなら非表示
     onChange: options.onChange || (() => {}),
     minMidi: 55,
     maxMidi: 79,
@@ -136,6 +137,19 @@ function createPianoRoll(canvas, options = {}) {
       ctx.fillStyle = "rgba(255,255,255,0.5)";
       ctx.fillRect(x + w - 3, y + 1, 3, state.rowH - 2);
     });
+
+    // 再生位置の縦線（プレイヘッド）
+    if (state.playheadBeat !== null) {
+      const px = beatToX(state.playheadBeat, labelW);
+      if (px >= labelW && px <= width) {
+        ctx.strokeStyle = "#e0533a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, height);
+        ctx.stroke();
+      }
+    }
   }
 
   function hitTest(mx, my) {
@@ -274,6 +288,11 @@ function createPianoRoll(canvas, options = {}) {
     },
     getMelody() {
       return state.melody;
+    },
+    // 再生位置ラインの表示/移動（拍）。null で消す。
+    setPlayhead(beat) {
+      state.playheadBeat = beat;
+      render();
     },
     render,
     play,

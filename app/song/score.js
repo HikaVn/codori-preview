@@ -38,6 +38,7 @@ const scoreEl = {
   bpm: document.querySelector("#score-bpm"),
   beatsPerBar: document.querySelector("#score-beats-per-bar"),
   playMelody: document.querySelector("#score-play-melody"),
+  playChords: document.querySelector("#score-play-chords"),
   chordEditor: document.querySelector("#score-chord-editor"),
   notationCanvas: document.querySelector("#score-notation"),
   overlayBlock: document.querySelector("#score-overlay-block"),
@@ -95,6 +96,7 @@ function recomputeScoreStartBeats() {
 
 // 取り込んだ楽譜データを scoreState へ
 function loadScoreData(parsed, kind) {
+  if (typeof scorePreviewStop === "function") scorePreviewStop();
   scoreState.title = parsed.title || kind;
   scoreState.bpm = parsed.bpm || 100;
   scoreState.beatsPerBar = parsed.beatsPerBar || 4;
@@ -379,6 +381,7 @@ function scoreFitLyrics() {
 
 // --- 譜面化（エディット/プレイへ） ---
 function scoreToSong() {
+  if (typeof scorePreviewStop === "function") scorePreviewStop();
   recomputeScoreStartBeats();
   const bpm = Math.max(40, Math.min(240, Number(scoreEl.bpm.value) || 100));
   const events = scoreState.events.map((e) => ({ ...e }));
@@ -410,10 +413,130 @@ function scoreToSong() {
   setMode("edit");
 }
 
-// --- メロディ試聴 ---
-function scorePlayMelody() {
-  scoreState.pianoRoll?.play();
+// --- 試聴プレイヤー（停止可能・再生位置ライン・持続音メロディ＋コード）---
+const scorePreview = {
+  playing: false,
+  mode: null,    // "melody" | "chords"
+  nodes: [],     // {oscs:[], gain} 鳴っているノード（停止用に保持）
+  raf: 0,
+  startTime: 0,
+  totalBeats: 0,
+  spb: 0.6
+};
+const MELODY_PARTIALS = [[1, 1], [2, 0.35], [3, 0.18]]; // 基音＋2倍音＋3倍音
+const CHORD_PARTIALS = [[1, 1], [2, 0.22]];
+
+// 持続音の1声を鳴らす。アタックは柔らかめ、指定倍音までを重ねる。停止できるよう保持する。
+function scorePreviewVoice(freq, start, dur, gain, partials) {
+  const ctx = ensureAudioContext();
+  const peak = Math.max(0.0001, gain);
+  const atk = 0.03;  // 柔らかいアタック
+  const rel = 0.09;  // 末尾リリース（プチッ音の防止）
+  const hold = Math.max(0.06, dur);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.linearRampToValueAtTime(peak, start + atk);                  // ソフトアタック
+  env.gain.setValueAtTime(peak, start + Math.max(atk, hold - rel));     // 持続
+  env.gain.exponentialRampToValueAtTime(0.0001, start + hold + rel);    // リリース
+  env.connect(ctx.destination);
+  const oscs = [];
+  for (const [mult, amp] of partials) {
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq * mult;
+    og.gain.value = amp;
+    osc.connect(og); og.connect(env);
+    osc.start(start);
+    osc.stop(start + hold + rel + 0.05);
+    oscs.push(osc);
+  }
+  scorePreview.nodes.push({ oscs, gain: env });
 }
+
+function scorePreviewStop() {
+  if (scorePreview.raf) cancelAnimationFrame(scorePreview.raf);
+  scorePreview.raf = 0;
+  const ctx = typeof audioCtx !== "undefined" ? audioCtx : null;
+  const now = ctx ? ctx.currentTime : 0;
+  for (const n of scorePreview.nodes) {
+    try {
+      n.gain.gain.cancelScheduledValues(now);
+      n.gain.gain.setValueAtTime(Math.max(0.0001, n.gain.gain.value), now);
+      n.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+      for (const o of n.oscs) o.stop(now + 0.06);
+    } catch (e) { /* 既に停止済み */ }
+  }
+  scorePreview.nodes = [];
+  scorePreview.playing = false;
+  scorePreview.mode = null;
+  scoreState.pianoRoll?.setPlayhead(null);
+  updateScorePreviewButtons();
+}
+
+function updateScorePreviewButtons() {
+  const m = scorePreview.playing && scorePreview.mode === "melody";
+  const c = scorePreview.playing && scorePreview.mode === "chords";
+  if (scoreEl.playMelody) scoreEl.playMelody.textContent = m ? "⏹ 停止" : "▶ メロディを聞く";
+  if (scoreEl.playChords) scoreEl.playChords.textContent = c ? "⏹ 停止" : "▶ コードも試聴";
+}
+
+function scorePreviewStart(mode) {
+  // トグル: 同じモードが再生中なら停止
+  if (scorePreview.playing && scorePreview.mode === mode) { scorePreviewStop(); return; }
+  scorePreviewStop();
+  recomputeScoreStartBeats(); // コードの startBeat を最新化
+  const ctx = ensureAudioContext();
+  if (ctx.state === "suspended") ctx.resume();
+  const bpm = Math.max(40, Math.min(240, Number(scoreEl.bpm.value) || scoreState.bpm || 100));
+  const spb = 60 / bpm;
+  const start = ctx.currentTime + 0.08;
+  // 繰り返しがあれば再生順に展開
+  const playOrder = (scoreState.playOrder && scoreState.playOrder.length) ? scoreState.playOrder : null;
+  let melody = scoreState.melody;
+  if (playOrder && typeof applyPlayOrder === "function") {
+    const exp = applyPlayOrder(scoreState.melody, playOrder);
+    if (exp.length) melody = exp;
+  }
+  let maxBeat = 0;
+  for (const nt of melody) {
+    if (!Number.isFinite(nt.midi) || !Number.isFinite(nt.startBeat)) continue;
+    const beats = Number(nt.beats) || 1;
+    scorePreviewVoice(midiToFrequency(nt.midi), start + nt.startBeat * spb, beats * spb, 0.16, MELODY_PARTIALS);
+    maxBeat = Math.max(maxBeat, nt.startBeat + beats);
+  }
+  if (mode === "chords") {
+    let chordList = scoreState.events
+      .filter((e) => e.type === "chord" && e.chord)
+      .map((e) => ({ startBeat: e.startBeat, beats: Number(e.beats) || scoreState.beatsPerBar, chord: e.chord }));
+    if (playOrder && typeof applyPlayOrder === "function") chordList = applyPlayOrder(chordList, playOrder);
+    for (const e of chordList) {
+      const freqs = typeof chordFrequencies === "function" ? chordFrequencies(e.chord) : null;
+      if (!freqs) continue;
+      for (const f of freqs) scorePreviewVoice(f, start + e.startBeat * spb, e.beats * spb, 0.05, CHORD_PARTIALS);
+      maxBeat = Math.max(maxBeat, e.startBeat + e.beats);
+    }
+  }
+  if (!scorePreview.nodes.length) return; // 鳴らすものが無い
+  scorePreview.playing = true;
+  scorePreview.mode = mode;
+  scorePreview.startTime = start;
+  scorePreview.totalBeats = maxBeat;
+  scorePreview.spb = spb;
+  updateScorePreviewButtons();
+  // 再生位置ライン（ピアノロール上）を動かす
+  const tick = () => {
+    if (!scorePreview.playing) return;
+    const beat = (ctx.currentTime - scorePreview.startTime) / scorePreview.spb;
+    if (beat >= scorePreview.totalBeats + 0.25) { scorePreviewStop(); return; }
+    scoreState.pianoRoll?.setPlayhead(Math.max(0, beat));
+    scorePreview.raf = requestAnimationFrame(tick);
+  };
+  scorePreview.raf = requestAnimationFrame(tick);
+}
+
+function scorePlayMelody() { scorePreviewStart("melody"); }
+function scorePlayChords() { scorePreviewStart("chords"); }
 
 // ===== ファイル読み込み =====
 async function scoreLoadMusicXml(file) {
@@ -573,6 +696,7 @@ scoreEl.beatsPerBar?.addEventListener("change", () => {
   }
 });
 scoreEl.playMelody?.addEventListener("click", scorePlayMelody);
+scoreEl.playChords?.addEventListener("click", scorePlayChords);
 scoreEl.fitLyrics?.addEventListener("click", scoreFitLyrics);
 scoreEl.convert?.addEventListener("click", scoreToSong);
 scoreEl.toHiragana?.addEventListener("click", async () => {
