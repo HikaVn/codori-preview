@@ -29,6 +29,7 @@ function extractPageVectors(ol, OPS, pageH) {
   const beams = [];
   const arcs = []; // タイ/スラー候補（曲線パス）
   let pend = [];
+  let pts = [];
   let hasCurve = false;
   let bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
   for (let i = 0; i < ol.fnArray.length; i += 1) {
@@ -65,11 +66,13 @@ function extractPageVectors(ol, OPS, pageH) {
       let k = 0;
       let cur = null;
       pend = [];
+      pts = [];
       hasCurve = false;
       bbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
       const track = (p) => {
         bbox.minx = Math.min(bbox.minx, p[0]); bbox.maxx = Math.max(bbox.maxx, p[0]);
         bbox.miny = Math.min(bbox.miny, p[1]); bbox.maxy = Math.max(bbox.maxy, p[1]);
+        pts.push(p);
       };
       for (const op of ops) {
         if (op === OPS.moveTo) { cur = pdfApply(ctm, co[k], co[k + 1]); k += 2; track(cur); }
@@ -84,12 +87,27 @@ function extractPageVectors(ol, OPS, pageH) {
         if (dx > 12 && dy < 1.5) hseg.push({ y: pageH - (a[1] + b[1]) / 2, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
         else if (dy > 8 && dx < 1.6) vseg.push({ x: (a[0] + b[0]) / 2, y0: pageH - Math.max(a[1], b[1]), y1: pageH - Math.min(a[1], b[1]) });
       }
-      // 連桁（ビーム）候補: 横長・薄い塗り
-      if ((fn === OPS.fill || fn === OPS.eoFill) && bbox.maxx > bbox.minx) {
-        const w = bbox.maxx - bbox.minx;
-        const h = bbox.maxy - bbox.miny;
-        if (w >= 6 && w <= 40 && h >= 1 && h <= 6) {
-          beams.push({ x0: bbox.minx, x1: bbox.maxx, y: pageH - (bbox.miny + bbox.maxy) / 2 });
+      // 連桁（ビーム）候補: 横長で薄い「平行四辺形」（傾いていてもよい）。
+      // 直線エッジ(hasCurve=false)で、左右の端の縦幅（連桁の太さ）が小さいものだけ。
+      // 傾き付きで両端のyを記録し、後でstem位置のyを補間して当てる。
+      if ((fn === OPS.fill || fn === OPS.eoFill) && !hasCurve && bbox.maxx - bbox.minx >= 6 && bbox.maxx - bbox.minx <= 50) {
+        const x0 = bbox.minx;
+        const x1 = bbox.maxx;
+        const near = (px) => pts.filter((p) => Math.abs(p[0] - px) < 2).map((p) => p[1]);
+        const lY = near(x0);
+        const rY = near(x1);
+        if (lY.length && rY.length) {
+          const span = (a) => Math.max(...a) - Math.min(...a);
+          const thick = Math.max(span(lY), span(rY)); // 連桁の太さ（縦）
+          if (thick <= 4.5) {
+            const avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+            beams.push({
+              x0, x1,
+              y0: pageH - avg(lY), // 左端の中心y（画面座標）
+              y1: pageH - avg(rY), // 右端の中心y
+              y: pageH - (avg(lY) + avg(rY)) / 2
+            });
+          }
         }
       }
       // タイ/スラー候補: 曲線を含む横長・薄い弧
@@ -373,8 +391,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     if (dx <= -8 || dx >= 4) return false;
     return Math.abs(g.y - v.y0) < 3.2 || Math.abs(g.y - v.y1) < 3.2;
   });
+  // 連桁 b の、x における y（傾きを補間）
+  const beamYAt = (b, x) => (b.y0 !== undefined ? b.y0 + (b.y1 - b.y0) * ((x - b.x0) / ((b.x1 - b.x0) || 1)) : b.y);
   const beamAtEnd = (v, endY) => beams.some((b) =>
-    v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(b.y - endY) < spacing * 1.8);
+    v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(beamYAt(b, v.x) - endY) < spacing * 1.8);
 
   // font+code ごとの構造統計
   const stat = new Map();
@@ -492,8 +512,8 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   // 符幹の先 tipY に重なる連桁の本数（1=8分,2=16分,3=32分）。学習した縦間隔で段数を数える。
   const beamLevelsAt = (v, tipY) => {
     const ys = beams
-      .filter((b) => v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(b.y - tipY) < beamGap * 2.5 + spacing)
-      .map((b) => b.y)
+      .filter((b) => v.x >= b.x0 - 3 && v.x <= b.x1 + 3 && Math.abs(beamYAt(b, v.x) - tipY) < beamGap * 2.5 + spacing)
+      .map((b) => beamYAt(b, v.x))
       .sort((a, b) => a - b);
     let levels = 0;
     let prev = -Infinity;
