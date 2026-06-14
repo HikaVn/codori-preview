@@ -349,6 +349,8 @@ const elements = {
   familyFilter: document.querySelector("#family-filter"),
   filterSummary: document.querySelector("#filter-summary"),
   cardCount: document.querySelector("#card-count"),
+  homeButton: document.querySelector("#home-button"),
+  brandHome: document.querySelector("#brand-home"),
   modeTitle: document.querySelector("#mode-title"),
   modeDescription: document.querySelector("#mode-description"),
   firstStepTip: document.querySelector("#first-step-tip"),
@@ -564,7 +566,10 @@ function stageProgress(stageId = activePracticeStage?.id) {
 
 function stageChordIds(stage = activePracticeStage) {
   if (stage?.code_ids?.length) {
-    return stage.code_ids;
+    // ステージ定義は表示名（"C" / "Cm"）でコードを並べているが、コード本体の
+    // 識別子は code_id（"C_major" など）。カタログを通して正規の code_id にそろえ、
+    // 「聞いた」記録やクイズ判定が確実に一致するようにする。
+    return stage.code_ids.map((id) => practiceCatalog.get(id)?.code_id || id);
   }
   return chordData.map((chord) => chord.code_id).filter(Boolean);
 }
@@ -720,9 +725,63 @@ function updateStoryEntryControls() {
 
 function setModeSelectOnly(enabled) {
   isModeSelectOnly = Boolean(enabled);
+  if (!isModeSelectOnly) {
+    enterSessionHistory();
+  }
   syncAppModeClasses();
   updateLearningMenuStatus();
 }
+
+function openLearningMenu() {
+  if (elements.learningMenu) {
+    elements.learningMenu.open = true;
+  }
+}
+
+function enterSessionHistory() {
+  // ストーリー／図鑑に入ったら、端末やブラウザの「戻る」操作でトップへ戻れるよう
+  // 履歴を1つ積んでおく。アプリの外へいきなり出てしまうのを防ぐ。
+  try {
+    if (!window.history.state || !window.history.state.codoriSession) {
+      window.history.pushState({ codoriSession: true }, "");
+    }
+  } catch (error) {
+    // historyが使えない環境では、戻るボタン連携なしでホームボタンだけで動かす。
+  }
+}
+
+function goToTop(options = {}) {
+  // ストーリーは好きなときに中断できる。進捗は常に自動保存しているので、
+  // トップへ戻ってからでも「つづける」で同じ場所から再開できる。
+  if (isModeSelectOnly) {
+    return;
+  }
+  saveLastLocation();
+  setModeSelectOnly(true);
+  syncLearningMenuGroup();
+  renderPracticeStageChrome();
+  openLearningMenu();
+  if (typeof window.scrollTo === "function") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  if (!options.fromPopstate) {
+    try {
+      // ホームボタンで戻った場合は、積んでおいた履歴を1つ消化しておく。
+      // こうすると次の「戻る」で自然にアプリ外へ出られる。
+      if (window.history.state && window.history.state.codoriSession) {
+        window.history.back();
+      }
+    } catch (error) {
+      // historyが使えない環境では何もしない。
+    }
+  }
+}
+
+window.addEventListener("popstate", () => {
+  if (!isModeSelectOnly) {
+    goToTop({ fromPopstate: true });
+  }
+});
 
 function syncAppModeClasses() {
   document.body.classList.toggle("is-mode-select-only", isModeSelectOnly);
@@ -1429,6 +1488,8 @@ async function setChordSet(setId) {
     renderCompare();
   }
   renderProgression();
+  // 図鑑に切り替えたら「いまの歩き方」ガイドも図鑑向けに更新する。
+  updateModeGuide();
 }
 
 function renderPracticeStageChrome() {
@@ -1465,6 +1526,7 @@ function renderStageTargets() {
     button.setAttribute("style", keyStyle(chord));
     button.setAttribute("aria-label", `${chord.display_name}の音カードへ`);
     button.addEventListener("click", () => {
+      setModeSelectOnly(false);
       currentIndex = index;
       renderCard();
       updateStageProgress();
@@ -1657,12 +1719,11 @@ function setPracticeStage(stageId, options = {}) {
   updateTabAvailability();
   renderCard();
   renderQuiz();
-  if (activeView === "compare") {
-    renderCompare();
-  }
   renderProgression();
+  // タブのハイライト・表示ビュー・「いまの歩き方」ガイドをまとめて同期する。
+  // （ストーリーでもビュー切り替えタブを出すようになったため、ここで必ず合わせる）
+  setView(activeView);
   updateLearningMenuStatus();
-  closeMobileLearningMenu();
 }
 
 function resolveStageCodes(stage) {
@@ -2155,6 +2216,14 @@ elements.nextStageButton.addEventListener("click", () => {
   goToNextCourse();
 });
 elements.openCatalog.addEventListener("click", () => setChordSet("all-main-chords"));
+elements.homeButton.addEventListener("click", () => goToTop());
+elements.brandHome.addEventListener("click", () => goToTop());
+elements.brandHome.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    goToTop();
+  }
+});
 elements.prevCard.addEventListener("click", () => {
   if (!chordData.length) {
     return;
@@ -2254,6 +2323,10 @@ async function init() {
   renderProgression();
   setModeSelectOnly(shouldStartOnModeSelect);
   setView(activeView);
+  if (isModeSelectOnly) {
+    // トップ（モード選択）では、モバイルでも選択肢をたたまず見せる。
+    openLearningMenu();
+  }
 }
 
 init();
