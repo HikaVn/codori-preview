@@ -165,6 +165,7 @@ const el = {
   metronomeToggle: document.querySelector("#metronome-toggle"),
   countinToggle: document.querySelector("#countin-toggle"),
   loopToggle: document.querySelector("#loop-toggle"),
+  swingToggle: document.querySelector("#swing-toggle"),
   rhythmPattern: document.querySelector("#rhythm-pattern"),
   melodyGuideToggle: document.querySelector("#melody-guide-toggle"),
   originalToggle: document.querySelector("#original-toggle"),
@@ -427,6 +428,10 @@ function cutRingingChords(time) {
 // 余韻はコード切り替え時に cutRingingChords で全音同時にカットされる。
 const STRUM_ARPEGGIO_INTERVAL = 0.03;
 const STRUM_HARMONIC_RATIO = 0.2;
+// コードが切り替わる直前に作るわずかな隙間（秒）。次のコードへ被らせない。
+const CHORD_CHANGE_GAP = 0.07;
+// スウィングの8分ウラの位置（0.5=ストレート, 0.667=三連スウィング）。やや浅めの三連寄り。
+const SWING_RATIO = 0.64;
 
 function strumChord(chord, time, beats, strumGain = 1) {
   const frequencies = chordFrequencies(chord);
@@ -435,7 +440,10 @@ function strumChord(chord, time, beats, strumGain = 1) {
   }
   const ctx = audioCtx;
   const secPerBeatNow = 60 / song.bpm;
-  const duration = Math.min(Math.max(beats * secPerBeatNow + 0.5, 0.8), 2.6);
+  // コードが切り替わる際に、ほんの少し前で音を切って隙間を作る（次のコードへ被らせない）。
+  // 割り当てられた拍ぶんの長さから CHORD_CHANGE_GAP だけ手前で消えるようにする。
+  const fullSec = beats * secPerBeatNow;
+  const duration = Math.min(Math.max(fullSec - CHORD_CHANGE_GAP, 0.3), 2.6);
   const masterHold = Math.min(1.15, duration * 0.45);
   const master = ctx.createGain();
   master.gain.setValueAtTime(0.0001, time);
@@ -537,6 +545,18 @@ function beatToTime(beat) {
   return player.anchorTime + (beat - player.anchorBeat) * secPerBeat();
 }
 
+// スウィング: 各拍を8分のオモテ/ウラに分け、ウラ（拍の後半）を後ろへずらす（ハネる）。
+// オモテ拍（拍頭）は動かさないのでメトロノームやコード頭は揺れない。
+function swingBeat(beat) {
+  if (!el.swingToggle?.checked) return beat;
+  const whole = Math.floor(beat);
+  const f = beat - whole;
+  const sf = f <= 0.5
+    ? f * (SWING_RATIO / 0.5)
+    : SWING_RATIO + (f - 0.5) * ((1 - SWING_RATIO) / 0.5);
+  return whole + sf;
+}
+
 function currentBeat() {
   return player.anchorBeat + (audioCtx.currentTime - player.anchorTime) / secPerBeat();
 }
@@ -590,7 +610,7 @@ function schedulerTick() {
   }
   while (player.nextHitIdx < playbackHits.length) {
     const hit = playbackHits[player.nextHitIdx];
-    const time = beatToTime(hit.beat);
+    const time = beatToTime(swingBeat(hit.beat));
     if (time >= horizon) {
       break;
     }
@@ -616,7 +636,7 @@ function schedulerTick() {
   if (el.melodyGuideToggle?.checked && Array.isArray(song.melody)) {
     while (player.nextMelodyIdx < song.melody.length) {
       const note = song.melody[player.nextMelodyIdx];
-      const time = beatToTime(note.startBeat);
+      const time = beatToTime(swingBeat(note.startBeat));
       if (time >= horizon) {
         break;
       }
