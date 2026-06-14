@@ -118,6 +118,7 @@ function createScoreNotation(canvas, options = {}) {
     restWhole: 0xe4e3, restHalf: 0xe4e4, restQuarter: 0xe4e5, rest8: 0xe4e6, rest16: 0xe4e7,
     accFlat: 0xe260, accNatural: 0xe261, accSharp: 0xe262, dot: 0xe1e7
   };
+  const SMUFL_REST_CODES = new Set([0xe4e3, 0xe4e4, 0xe4e5, 0xe4e6, 0xe4e7]);
   const MIN_MEASURE_W = 110;
 
   function maxAbsFifths() {
@@ -406,8 +407,8 @@ function createScoreNotation(canvas, options = {}) {
       // 段番号
       ctx.fillStyle = "#62717d"; ctx.font = "9px sans-serif";
       ctx.fillText(String(si + 1), 6, top - 6);
-      // 休符（学習位置）
-      for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats);
+      // 休符（学習位置・学習した休符の種類で）
+      for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats, r);
       // コード（学習位置・五線の上）
       if (sys.chords && sys.chords.length) {
         ctx.fillStyle = "#1f6f4f"; ctx.font = "11px sans-serif";
@@ -468,14 +469,24 @@ function createScoreNotation(canvas, options = {}) {
     }
     ctx.lineWidth = 1;
   }
-  function drawRest(x, staffTop, beats) {
+  // info（学習した休符）= {smufl, dotted}。あればその種類で描く。無ければ拍数から推定。
+  function drawRest(x, staffTop, beats, info) {
     const midY = staffTop + 2 * SPACING; // 第3線（SMuFL休符の基準）
-    const code = beats >= 3 ? SMUFL.restWhole
-      : beats >= 1.5 ? SMUFL.restHalf
-        : beats >= 0.75 ? SMUFL.restQuarter
-          : beats >= 0.4 ? SMUFL.rest8
-            : SMUFL.rest16;
+    let code;
+    let dotted;
+    if (info && info.smufl && SMUFL_REST_CODES.has(info.smufl)) {
+      code = info.smufl;       // 学習した実際の休符グリフ（付点4分休符=4分休符＋点 など）
+      dotted = !!info.dotted;
+    } else if (Math.abs(beats - state.beatsPerBar) < 0.1) {
+      code = SMUFL.restWhole;  // 1小節まるごと＝全休符の慣習
+      dotted = false;
+    } else {
+      dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
+      const base = dotted ? beats / 1.5 : beats;
+      code = base >= 4 ? SMUFL.restWhole : base >= 2 ? SMUFL.restHalf : base >= 1 ? SMUFL.restQuarter : base >= 0.5 ? SMUFL.rest8 : SMUFL.rest16;
+    }
     ctx.smufl(code, x, midY, MUSIC, "middle", "#8a96a0");
+    if (dotted) ctx.smufl(SMUFL.dot, x + HEAD_HALF + 1, midY - SPACING * 0.5, MUSIC, "start", "#8a96a0");
   }
 
   function drawNote(note, x, staffTop, beam) {

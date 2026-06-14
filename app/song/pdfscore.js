@@ -1039,7 +1039,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
       bars: s.bars,
       chords: s.chords,
-      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1 }))
+      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1, smufl: r.smufl, dotted: !!r.dotted }))
     }))
   };
   return {
