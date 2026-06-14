@@ -190,11 +190,15 @@ function findStaves(hseg, pageWidth, pageHeight) {
     }
   }
   // 五線らしい線（横長・ページ枠でない）だけ
-  const lineYs = clusters
-    .filter((c) => {
-      const span = c.x1 - c.x0;
-      return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
-    })
+  const valid = clusters.filter((c) => {
+    const span = c.x1 - c.x0;
+    return span > minSpan && span < maxSpan && c.y > 4 && c.y < (pageHeight || 842) - 4;
+  });
+  // スラー/タイは「真ん中ほど太い」弧で、水平部分が五線候補に混入する（部分幅）。
+  // 五線は段の全幅に渡る最長級の線なので、最長線の8割未満の短い線は除外する。
+  const maxObserved = valid.reduce((m, c) => Math.max(m, c.x1 - c.x0), 1);
+  const lineYs = valid
+    .filter((c) => (c.x1 - c.x0) > maxObserved * 0.8)
     .map((c) => c.y)
     .sort((a, b) => a - b);
   if (lineYs.length < 5) {
@@ -423,6 +427,12 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       filledKey = k;
     }
   }
+  // 音符が少ないページ（最終ページなど）は構造ヒューリスティック(ys≥8)が効かない。
+  // SMuFLコードがあれば黒玉コードを直接決める（取りこぼし防止）。
+  if (!filledKey) {
+    const sb = glyphs.find((g) => g.smufl === SMUFL.noteheadBlack);
+    if (sb) filledKey = keyOf(sb);
+  }
   if (!filledKey) {
     return { systems: [], staves: staves.length, keyCand: null };
   }
@@ -448,6 +458,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       openKey = k;
     }
   }
+  if (!openKey) { // SMuFLフォールバック（疎なページ）
+    const sh = glyphs.find((g) => g.smufl === SMUFL.noteheadHalf);
+    if (sh) openKey = keyOf(sh);
+  }
   // 全音符（符幹なしの開放符頭）= 符幹がほぼ無く、音高(y)も位置(x)もばらける符頭。
   // フォントは符頭コードを近い番号に固めるので、黒玉/白玉に番号が近いものを選ぶ
   // （調号の♭やクレフは同じxに固まる＝xがばらけない、で除外できる）。
@@ -467,6 +481,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
       if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
     }
+  }
+  if (!wholeKey) { // SMuFLフォールバック（疎なページ）
+    const sw = glyphs.find((g) => g.smufl === SMUFL.noteheadWhole);
+    if (sw) wholeKey = keyOf(sw);
   }
 
   const headList = glyphs
