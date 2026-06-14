@@ -168,7 +168,9 @@ function createScoreNotation(canvas, options = {}) {
     canvas.style.width = `${m.cssW}px`;
     canvas.style.height = `${m.cssH}px`;
     // 可逆性: 全音楽データを <metadata> にJSONで埋め込む（SVG単体から完全復元できる）
-    canvas.innerHTML = buildMetadata() + ctx.flush();
+    // 先頭に透明な全面rectを敷く: 空白（音符以外の小節部分）クリックも拾えるようにする。
+    const hitRect = `<rect x="0" y="0" width="${m.cssW}" height="${m.cssH}" fill="transparent" pointer-events="all"/>`;
+    canvas.innerHTML = buildMetadata() + hitRect + ctx.flush();
   }
 
   // SVGに埋め込む権威データ（これだけで楽譜を完全復元できる）
