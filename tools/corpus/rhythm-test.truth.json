@@ -3,7 +3,7 @@
   "version": 1,
   "beatsPerBar": 4,
   "fifths": 0,
-  "noteCount": 66,
+  "noteCount": 92,
   "restCount": 11,
   "notes": [
     {
@@ -323,16 +323,146 @@
     },
     {
       "beat": 66,
+      "beats": 0.333,
+      "midi": 60
+    },
+    {
+      "beat": 66.333,
+      "beats": 0.333,
+      "midi": 62
+    },
+    {
+      "beat": 66.667,
+      "beats": 0.333,
+      "midi": 64
+    },
+    {
+      "beat": 67,
+      "beats": 0.333,
+      "midi": 65
+    },
+    {
+      "beat": 67.333,
+      "beats": 0.333,
+      "midi": 67
+    },
+    {
+      "beat": 67.667,
+      "beats": 0.333,
+      "midi": 69
+    },
+    {
+      "beat": 68,
       "beats": 1,
       "midi": 60
     },
     {
-      "beat": 67,
+      "beat": 69,
       "beats": 1,
       "midi": 62
     },
     {
-      "beat": 68,
+      "beat": 70,
+      "beats": 1,
+      "midi": 65
+    },
+    {
+      "beat": 71,
+      "beats": 1,
+      "midi": 67
+    },
+    {
+      "beat": 72,
+      "beats": 1,
+      "midi": 69
+    },
+    {
+      "beat": 73,
+      "beats": 1,
+      "midi": 70
+    },
+    {
+      "beat": 74,
+      "beats": 1,
+      "midi": 63
+    },
+    {
+      "beat": 75,
+      "beats": 1,
+      "midi": 65
+    },
+    {
+      "beat": 76,
+      "beats": 1,
+      "midi": 67
+    },
+    {
+      "beat": 77,
+      "beats": 1,
+      "midi": 68
+    },
+    {
+      "beat": 78,
+      "beats": 1,
+      "midi": 60
+    },
+    {
+      "beat": 79,
+      "beats": 1,
+      "midi": 62
+    },
+    {
+      "beat": 80,
+      "beats": 1.5,
+      "midi": 60
+    },
+    {
+      "beat": 81.5,
+      "beats": 1.5,
+      "midi": 62
+    },
+    {
+      "beat": 83,
+      "beats": 0.5,
+      "midi": 60
+    },
+    {
+      "beat": 83.5,
+      "beats": 0.5,
+      "midi": 62
+    },
+    {
+      "beat": 84,
+      "beats": 0.5,
+      "midi": 64
+    },
+    {
+      "beat": 84.5,
+      "beats": 0.5,
+      "midi": 65
+    },
+    {
+      "beat": 85,
+      "beats": 0.5,
+      "midi": 67
+    },
+    {
+      "beat": 85.5,
+      "beats": 0.5,
+      "midi": 69
+    },
+    {
+      "beat": 86,
+      "beats": 1,
+      "midi": 60
+    },
+    {
+      "beat": 87,
+      "beats": 1,
+      "midi": 62
+    },
+    {
+      "beat": 88,
       "beats": 1,
       "midi": 64
     }
@@ -389,7 +519,7 @@
       "kind": "dotted-half"
     },
     {
-      "beat": 69,
+      "beat": 89,
       "beats": 4,
       "kind": "whole"
     }
@@ -927,6 +1057,196 @@
     },
     {
       "measure": 18,
+      "label": "8分3連符×2＋4分×2",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "type": "8分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "8分",
+          "midi": 62
+        },
+        {
+          "pitch": "E4",
+          "type": "8分",
+          "midi": 64
+        },
+        {
+          "pitch": "F4",
+          "type": "8分",
+          "midi": 65
+        },
+        {
+          "pitch": "G4",
+          "type": "8分",
+          "midi": 67
+        },
+        {
+          "pitch": "A4",
+          "type": "8分",
+          "midi": 69
+        },
+        {
+          "pitch": "C4",
+          "type": "4分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "4分",
+          "midi": 62
+        }
+      ],
+      "rests": [],
+      "startBeat": 66
+    },
+    {
+      "measure": 19,
+      "label": "調号1♭（Fメジャー）4分×4",
+      "key": -1,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "F4",
+          "type": "4分",
+          "midi": 65
+        },
+        {
+          "pitch": "G4",
+          "type": "4分",
+          "midi": 67
+        },
+        {
+          "pitch": "A4",
+          "type": "4分",
+          "midi": 69
+        },
+        {
+          "pitch": "Bb4",
+          "type": "4分",
+          "midi": 70
+        }
+      ],
+      "rests": [],
+      "startBeat": 70
+    },
+    {
+      "measure": 20,
+      "label": "調号3♭（E♭メジャー）4分×4",
+      "key": -3,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "Eb4",
+          "type": "4分",
+          "midi": 63
+        },
+        {
+          "pitch": "F4",
+          "type": "4分",
+          "midi": 65
+        },
+        {
+          "pitch": "G4",
+          "type": "4分",
+          "midi": 67
+        },
+        {
+          "pitch": "Ab4",
+          "type": "4分",
+          "midi": 68
+        }
+      ],
+      "rests": [],
+      "startBeat": 74
+    },
+    {
+      "measure": 21,
+      "label": "2/4：4分×2",
+      "key": 0,
+      "time": "2/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "type": "4分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "4分",
+          "midi": 62
+        }
+      ],
+      "rests": [],
+      "startBeat": 78
+    },
+    {
+      "measure": 22,
+      "label": "6/8：付点4分×2",
+      "key": 0,
+      "time": "6/8",
+      "notes": [
+        {
+          "pitch": "C4",
+          "type": "付点4分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "付点4分",
+          "midi": 62
+        }
+      ],
+      "rests": [],
+      "startBeat": 80
+    },
+    {
+      "measure": 23,
+      "label": "6/8：8分×6（連桁）",
+      "key": 0,
+      "time": "6/8",
+      "notes": [
+        {
+          "pitch": "C4",
+          "type": "8分",
+          "midi": 60
+        },
+        {
+          "pitch": "D4",
+          "type": "8分",
+          "midi": 62
+        },
+        {
+          "pitch": "E4",
+          "type": "8分",
+          "midi": 64
+        },
+        {
+          "pitch": "F4",
+          "type": "8分",
+          "midi": 65
+        },
+        {
+          "pitch": "G4",
+          "type": "8分",
+          "midi": 67
+        },
+        {
+          "pitch": "A4",
+          "type": "8分",
+          "midi": 69
+        }
+      ],
+      "rests": [],
+      "startBeat": 83
+    },
+    {
+      "measure": 24,
       "label": "3/4：4分×3",
       "key": 0,
       "time": "3/4",
@@ -948,10 +1268,10 @@
         }
       ],
       "rests": [],
-      "startBeat": 66
+      "startBeat": 86
     },
     {
-      "measure": 19,
+      "measure": 25,
       "label": "3/4：全休符（1小節=3拍）",
       "key": 0,
       "time": "3/4",
@@ -962,7 +1282,7 @@
           "beats": 4
         }
       ],
-      "startBeat": 69
+      "startBeat": 89
     }
   ]
 }

@@ -11,14 +11,15 @@ import { mkdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-const DIV = 8; // 4分音符あたりの分割数（16分=2, 32分=1 まで整数で扱える）
-const TYPE_DIV = { whole: 32, half: 16, quarter: 8, eighth: 4, "16th": 2, "32nd": 1 };
+const DIV = 24; // 4分音符あたりの分割数（3連符＝24/3=8 も整数で扱える）
+const TYPE_DIV = { whole: 96, half: 48, quarter: 24, eighth: 12, "16th": 6, "32nd": 3 };
 const TYPE_JP = { whole: "全", half: "2分", quarter: "4分", eighth: "8分", "16th": "16分", "32nd": "32分" };
 
-// 音価（divisions）= 種類 × 付点係数（付点1つ=1.5, 2つ=1.75）
-function durOf(type, dots = 0) {
+// 音価（divisions）= 種類 × 付点係数（付点1つ=1.5, 2つ=1.75）× 連符係数(normal/actual)
+function durOf(type, dots = 0, tuplet = null) {
   const f = dots === 2 ? 1.75 : dots === 1 ? 1.5 : 1;
-  return Math.round(TYPE_DIV[type] * f);
+  const tf = tuplet ? tuplet[1] / tuplet[0] : 1; // 例: 3連符[3,2]→2/3
+  return Math.round(TYPE_DIV[type] * f * tf);
 }
 // 種類＋付点 → 休符の種別キー（描画/照合で使う統一名）
 function restKind(type, dots) {
@@ -59,28 +60,44 @@ const measures = [
   { label: "タイ（4分→4分＝2分の長さ）と4分×2", events: [n("C4", "quarter", { tie: "start" }), n("C4", "quarter", { tie: "stop" }), n("D4", "quarter"), n("E4", "quarter")] },
   // ---- 調号（2♯）----
   { key: 2, label: "調号2♯（Dメジャー）4分×4", events: [n("D4", "quarter"), n("E4", "quarter"), n("F#4", "quarter"), n("G4", "quarter")] },
+  // ---- 3連符（8分3連×2拍 ＋ 4分×2）----
+  { time: [4, 4], key: 0, label: "8分3連符×2＋4分×2", events: [
+    n("C4", "eighth", { tuplet: [3, 2], tpos: "start" }), n("D4", "eighth", { tuplet: [3, 2] }), n("E4", "eighth", { tuplet: [3, 2], tpos: "stop" }),
+    n("F4", "eighth", { tuplet: [3, 2], tpos: "start" }), n("G4", "eighth", { tuplet: [3, 2] }), n("A4", "eighth", { tuplet: [3, 2], tpos: "stop" }),
+    n("C4", "quarter"), n("D4", "quarter")] },
+  // ---- 調号（1♭ Fメジャー / 3♭ E♭メジャー）----
+  { key: -1, label: "調号1♭（Fメジャー）4分×4", events: [n("F4", "quarter"), n("G4", "quarter"), n("A4", "quarter"), n("Bb4", "quarter")] },
+  { key: -3, label: "調号3♭（E♭メジャー）4分×4", events: [n("Eb4", "quarter"), n("F4", "quarter"), n("G4", "quarter"), n("Ab4", "quarter")] },
+  // ---- 2/4拍子 ----
+  { time: [2, 4], key: 0, label: "2/4：4分×2", events: [n("C4", "quarter"), n("D4", "quarter")] },
+  // ---- 6/8拍子（付点4分×2）----
+  { time: [6, 8], label: "6/8：付点4分×2", events: [n("C4", "quarter", { dots: 1 }), n("D4", "quarter", { dots: 1 })] },
+  { time: [6, 8], label: "6/8：8分×6（連桁）", events: ["C4", "D4", "E4", "F4", "G4", "A4"].map((p) => n(p, "eighth", { beam: true })) },
   // ---- 3/4拍子 ----
   { time: [3, 4], key: 0, label: "3/4：4分×3", events: [n("C4", "quarter"), n("D4", "quarter"), n("E4", "quarter")] },
   { time: [3, 4], label: "3/4：全休符（1小節=3拍）", events: [r("whole")] },
 ];
 
 // ===== MusicXML 出力 =====
-function noteXml(ev, divisions) {
-  const dur = durOf(ev.type, ev.dots || 0);
+function noteXml(ev) {
+  const dur = durOf(ev.type, ev.dots || 0, ev.tuplet);
   const dotsXml = (ev.dots ? "<dot/>".repeat(ev.dots) : "");
   const beamXml = ev.beam ? `<beam number="1">${ev.beamPos}</beam>` : "";
+  const timeMod = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet[0]}</actual-notes><normal-notes>${ev.tuplet[1]}</normal-notes></time-modification>` : "";
   if (ev.kind === "rest") {
-    return `      <note><rest/><duration>${dur}</duration><type>${ev.type}</type>${dotsXml}</note>\n`;
+    return `      <note><rest/><duration>${dur}</duration><type>${ev.type}</type>${dotsXml}${timeMod}</note>\n`;
   }
   const m = /^([A-G])([#b]?)(\d)$/.exec(ev.pitch);
   const alter = m[2] === "#" ? "<alter>1</alter>" : m[2] === "b" ? "<alter>-1</alter>" : "";
   const accXml = ev.acc ? `<accidental>${ev.acc}</accidental>` : "";
   let tieXml = "";
-  let tiedXml = "";
-  if (ev.tie === "start") { tieXml = `<tie type="start"/>`; tiedXml = `<notations><tied type="start"/></notations>`; }
-  if (ev.tie === "stop") { tieXml = `<tie type="stop"/>`; tiedXml = `<notations><tied type="stop"/></notations>`; }
+  let notationsInner = "";
+  if (ev.tie === "start") { tieXml = `<tie type="start"/>`; notationsInner += `<tied type="start"/>`; }
+  if (ev.tie === "stop") { tieXml = `<tie type="stop"/>`; notationsInner += `<tied type="stop"/>`; }
+  if (ev.tpos) notationsInner += `<tuplet type="${ev.tpos}"/>`;
+  const notationsXml = notationsInner ? `<notations>${notationsInner}</notations>` : "";
   return `      <note><pitch><step>${m[1]}</step>${alter}<octave>${m[3]}</octave></pitch>` +
-    `<duration>${dur}</duration>${tieXml}<type>${ev.type}</type>${dotsXml}${accXml}${beamXml}${tiedXml}</note>\n`;
+    `<duration>${dur}</duration>${tieXml}<type>${ev.type}</type>${dotsXml}${accXml}${timeMod}${beamXml}${notationsXml}</note>\n`;
 }
 
 function buildMusicXml(measures) {
@@ -105,7 +122,7 @@ function buildMusicXml(measures) {
     }
     // 小節名（リハーサルマーク代わりにテキスト）
     xml += `      <direction placement="above"><direction-type><words>${escapeXml(mez.label)}</words></direction-type></direction>\n`;
-    for (const ev of mez.events) xml += noteXml(ev, DIV);
+    for (const ev of mez.events) xml += noteXml(ev);
     xml += `    </measure>\n`;
     curKey = key; curTime = time;
   });
@@ -130,7 +147,7 @@ function buildTruth(measures) {
     const caseNotes = [];
     const caseRests = [];
     for (const ev of mez.events) {
-      const beats = durOf(ev.type, ev.dots || 0) / DIV;
+      const beats = durOf(ev.type, ev.dots || 0, ev.tuplet) / DIV;
       if (ev.kind === "rest") {
         const kind = restKind(ev.type, ev.dots || 0);
         rests.push({ beat: round(beat), beats: round(beats), kind });
