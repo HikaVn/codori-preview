@@ -96,6 +96,7 @@ function createScoreNotation(canvas, options = {}) {
     fifths: options.keySig?.fifths || 0,   // 調号（五度圏: ♯=正/♭=負）
     onChange: options.onChange || (() => {}),
     onSelect: options.onSelect || (() => {}),
+    onMeasureClick: options.onMeasureClick || null, // 音符以外（小節の余白）クリック→その拍を渡す
     selected: null,   // note オブジェクト参照
     drag: null,
     layout: options.layout || null, // 学習した元譜の配置（あれば元の配置で描く）
@@ -610,6 +611,18 @@ function createScoreNotation(canvas, options = {}) {
     return best;
   }
 
+  // クリック位置に最も近い音符（同じ段＝y帯のなかでx最近）。小節クリックの拍特定に使う。
+  function nearestNote(mx, my) {
+    let best = null;
+    let bestD = Infinity;
+    for (const l of state.layouts) {
+      if (Math.abs(l.y - my) > LINE_H * 0.6) continue; // だいたい同じ段
+      const d = Math.abs(l.x - mx);
+      if (d < bestD) { bestD = d; best = l; }
+    }
+    return best;
+  }
+
   function pointerPos(event) {
     const rect = canvas.getBoundingClientRect();
     return { mx: event.clientX - rect.left, my: event.clientY - rect.top };
@@ -618,7 +631,17 @@ function createScoreNotation(canvas, options = {}) {
   canvas.addEventListener("pointerdown", (event) => {
     const { mx, my } = pointerPos(event);
     const hit = hitTest(mx, my);
-    if (!hit) return;
+    if (!hit) {
+      // 音符以外（小節の余白）をクリック → その小節のコードを試聴する
+      if (state.onMeasureClick) {
+        const near = nearestNote(mx, my);
+        if (near && Number.isFinite(near.note.startBeat)) {
+          event.preventDefault();
+          state.onMeasureClick(near.note.startBeat);
+        }
+      }
+      return;
+    }
     event.preventDefault();
     state.selected = hit.note;
     state.drag = { layout: hit, startY: my, startMidi: hit.note.midi, moved: false };

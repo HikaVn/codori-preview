@@ -40,6 +40,7 @@ const scoreEl = {
   beatsPerBar: document.querySelector("#score-beats-per-bar"),
   playMelody: document.querySelector("#score-play-melody"),
   playChords: document.querySelector("#score-play-chords"),
+  swingToggle: document.querySelector("#score-swing-toggle"),
   chordEditor: document.querySelector("#score-chord-editor"),
   notationCanvas: document.querySelector("#score-notation"),
   overlayBlock: document.querySelector("#score-overlay-block"),
@@ -178,7 +179,8 @@ function syncScoreNotation() {
       beatsPerBar: scoreState.beatsPerBar,
       keySig: scoreState.keySig,
       onChange: () => { afterNoteEdit(); },
-      onSelect: (note) => { renderScoreNoteTable(); drawScoreOverlayMarks(); scrollScoreNoteIntoView(note); }
+      onSelect: (note) => { renderScoreNoteTable(); drawScoreOverlayMarks(); scrollScoreNoteIntoView(note); },
+      onMeasureClick: (beat) => { scorePlayChordAt(beat); }
     });
   }
   scoreState.notation.setMelody(scoreState.melody, { beatsPerBar: scoreState.beatsPerBar, keySig: scoreState.keySig, layout: scoreState.layout });
@@ -420,15 +422,38 @@ function scoreToSong() {
 // --- 試聴プレイヤー（停止可能・再生位置ライン・持続音メロディ＋コード）---
 const scorePreview = {
   playing: false,
-  mode: null,    // "melody" | "chords"
+  mode: null,    // "melody" | "chords" | "chord"
   nodes: [],     // {oscs:[], gain} 鳴っているノード（停止用に保持）
   raf: 0,
   startTime: 0,
+  originBeat: 0, // 再生開始の拍（プレイヘッドの基準）
   totalBeats: 0,
   spb: 0.6
 };
 const MELODY_PARTIALS = [[1, 1], [2, 0.35], [3, 0.18]]; // 基音＋2倍音＋3倍音
 const CHORD_PARTIALS = [[1, 1], [2, 0.22]];
+
+// 試聴のスウィング: 拍の8分ウラ（後半）を後ろへずらしてハネさせる。拍頭は動かさない。
+function scoreSwingBeat(beat) {
+  if (!scoreEl.swingToggle?.checked) return beat;
+  const ratio = (typeof SWING_RATIO !== "undefined") ? SWING_RATIO : 0.64;
+  const whole = Math.floor(beat);
+  const f = beat - whole;
+  const sf = f <= 0.5 ? f * (ratio / 0.5) : ratio + (f - 0.5) * ((1 - ratio) / 0.5);
+  return whole + sf;
+}
+
+// 再生位置ライン（ピアノロール）を originBeat から動かす。終わったら停止。
+function scorePreviewRunPlayhead(ctx) {
+  const tick = () => {
+    if (!scorePreview.playing) return;
+    const beat = scorePreview.originBeat + (ctx.currentTime - scorePreview.startTime) / scorePreview.spb;
+    if (beat >= scorePreview.originBeat + scorePreview.totalBeats + 0.25) { scorePreviewStop(); return; }
+    scoreState.pianoRoll?.setPlayhead(Math.max(0, beat));
+    scorePreview.raf = requestAnimationFrame(tick);
+  };
+  scorePreview.raf = requestAnimationFrame(tick);
+}
 
 // 持続音の1声を鳴らす。アタックは柔らかめ、指定倍音までを重ねる。停止できるよう保持する。
 function scorePreviewVoice(freq, start, dur, gain, partials) {
@@ -506,7 +531,7 @@ function scorePreviewStart(mode) {
   for (const nt of melody) {
     if (!Number.isFinite(nt.midi) || !Number.isFinite(nt.startBeat)) continue;
     const beats = Number(nt.beats) || 1;
-    scorePreviewVoice(midiToFrequency(nt.midi), start + nt.startBeat * spb, beats * spb, 0.16, MELODY_PARTIALS);
+    scorePreviewVoice(midiToFrequency(nt.midi), start + scoreSwingBeat(nt.startBeat) * spb, beats * spb, 0.16, MELODY_PARTIALS);
     maxBeat = Math.max(maxBeat, nt.startBeat + beats);
   }
   if (mode === "chords") {
@@ -524,7 +549,7 @@ function scorePreviewStart(mode) {
       const beats = Math.max(0.25, end - c.startBeat);
       const freqs = typeof chordFrequencies === "function" ? chordFrequencies(c.chord) : null;
       if (!freqs) return;
-      for (const f of freqs) scorePreviewVoice(f, start + c.startBeat * spb, beats * spb, 0.05, CHORD_PARTIALS);
+      for (const f of freqs) scorePreviewVoice(f, start + scoreSwingBeat(c.startBeat) * spb, beats * spb, 0.05, CHORD_PARTIALS);
       maxBeat = Math.max(maxBeat, c.startBeat + beats);
     });
   }
@@ -532,22 +557,50 @@ function scorePreviewStart(mode) {
   scorePreview.playing = true;
   scorePreview.mode = mode;
   scorePreview.startTime = start;
+  scorePreview.originBeat = 0;
   scorePreview.totalBeats = maxBeat;
   scorePreview.spb = spb;
   updateScorePreviewButtons();
-  // 再生位置ライン（ピアノロール上）を動かす
-  const tick = () => {
-    if (!scorePreview.playing) return;
-    const beat = (ctx.currentTime - scorePreview.startTime) / scorePreview.spb;
-    if (beat >= scorePreview.totalBeats + 0.25) { scorePreviewStop(); return; }
-    scoreState.pianoRoll?.setPlayhead(Math.max(0, beat));
-    scorePreview.raf = requestAnimationFrame(tick);
-  };
-  scorePreview.raf = requestAnimationFrame(tick);
+  scorePreviewRunPlayhead(ctx);
 }
 
 function scorePlayMelody() { scorePreviewStart("melody"); }
 function scorePlayChords() { scorePreviewStart("chords"); }
+
+// 五線譜の小節（音符以外）をクリック→その拍に効いているコードを、長さぶん鳴らす。
+function scorePlayChordAt(beat) {
+  scorePreviewStop();
+  const chords = (scoreState.chordEvents || []).filter((c) => c.chord)
+    .sort((a, b) => a.startBeat - b.startBeat);
+  if (!chords.length) return;
+  // beat に効いているコード＝開始拍が beat 以下で最も後ろのもの
+  let idx = 0;
+  for (let i = 0; i < chords.length; i += 1) {
+    if (chords[i].startBeat <= beat + 1e-6) idx = i; else break;
+  }
+  const c = chords[idx];
+  const next = chords[idx + 1];
+  const melodyEnd = scoreState.melody.reduce((m, n) => Math.max(m, (Number(n.startBeat) || 0) + (Number(n.beats) || 0)), 0);
+  const end = next ? next.startBeat : Math.max(melodyEnd, c.startBeat + scoreState.beatsPerBar);
+  const lenBeats = Math.max(0.5, end - c.startBeat);
+  const freqs = typeof chordFrequencies === "function" ? chordFrequencies(c.chord) : null;
+  if (!freqs) return;
+  const ctx = ensureAudioContext();
+  if (ctx.state === "suspended") ctx.resume();
+  const bpm = Math.max(40, Math.min(240, Number(scoreEl.bpm.value) || scoreState.bpm || 100));
+  const spb = 60 / bpm;
+  const start = ctx.currentTime + 0.05;
+  for (const f of freqs) scorePreviewVoice(f, start, lenBeats * spb, 0.06, CHORD_PARTIALS);
+  if (!scorePreview.nodes.length) return;
+  scorePreview.playing = true;
+  scorePreview.mode = "chord";
+  scorePreview.startTime = start;
+  scorePreview.originBeat = c.startBeat;
+  scorePreview.totalBeats = lenBeats;
+  scorePreview.spb = spb;
+  updateScorePreviewButtons();
+  scorePreviewRunPlayhead(ctx);
+}
 
 // ===== ファイル読み込み =====
 async function scoreLoadMusicXml(file) {
