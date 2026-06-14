@@ -41,6 +41,9 @@ const scoreEl = {
   playMelody: document.querySelector("#score-play-melody"),
   playChords: document.querySelector("#score-play-chords"),
   swingToggle: document.querySelector("#score-swing-toggle"),
+  seek: document.querySelector("#score-seek"),
+  speed: document.querySelector("#score-speed"),
+  speedLabel: document.querySelector("#score-speed-label"),
   chordEditor: document.querySelector("#score-chord-editor"),
   notationCanvas: document.querySelector("#score-notation"),
   overlayBlock: document.querySelector("#score-overlay-block"),
@@ -419,16 +422,21 @@ function scoreToSong() {
   setMode("edit");
 }
 
-// --- 試聴プレイヤー（停止可能・再生位置ライン・持続音メロディ＋コード）---
+// --- 試聴プレイヤー（停止可能・再生位置ライン・シーク・速度変更・持続音メロディ＋コード）---
 const scorePreview = {
   playing: false,
-  mode: null,    // "melody" | "chords" | "chord"
-  nodes: [],     // {oscs:[], gain} 鳴っているノード（停止用に保持）
+  mode: null,      // "melody" | "chords" | "chord"
+  nodes: [],       // {oscs:[], gain} 鳴っているノード（停止用に保持）
   raf: 0,
   startTime: 0,
-  originBeat: 0, // 再生開始の拍（プレイヘッドの基準）
-  totalBeats: 0,
-  spb: 0.6
+  originBeat: 0,   // 再生中の基準拍（シーク・速度変更でずらせる）
+  totalBeats: 0,   // 曲全体の終端拍（シークの目盛り・停止判定）
+  spb: 0.6,        // 実効の1拍秒（baseSpb / speed）
+  baseSpb: 0.6,    // テンポ（BPM）由来の1拍秒
+  speed: 1,        // 速度倍率（スライダー）
+  seeking: false,  // シークバー操作中はバーの自動追従を止める
+  melodyCache: [], // [{startBeat, beats, midi}]（繰り返し展開済み）
+  chordCache: []   // [{startBeat, end, freqs}]
 };
 const MELODY_PARTIALS = [[1, 1], [2, 0.35], [3, 0.18]]; // 基音＋2倍音＋3倍音
 const CHORD_PARTIALS = [[1, 1], [2, 0.22]];
@@ -443,13 +451,22 @@ function scoreSwingBeat(beat) {
   return whole + sf;
 }
 
-// 再生位置ライン（ピアノロール）を originBeat から動かす。終わったら停止。
+// 速度スライダーの倍率（0.5〜1.5x など）。無ければ1.0。
+function scoreCurrentSpeed() {
+  const v = Number(scoreEl.speed?.value);
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1;
+}
+
+// 再生位置ライン（ピアノロール）＋シークバーを動かす。終端で停止。
 function scorePreviewRunPlayhead(ctx) {
   const tick = () => {
     if (!scorePreview.playing) return;
     const beat = scorePreview.originBeat + (ctx.currentTime - scorePreview.startTime) / scorePreview.spb;
-    if (beat >= scorePreview.originBeat + scorePreview.totalBeats + 0.25) { scorePreviewStop(); return; }
+    if (beat >= scorePreview.totalBeats + 0.25) { scorePreviewStop(); return; }
     scoreState.pianoRoll?.setPlayhead(Math.max(0, beat));
+    if (scoreEl.seek && !scorePreview.seeking) {
+      scoreEl.seek.value = String(Math.round((beat / Math.max(0.001, scorePreview.totalBeats)) * 1000));
+    }
     scorePreview.raf = requestAnimationFrame(tick);
   };
   scorePreview.raf = requestAnimationFrame(tick);
@@ -483,9 +500,8 @@ function scorePreviewVoice(freq, start, dur, gain, partials) {
   scorePreview.nodes.push({ oscs, gain: env });
 }
 
-function scorePreviewStop() {
-  if (scorePreview.raf) cancelAnimationFrame(scorePreview.raf);
-  scorePreview.raf = 0;
+// 鳴っているノードだけ止める（再生状態・RAFは触らない＝シーク/速度変更で使う）
+function scoreStopNodes() {
   const ctx = typeof audioCtx !== "undefined" ? audioCtx : null;
   const now = ctx ? ctx.currentTime : 0;
   for (const n of scorePreview.nodes) {
@@ -497,6 +513,12 @@ function scorePreviewStop() {
     } catch (e) { /* 既に停止済み */ }
   }
   scorePreview.nodes = [];
+}
+
+function scorePreviewStop() {
+  if (scorePreview.raf) cancelAnimationFrame(scorePreview.raf);
+  scorePreview.raf = 0;
+  scoreStopNodes();
   scorePreview.playing = false;
   scorePreview.mode = null;
   scoreState.pianoRoll?.setPlayhead(null);
@@ -510,6 +532,34 @@ function updateScorePreviewButtons() {
   if (scoreEl.playChords) scoreEl.playChords.textContent = c ? "⏹ 停止" : "▶ コードも試聴";
 }
 
+// fromBeat 以降のメロディ／コードを、いまの速度で鳴らし直す（シーク・速度変更の心臓部）。
+// fromBeat の途中にかかる音/コードは残りぶんだけ鳴らす。
+function scoreScheduleFrom(fromBeat) {
+  scoreStopNodes();
+  const ctx = ensureAudioContext();
+  if (ctx.state === "suspended") ctx.resume();
+  const spb = scorePreview.baseSpb / Math.max(0.25, scorePreview.speed);
+  const start = ctx.currentTime + 0.06;
+  const ref = scoreSwingBeat(fromBeat);
+  for (const nt of scorePreview.melodyCache) {
+    if (nt.startBeat + nt.beats <= fromBeat + 1e-6) continue; // もう終わった音
+    const ps = Math.max(nt.startBeat, fromBeat);
+    const t = start + (scoreSwingBeat(ps) - ref) * spb;
+    scorePreviewVoice(midiToFrequency(nt.midi), t, ((nt.startBeat + nt.beats) - ps) * spb, 0.16, MELODY_PARTIALS);
+  }
+  if (scorePreview.mode === "chords") {
+    for (const c of scorePreview.chordCache) {
+      if (c.end <= fromBeat + 1e-6) continue;
+      const ps = Math.max(c.startBeat, fromBeat);
+      const t = start + (scoreSwingBeat(ps) - ref) * spb;
+      for (const f of c.freqs) scorePreviewVoice(f, t, (c.end - ps) * spb, 0.05, CHORD_PARTIALS);
+    }
+  }
+  scorePreview.startTime = start;
+  scorePreview.originBeat = fromBeat;
+  scorePreview.spb = spb;
+}
+
 function scorePreviewStart(mode) {
   // トグル: 同じモードが再生中なら停止
   if (scorePreview.playing && scorePreview.mode === mode) { scorePreviewStop(); return; }
@@ -518,8 +568,8 @@ function scorePreviewStart(mode) {
   const ctx = ensureAudioContext();
   if (ctx.state === "suspended") ctx.resume();
   const bpm = Math.max(40, Math.min(240, Number(scoreEl.bpm.value) || scoreState.bpm || 100));
-  const spb = 60 / bpm;
-  const start = ctx.currentTime + 0.08;
+  scorePreview.baseSpb = 60 / bpm;
+  scorePreview.speed = scoreCurrentSpeed();
   // 繰り返しがあれば再生順に展開
   const playOrder = (scoreState.playOrder && scoreState.playOrder.length) ? scoreState.playOrder : null;
   let melody = scoreState.melody;
@@ -527,41 +577,45 @@ function scorePreviewStart(mode) {
     const exp = applyPlayOrder(scoreState.melody, playOrder);
     if (exp.length) melody = exp;
   }
-  let maxBeat = 0;
-  for (const nt of melody) {
-    if (!Number.isFinite(nt.midi) || !Number.isFinite(nt.startBeat)) continue;
-    const beats = Number(nt.beats) || 1;
-    scorePreviewVoice(midiToFrequency(nt.midi), start + scoreSwingBeat(nt.startBeat) * spb, beats * spb, 0.16, MELODY_PARTIALS);
-    maxBeat = Math.max(maxBeat, nt.startBeat + beats);
-  }
-  if (mode === "chords") {
-    // 認識どおりの絶対拍位置でコードを鳴らす（メロディと同じ拍スケール）。
-    // 各コードは次のコードまで持続。最後のコードはメロディ末尾まで伸ばして
-    // 伴奏とメロディの長さを合わせる。
-    const melodyEnd = melody.reduce((m, n) => Math.max(m, (Number(n.startBeat) || 0) + (Number(n.beats) || 0)), 0);
-    let src = (scoreState.chordEvents || []).filter((c) => c.chord)
-      .map((c) => ({ startBeat: c.startBeat, chord: c.chord }))
-      .sort((a, b) => a.startBeat - b.startBeat);
-    if (playOrder && typeof applyPlayOrder === "function") src = applyPlayOrder(src, playOrder);
-    src.forEach((c, i) => {
-      const next = src[i + 1];
-      const end = next ? next.startBeat : Math.max(melodyEnd, c.startBeat + scoreState.beatsPerBar);
-      const beats = Math.max(0.25, end - c.startBeat);
-      const freqs = typeof chordFrequencies === "function" ? chordFrequencies(c.chord) : null;
-      if (!freqs) return;
-      for (const f of freqs) scorePreviewVoice(f, start + scoreSwingBeat(c.startBeat) * spb, beats * spb, 0.05, CHORD_PARTIALS);
-      maxBeat = Math.max(maxBeat, c.startBeat + beats);
-    });
-  }
-  if (!scorePreview.nodes.length) return; // 鳴らすものが無い
-  scorePreview.playing = true;
+  scorePreview.melodyCache = melody
+    .filter((nt) => Number.isFinite(nt.midi) && Number.isFinite(nt.startBeat))
+    .map((nt) => ({ startBeat: nt.startBeat, beats: Number(nt.beats) || 1, midi: nt.midi }));
+  const melodyEnd = scorePreview.melodyCache.reduce((m, n) => Math.max(m, n.startBeat + n.beats), 0);
+  // コード（絶対拍・次のコードまで持続・最後はメロディ末尾まで）
+  let src = (scoreState.chordEvents || []).filter((c) => c.chord)
+    .map((c) => ({ startBeat: c.startBeat, chord: c.chord })).sort((a, b) => a.startBeat - b.startBeat);
+  if (playOrder && typeof applyPlayOrder === "function") src = applyPlayOrder(src, playOrder);
+  scorePreview.chordCache = src.map((c, i) => {
+    const next = src[i + 1];
+    const end = next ? next.startBeat : Math.max(melodyEnd, c.startBeat + scoreState.beatsPerBar);
+    return { startBeat: c.startBeat, end, freqs: typeof chordFrequencies === "function" ? chordFrequencies(c.chord) : null };
+  }).filter((c) => c.freqs && c.end > c.startBeat);
+  let total = melodyEnd;
+  if (mode === "chords") total = scorePreview.chordCache.reduce((m, c) => Math.max(m, c.end), total);
+  if (!(total > 0)) return; // 鳴らすものが無い
+  scorePreview.totalBeats = total;
   scorePreview.mode = mode;
-  scorePreview.startTime = start;
-  scorePreview.originBeat = 0;
-  scorePreview.totalBeats = maxBeat;
-  scorePreview.spb = spb;
+  scorePreview.playing = true;
   updateScorePreviewButtons();
+  scoreScheduleFrom(0);
   scorePreviewRunPlayhead(ctx);
+}
+
+// シークバー（0〜1000）→ その位置へ。再生中のみ。
+function scorePreviewSeek(ratio) {
+  if (!scorePreview.playing) return;
+  const beat = Math.max(0, Math.min(scorePreview.totalBeats, ratio * scorePreview.totalBeats));
+  scoreScheduleFrom(beat);
+}
+
+// 速度倍率を変更。再生中なら現在位置から鳴らし直して即反映。
+function scorePreviewSetSpeed() {
+  scorePreview.speed = scoreCurrentSpeed();
+  if (scoreEl.speedLabel) scoreEl.speedLabel.textContent = `${scorePreview.speed.toFixed(2)}x`;
+  if (scorePreview.playing) {
+    const cur = scorePreview.originBeat + (audioCtx.currentTime - scorePreview.startTime) / scorePreview.spb;
+    scoreScheduleFrom(Math.max(0, Math.min(scorePreview.totalBeats, cur)));
+  }
 }
 
 function scorePlayMelody() { scorePreviewStart("melody"); }
@@ -596,7 +650,7 @@ function scorePlayChordAt(beat) {
   scorePreview.mode = "chord";
   scorePreview.startTime = start;
   scorePreview.originBeat = c.startBeat;
-  scorePreview.totalBeats = lenBeats;
+  scorePreview.totalBeats = c.startBeat + lenBeats; // 終端は絶対拍（停止判定に合わせる）
   scorePreview.spb = spb;
   updateScorePreviewButtons();
   scorePreviewRunPlayhead(ctx);
@@ -761,6 +815,23 @@ scoreEl.beatsPerBar?.addEventListener("change", () => {
 });
 scoreEl.playMelody?.addEventListener("click", scorePlayMelody);
 scoreEl.playChords?.addEventListener("click", scorePlayChords);
+// シークバー: ドラッグ中はライン追従を止めて位置プレビュー、離したら実シーク
+scoreEl.seek?.addEventListener("input", () => {
+  scorePreview.seeking = true;
+  if (scorePreview.playing) {
+    const beat = (Number(scoreEl.seek.value) / 1000) * scorePreview.totalBeats;
+    scoreState.pianoRoll?.setPlayhead(Math.max(0, beat));
+  }
+});
+scoreEl.seek?.addEventListener("change", () => {
+  scorePreviewSeek(Number(scoreEl.seek.value) / 1000);
+  scorePreview.seeking = false;
+});
+// 速度スライダー: ラベルは即時、再生中は現在位置から鳴らし直して反映
+scoreEl.speed?.addEventListener("input", () => {
+  if (scoreEl.speedLabel) scoreEl.speedLabel.textContent = `${(scoreCurrentSpeed()).toFixed(2)}x`;
+});
+scoreEl.speed?.addEventListener("change", scorePreviewSetSpeed);
 scoreEl.fitLyrics?.addEventListener("click", scoreFitLyrics);
 scoreEl.convert?.addEventListener("click", scoreToSong);
 scoreEl.toHiragana?.addEventListener("click", async () => {
