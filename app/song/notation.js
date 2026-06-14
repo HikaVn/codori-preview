@@ -71,6 +71,8 @@ function makeSvgCtx() {
     stroke() { if (pend) { out.push(ellSvg(`fill="none" stroke="${cur.stroke}" stroke-width="${cur.lw}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="none" stroke="${cur.stroke}" stroke-width="${cur.lw}" stroke-linecap="round" stroke-linejoin="round"/>`); },
     fill() { if (pend) { out.push(ellSvg(`fill="${cur.fill}"`)); pend = null; return; } if (path) out.push(`<path d="${path}" fill="${cur.fill}"/>`); },
     fillText(t, x, y) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${cur.fill}" font-size="${cur.font}" font-family="sans-serif">${esc(t)}</text>`); },
+    // SMuFL音楽グリフ（Bravura）。codeはコードポイント。anchor: start/middle/end。
+    smufl(code, x, y, size, anchor, fill) { const p = ap(x, y); out.push(`<text x="${r2(p[0])}" y="${r2(p[1])}" fill="${fill || cur.fill}" font-size="${r2(size)}" font-family="BravuraSub" text-anchor="${anchor || "start"}">&#x${code.toString(16)};</text>`); },
     save() { stack.push({ ...cur, t: cur.t.slice() }); },
     restore() { const s = stack.pop(); if (s) cur = s; },
     translate(x, y) { cur.t = mul(cur.t, [1, 0, 0, 1, x, y]); },
@@ -97,6 +99,16 @@ function createScoreNotation(canvas, options = {}) {
   const BOTTOM_PAD = 34;         // 下加線・歌詞のための余白
   const LINE_H = TOP_PAD + STAFF_H + BOTTOM_PAD;
   const CLEF_W = 30;
+  // SMuFL（Bravura）: 1em = 五線の高さ(4間)。符頭・記号をプロの字形で描く。
+  const MUSIC = STAFF_H;
+  const HEAD_HALF = SPACING * 0.58; // 符頭の半幅（符幹の付け根）
+  const SMUFL = {
+    gClef: 0xe050, headBlack: 0xe0a4, headHalf: 0xe0a3, headWhole: 0xe0a2,
+    flag8Up: 0xe240, flag8Down: 0xe241, flag16Up: 0xe242, flag16Down: 0xe243,
+    flag32Up: 0xe244, flag32Down: 0xe245,
+    restWhole: 0xe4e3, restHalf: 0xe4e4, restQuarter: 0xe4e5, rest8: 0xe4e6, rest16: 0xe4e7,
+    accFlat: 0xe260, accNatural: 0xe261, accSharp: 0xe262, dot: 0xe1e7
+  };
   const MIN_MEASURE_W = 110;
 
   function maxAbsFifths() {
@@ -133,21 +145,9 @@ function createScoreNotation(canvas, options = {}) {
     return staffTop + STAFF_H - step * (SPACING / 2);
   }
 
-  // 簡易ト音記号（フォント依存を避けてベジェで描く）
+  // ト音記号（SMuFL gClef。baselineはG線＝下から2本目）
   function drawClef(x, top) {
-    const cx = x + 9;
-    ctx.strokeStyle = "#1f2933";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(cx, top - 6);
-    ctx.bezierCurveTo(cx + 9, top + 2, cx - 8, top + STAFF_H * 0.55, cx + 1, top + STAFF_H * 0.8);
-    ctx.bezierCurveTo(cx + 8, top + STAFF_H + 2, cx - 2, top + STAFF_H + 8, cx - 4, top + STAFF_H + 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx + 1, top + STAFF_H * 0.75, 2.4, 0, Math.PI * 2);
-    ctx.fillStyle = "#1f2933";
-    ctx.fill();
-    ctx.lineWidth = 1;
+    ctx.smufl(SMUFL.gClef, x + 2, top + 3 * SPACING, MUSIC, "start", "#1f2933");
   }
 
   function flush(m) {
@@ -211,11 +211,9 @@ function createScoreNotation(canvas, options = {}) {
       const lf = lineFifths(line);
       if (lf) {
         const steps = lf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
-        const sym = lf > 0 ? "♯" : "♭";
-        ctx.fillStyle = "#1f2933";
-        ctx.font = "18px sans-serif";
+        const accCode = lf > 0 ? SMUFL.accSharp : SMUFL.accFlat;
         for (let i = 0; i < Math.abs(lf); i += 1) {
-          ctx.fillText(sym, CLEF_W + i * 11, stepToY(steps[i], top) + 6);
+          ctx.smufl(accCode, CLEF_W + i * 8, stepToY(steps[i], top), MUSIC, "start", "#1f2933");
         }
       }
       for (let c = 0; c <= barsInLine; c += 1) {
@@ -294,10 +292,10 @@ function createScoreNotation(canvas, options = {}) {
         const ys = g.items.map((d, i) => stepToY(steps[i], o.top));
         const tipY = up ? Math.min(...ys) - 24 : Math.max(...ys) + 24;
         for (const d of g.items) drawNote(d.note, d.x, o.top, { up, tipY });
-        const x0 = (up ? g.items[0].x + 4.6 : g.items[0].x - 4.6);
-        const x1 = (up ? g.items[g.items.length - 1].x + 4.6 : g.items[g.items.length - 1].x - 4.6);
+        const x0 = (up ? g.items[0].x + HEAD_HALF : g.items[0].x - HEAD_HALF);
+        const x1 = (up ? g.items[g.items.length - 1].x + HEAD_HALF : g.items[g.items.length - 1].x - HEAD_HALF);
         ctx.strokeStyle = state.selected && g.items.some((d) => d.note === state.selected) ? "#d89b2b" : "#1f2933";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.moveTo(x0, tipY); ctx.lineTo(x1, tipY); ctx.stroke();
         ctx.lineWidth = 1;
       }
@@ -332,32 +330,13 @@ function createScoreNotation(canvas, options = {}) {
     ctx.lineWidth = 1;
   }
   function drawRest(x, staffTop, beats) {
-    const midY = staffTop + 2 * SPACING; // 第3線
-    ctx.fillStyle = "#8a96a0";
-    ctx.strokeStyle = "#8a96a0";
-    if (beats >= 1.5) {
-      // 2分休符: 第3線の上に乗る塗りつぶし矩形
-      ctx.fillRect(x - 5, midY - SPACING * 0.55, 10, SPACING * 0.55);
-    } else if (beats >= 0.75) {
-      // 4分休符: ジグザグ
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x - 3, midY - SPACING);
-      ctx.lineTo(x + 2, midY - SPACING * 0.25);
-      ctx.lineTo(x - 2, midY + SPACING * 0.35);
-      ctx.lineTo(x + 3, midY + SPACING);
-      ctx.stroke();
-    } else {
-      // 8分休符: 旗付きの斜線＋玉
-      ctx.beginPath();
-      ctx.arc(x - 2, midY - SPACING * 0.4, 1.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.moveTo(x - 0.5, midY - SPACING * 0.35);
-      ctx.lineTo(x + 2.5, midY + SPACING * 0.7);
-      ctx.stroke();
-    }
+    const midY = staffTop + 2 * SPACING; // 第3線（SMuFL休符の基準）
+    const code = beats >= 3 ? SMUFL.restWhole
+      : beats >= 1.5 ? SMUFL.restHalf
+        : beats >= 0.75 ? SMUFL.restQuarter
+          : beats >= 0.4 ? SMUFL.rest8
+            : SMUFL.rest16;
+    ctx.smufl(code, x, midY, MUSIC, "middle", "#8a96a0");
   }
 
   function drawNote(note, x, staffTop, beam) {
@@ -383,58 +362,38 @@ function createScoreNotation(canvas, options = {}) {
     // 臨時記号（調号で説明できる変化は描かない。調号の変化を打ち消すときは♮）
     const keyA = notationKeyAlter(NOTATION_STEP_LETTER_C[((step % 7) + 7) % 7], fifths);
     if (alt !== keyA) {
-      ctx.fillStyle = color;
-      ctx.font = "11px sans-serif";
-      ctx.fillText(alt === 1 ? "♯" : alt === -1 ? "♭" : "♮", x - 14, y + 4);
+      const accCode = alt === 1 ? SMUFL.accSharp : alt === -1 ? SMUFL.accFlat : SMUFL.accNatural;
+      ctx.smufl(accCode, x - SPACING * 1.7, y, MUSIC, "start", color);
     }
 
-    // 符頭（2拍以上は白玉、4拍以上は全音符=符幹なし）
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-0.3);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 5, 3.6, 0, 0, Math.PI * 2);
-    if (beats >= 2) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-    ctx.restore();
+    // 符頭（SMuFL: 4拍以上=全音符、2拍以上=2分、それ未満=黒玉）
+    const headCode = beats >= 4 ? SMUFL.headWhole : beats >= 2 ? SMUFL.headHalf : SMUFL.headBlack;
+    ctx.smufl(headCode, x, y, MUSIC, "middle", color);
 
-    // 付点（付点音価は基準値×1.5）。符頭の右に小さな丸を描く。
+    // 付点（付点音価は基準値×1.5）。符頭の右に付点グリフ。
     const dotted = beats === 0.75 || beats === 1.5 || beats === 3 || beats === 6;
     const base = dotted ? beats / 1.5 : beats;
     if (dotted) {
-      ctx.fillStyle = color;
-      // 線上の音符は間（半間上）に付点を置く
       const onLine = ((step % 2) + 2) % 2 === 0;
-      ctx.beginPath();
-      ctx.arc(x + 9, y - (onLine ? SPACING / 2 : 0), 1.4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.smufl(SMUFL.dot, x + HEAD_HALF + 2, y - (onLine ? SPACING / 2 : 0), MUSIC, "start", color);
     }
 
     // 符幹と旗（連桁グループのときは旗を描かず、符幹を連桁の高さまで伸ばす）
     if (base < 4) {
       const up = beam ? beam.up : step < 4; // 第3線(B4)より下は上向き
-      const sx = up ? x + 4.6 : x - 4.6;
+      const sx = up ? x + HEAD_HALF : x - HEAD_HALF;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.3;
       if (beam) {
         ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, beam.tipY); ctx.stroke();
       } else {
-        const sy = up ? y - 26 : y + 26;
+        const sy = up ? y - SPACING * 3.3 : y + SPACING * 3.3;
         ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, sy); ctx.stroke();
-        const flags = base <= 0.26 ? 2 : base <= 0.51 ? 1 : 0;
-        for (let f = 0; f < flags; f += 1) {
-          const fy = sy + (up ? f * 5 : -f * 5);
-          ctx.beginPath();
-          ctx.moveTo(sx, fy);
-          ctx.quadraticCurveTo(sx + 7, fy + (up ? 5 : -5), sx + 4, fy + (up ? 12 : -12));
-          ctx.stroke();
-        }
+        // 旗（SMuFL）。符幹の先に付く。
+        const flagCode = base <= 0.13 ? (up ? SMUFL.flag32Up : SMUFL.flag32Down)
+          : base <= 0.26 ? (up ? SMUFL.flag16Up : SMUFL.flag16Down)
+            : base <= 0.51 ? (up ? SMUFL.flag8Up : SMUFL.flag8Down) : null;
+        if (flagCode) ctx.smufl(flagCode, sx, sy, MUSIC, "start", color);
       }
     }
 
