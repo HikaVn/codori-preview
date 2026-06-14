@@ -696,18 +696,27 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     }
   }
 
-  // 拍子（SMuFL timeSig 数字）: 段の左端付近に縦に並ぶ2桁＝分子/分母
+  // 拍子: 最上段の左端（クレフ・調号の後、最初の符頭より左）の、五線帯内に縦に並ぶ2桁。
+  // SMuFL数字(E080-E089)でも、ASCII数字(0x30-0x39 にtoUnicodeされる埋め込み音楽フォント)でも拾う。
   let timeSig = null;
-  if (hasSmufl) {
-    const tsDigits = glyphs
-      .map((g) => ({ d: smuflTimeSigDigit(g.smufl), x: g.x, y: g.y }))
-      .filter((t) => t.d !== null)
-      .sort((a, b) => a.x - b.x || a.y - b.y);
-    if (tsDigits.length >= 2) {
-      // 同じx付近の上下2つ＝分子(上=yが小)・分母(下=yが大)
-      const x0 = tsDigits[0].x;
-      const col = tsDigits.filter((t) => Math.abs(t.x - x0) < 6).sort((a, b) => a.y - b.y);
-      if (col.length >= 2) timeSig = { numerator: col[0].d, denominator: col[col.length - 1].d };
+  {
+    const digitOf = (u) => (u >= 0xe080 && u <= 0xe089) ? u - 0xe080
+      : (u >= 0x30 && u <= 0x39) ? u - 0x30 : null;
+    const st = staves.slice().sort((a, b) => a.top - b.top)[0];
+    if (st) {
+      const mid = (st.top + st.bottom) / 2;
+      const heads = deduped.filter((n) => n.staffTop === st.top).map((n) => n.x);
+      const firstNoteX = heads.length ? Math.min(...heads) : Infinity;
+      const tsDigits = glyphs
+        .map((g) => ({ d: digitOf(g.smufl), x: g.x, y: g.y }))
+        .filter((t) => t.d !== null && Math.abs(t.y - mid) < spacing * 4 && t.x < firstNoteX - 1)
+        .sort((a, b) => a.x - b.x || a.y - b.y);
+      if (tsDigits.length >= 2) {
+        // 同じx付近の上下2つ＝分子(上=yが小)・分母(下=yが大)
+        const x0 = tsDigits[0].x;
+        const col = tsDigits.filter((t) => Math.abs(t.x - x0) < spacing * 1.5).sort((a, b) => a.y - b.y);
+        if (col.length >= 2) timeSig = { numerator: col[0].d, denominator: col[col.length - 1].d };
+      }
     }
   }
 
@@ -756,27 +765,31 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       clefX: leftmostStaffX(glyphs, staves, nearestStaff, s),
       bars,
       chords,
-      fifths: hasSmufl ? detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped) : null,
+      fifths: detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped),
       notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x),
       rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
     };
   });
 
-  // 調号。SMuFL があれば段ごとの fifths（同一(x,y)最大クラスタ）を採用。転調も拾える。
+  // 調号: 段ごとの fifths（♭/♯グリフの数。SMuFL/ASCII音楽フォント両対応）の多数決。
+  // 0以外が多数なら採用（転調も段ごとに反映済み）、全段0なら構造的クラスタ検出にフォールバック。
   const noteheadKeys = new Set([filledKey, openKey].filter(Boolean));
-  let keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
-  if (hasSmufl) {
-    // 段の fifths の多数決を曲全体の代表調号に
-    const counts = new Map();
-    for (const sy of systems) counts.set(sy.fifths, (counts.get(sy.fifths) || 0) + 1);
-    let bestKey = 0; let bestN = -1;
-    for (const [k, n] of counts) if (n > bestN) { bestN = n; bestKey = k; }
+  const counts = new Map();
+  for (const sy of systems) counts.set(sy.fifths, (counts.get(sy.fifths) || 0) + 1);
+  let bestKey = 0; let bestN = -1;
+  for (const [k, n] of counts) if (n > bestN) { bestN = n; bestKey = k; }
+  let keyCand;
+  if (bestKey !== 0 || hasSmufl) {
+    // SMuFL譜は fifths カウントを常に信頼（0=ハ長調も正しい）。ASCII譜は♭/♯が見つかれば採用。
     keyCand = { smuflFifths: bestKey };
-  } else if (keyCand) {
-    const keyGlyphs = glyphs.filter((g) => keyOf(g) === keyCand.glyphKey);
-    const singles = keyGlyphs.filter((g) => !isStacked(g));
-    for (const n of deduped) {
-      n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
+  } else {
+    keyCand = detectKeySigGlyph(glyphs, staves, noteheadKeys);
+    if (keyCand) {
+      const keyGlyphs = glyphs.filter((g) => keyOf(g) === keyCand.glyphKey);
+      const singles = keyGlyphs.filter((g) => !isStacked(g));
+      for (const n of deduped) {
+        n.accSame = singles.some((g) => g.x < n.x - 1.5 && g.x > n.x - 11 && Math.abs(g.y - n.y) < 2.5);
+      }
     }
   }
   // 繰り返し記号（SMuFL）: 反復バーライン・segno・coda・D.S.・D.C.、および
@@ -837,20 +850,24 @@ function leftmostStaffX(glyphs, staves, nearestStaff, s) {
 // クレフと最初の符頭の間には音符が無い＝音符の臨時記号も無いので、その帯（かつ
 // 五線のすぐ近く）にある♭/♯の数がそのまま調号の数になる。
 // （遠い位置の臨時記号や隣段のものは五線帯フィルタと最初の符頭手前で除外）
+// ♭/♯ の判定。SMuFL専用コードに加え、ASCIIにtoUnicodeされる埋め込み音楽フォント
+// （♭→'b'=0x62, ♯→'#'=0x23）や本来のUnicode記号(♭=0x266D, ♯=0x266F)も拾う。
+function isFlatGlyph(u) { return u === SMUFL.accFlat || u === 0x266d || u === 0x62; }
+function isSharpGlyph(u) { return u === SMUFL.accSharp || u === 0x266f || u === 0x23; }
 function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   const clefs = glyphs.filter((g) => (g.smufl === SMUFL.gClef || g.smufl === SMUFL.fClef) && nearestStaff(g.y).staff === staff).map((g) => g.x);
   const clefX = clefs.length ? Math.min(...clefs) : -Infinity;
   const heads = deduped.filter((n) => n.staffTop === staff.top).map((n) => n.x);
   const firstNoteX = heads.length ? Math.min(...heads) : (clefX + spacing * 12);
   const mid = (staff.top + staff.bottom) / 2;
-  const countKeySig = (smufl) => glyphs.filter((g) =>
-    g.smufl === smufl &&
+  const countKeySig = (pred) => glyphs.filter((g) =>
+    pred(g.smufl) &&
     g.x > clefX && g.x < firstNoteX - spacing * 1.2 && // クレフ〜最初の符頭の手前
     Math.abs(g.y - mid) < spacing * 5 &&               // 五線の近く（遠い臨時記号を除外）
     nearestStaff(g.y).staff === staff
   ).length;
-  const f = countKeySig(SMUFL.accFlat);
-  const s = countKeySig(SMUFL.accSharp);
+  const f = countKeySig(isFlatGlyph);
+  const s = countKeySig(isSharpGlyph);
   return s > f ? s : -f;
 }
 
