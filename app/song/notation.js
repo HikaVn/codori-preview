@@ -100,7 +100,8 @@ function createScoreNotation(canvas, options = {}) {
     selected: null,   // note オブジェクト参照
     drag: null,
     layout: options.layout || null, // 学習した元譜の配置（あれば元の配置で描く）
-    layouts: []       // render 時に確定した {note, x, y, step}
+    layouts: [],      // render 時に確定した {note, x, y, step}
+    measureZones: []  // クリック用の小節ゾーン {x0,x1,yTop,yBot,startBeat}（全休符小節も拾える）
   };
 
   const SPACING = 9;             // 五線の線間
@@ -201,6 +202,7 @@ function createScoreNotation(canvas, options = {}) {
     const m = layoutMetrics();
     ctx.clear();
     state.layouts = [];
+    state.measureZones = [];
     if (!state.melody.length) {
       ctx.fillStyle = "#62717d";
       ctx.font = "12px sans-serif";
@@ -356,6 +358,7 @@ function createScoreNotation(canvas, options = {}) {
     const m = { cssW, cssH: systems.length * LINE_H + 6 };
     ctx.clear();
     state.layouts = [];
+    state.measureZones = [];
 
     // 各音符を「同じページで縦位置(y)が最も近いシステム」へ割り当てる
     const notesBySys = systems.map(() => []);
@@ -385,6 +388,32 @@ function createScoreNotation(canvas, options = {}) {
       const contentRight = (xs.length ? Math.max(...xs) : (layout.pageWidth - 20)) + 7;
       const span = Math.max(1, contentRight - contentLeft);
       const mapX = (x) => lw + ((x - contentLeft) / span) * (renderRight - lw);
+
+      // 小節ゾーン（クリック→その小節の開始拍）。小節線で区切り、音符のある小節から開始拍を
+      // 求め、全休符など音符の無い小節は前後から連番（1小節=拍子ぶん）で補完する。
+      {
+        const bpb = state.beatsPerBar || 4;
+        const barXs = (sys.bars || []).map(mapX).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+        const bounds = [4, ...barXs, renderRight];
+        const zs = new Array(Math.max(0, bounds.length - 1)).fill(null);
+        for (const n of notes) {
+          const zx = mapX(n.x);
+          for (let i = 0; i < bounds.length - 1; i += 1) {
+            if (zx >= bounds[i] - 1 && zx < bounds[i + 1]) {
+              const ms = Math.floor((n.startBeat + 1e-6) / bpb) * bpb;
+              if (zs[i] === null || ms < zs[i]) zs[i] = ms;
+              break;
+            }
+          }
+        }
+        for (let i = 1; i < zs.length; i += 1) if (zs[i] === null && zs[i - 1] !== null) zs[i] = zs[i - 1] + bpb;
+        for (let i = zs.length - 2; i >= 0; i -= 1) if (zs[i] === null && zs[i + 1] !== null) zs[i] = Math.max(0, zs[i + 1] - bpb);
+        const yTop = si * LINE_H; const yBot = (si + 1) * LINE_H;
+        for (let i = 0; i < zs.length; i += 1) {
+          if (zs[i] === null || bounds[i + 1] - bounds[i] < 2) continue;
+          state.measureZones.push({ x0: bounds[i], x1: bounds[i + 1], yTop, yBot, startBeat: zs[i] });
+        }
+      }
 
       // 五線
       ctx.strokeStyle = "#9aa7b0"; ctx.lineWidth = 1;
@@ -625,6 +654,16 @@ function createScoreNotation(canvas, options = {}) {
     return best;
   }
 
+  // クリック位置の小節の開始拍。小節ゾーンを優先（全休符小節も正しく拾える）、
+  // 無ければ最寄り音符の拍にフォールバック。該当なしは null。
+  function measureBeatAt(mx, my) {
+    for (const z of state.measureZones) {
+      if (mx >= z.x0 && mx < z.x1 && my >= z.yTop && my < z.yBot) return z.startBeat;
+    }
+    const near = nearestNote(mx, my);
+    return near && Number.isFinite(near.note.startBeat) ? near.note.startBeat : null;
+  }
+
   function pointerPos(event) {
     const rect = canvas.getBoundingClientRect();
     return { mx: event.clientX - rect.left, my: event.clientY - rect.top };
@@ -636,10 +675,10 @@ function createScoreNotation(canvas, options = {}) {
     if (!hit) {
       // 音符以外（小節の余白）をクリック → その小節のコードを試聴する
       if (state.onMeasureClick) {
-        const near = nearestNote(mx, my);
-        if (near && Number.isFinite(near.note.startBeat)) {
+        const beat = measureBeatAt(mx, my);
+        if (beat !== null) {
           event.preventDefault();
-          state.onMeasureClick(near.note.startBeat);
+          state.onMeasureClick(beat);
         }
       }
       return;
