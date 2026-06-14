@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <movement-title>Codori 認識テスト</movement-title>
+  <part-list><score-part id="P1"><part-name>Test</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>8</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above"><direction-type><words>4分音符×4</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <direction placement="above"><direction-type><words>8分音符×8（連桁）</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">begin</beam></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">continue</beam></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>eighth</type><beam number="1">end</beam></note>
+    </measure>
+    <measure number="3">
+      <direction placement="above"><direction-type><words>16分音符×16（連桁）</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">begin</beam></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">continue</beam></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><type>16th</type><beam number="1">end</beam></note>
+    </measure>
+    <measure number="4">
+      <direction placement="above"><direction-type><words>2分+4分+4分</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>half</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="5">
+      <direction placement="above"><direction-type><words>全音符</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>32</duration><type>whole</type></note>
+    </measure>
+    <measure number="6">
+      <direction placement="above"><direction-type><words>付点4分+8分+2分</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>12</duration><type>quarter</type><dot/></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><type>half</type></note>
+    </measure>
+    <measure number="7">
+      <direction placement="above"><direction-type><words>付点2分+4分</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>24</duration><type>half</type><dot/></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="8">
+      <direction placement="above"><direction-type><words>付点8分+16分（付点リズム）×2</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>6</duration><type>eighth</type><dot/></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><type>16th</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>6</duration><type>eighth</type><dot/></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><type>16th</type></note>
+    </measure>
+    <measure number="9">
+      <direction placement="above"><direction-type><words>4分音符と4分休符</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><rest/><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><rest/><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="10">
+      <direction placement="above"><direction-type><words>8分休符＋8分音符×4</words></direction-type></direction>
+      <note><rest/><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+      <note><rest/><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+      <note><rest/><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+      <note><rest/><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+    </measure>
+    <measure number="11">
+      <direction placement="above"><direction-type><words>★付点4分休符（4分音符+付点4分休符+8分音符+4分音符）</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><rest/><duration>12</duration><type>quarter</type><dot/></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>eighth</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="12">
+      <direction placement="above"><direction-type><words>2分休符＋2分音符</words></direction-type></direction>
+      <note><rest/><duration>16</duration><type>half</type></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>half</type></note>
+    </measure>
+    <measure number="13">
+      <direction placement="above"><direction-type><words>全休符（1小節）</words></direction-type></direction>
+      <note><rest/><duration>32</duration><type>whole</type></note>
+    </measure>
+    <measure number="14">
+      <direction placement="above"><direction-type><words>付点2分休符＋4分音符</words></direction-type></direction>
+      <note><rest/><duration>24</duration><type>half</type><dot/></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="15">
+      <direction placement="above"><direction-type><words>臨時記号（♯♭♮）</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><alter>1</alter><octave>4</octave></pitch><duration>8</duration><type>quarter</type><accidental>sharp</accidental></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><alter>-1</alter><octave>4</octave></pitch><duration>8</duration><type>quarter</type><accidental>flat</accidental></note>
+    </measure>
+    <measure number="16">
+      <direction placement="above"><direction-type><words>タイ（4分→4分＝2分の長さ）と4分×2</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><tie type="start"/><type>quarter</type><notations><tied type="start"/></notations></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><tie type="stop"/><type>quarter</type><notations><tied type="stop"/></notations></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="17">
+      <attributes>
+        <key><fifths>2</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <direction placement="above"><direction-type><words>調号2♯（Dメジャー）4分×4</words></direction-type></direction>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="18">
+      <attributes>
+        <key><fifths>0</fifths></key>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <direction placement="above"><direction-type><words>3/4：4分×3</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>quarter</type></note>
+    </measure>
+    <measure number="19">
+      <direction placement="above"><direction-type><words>3/4：全休符（1小節=3拍）</words></direction-type></direction>
+      <note><rest/><duration>32</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>

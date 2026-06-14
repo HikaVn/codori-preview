@@ -1,0 +1,47 @@
+{
+   // Codori 認識テスト用 Sibelius ManuScript プラグイン（スケッチ）
+   //
+   // 目的: tools/gen-test-corpus.mjs が生成した MusicXML フォルダを、Sibelius で
+   //       一括 PDF 化する。出力 PDF を Codori「楽譜とりこみ」で認識し、
+   //       tools/compare.mjs で正解(.truth.json)と自動照合する。
+   //
+   // 導入: このファイルを Sibelius の Plugins フォルダ（ユーザー領域）に置くか、
+   //       Plug-ins > Edit Plug-ins > New で貼り付ける。Plug-ins メニューに出る。
+   //
+   // ※ PDF 書き出しのメソッド名は Sibelius のバージョンで異なる。下の Run() の
+   //    該当行は環境の ManuScript リファレンスで要確認（コメント参照）。
+   //    確実なのは Sibelius 同梱の「Batch Processing」プラグイン群:
+   //      Plug-ins > Batch Processing > Convert Folder of MusicXML Files（取り込み）
+   //      Plug-ins > Batch Processing > Export Folder as PDF（PDF一括書き出し）
+   //    まずはこの2つを使うのが最短・確実。本プラグインは自動化したい場合の雛形。
+
+   Initialize "() {
+      Sibelius.AddToPluginsMenu('Codori: MusicXML一括PDF化', 'Run');
+   }"
+
+   Run "() {
+      folder = Sibelius.SelectFolder('MusicXML(.xml/.musicxml)の入ったフォルダを選択');
+      if (folder = null) { return False; }
+
+      files = folder.Files('*.xml');
+      count = 0;
+      for each file in files {
+         // MusicXML を開く（Sibelius は自動でインポート）
+         score = Sibelius.Open(file.NameWithExt);
+         if (score != null) {
+            pdfPath = folder.Name & file.NameNoExt & '.pdf';
+
+            // --- PDF 書き出し（バージョン依存。いずれかが使える）---
+            // Sibelius 2018+ 系: score.SaveAs(pdfPath, 'PDF');
+            // 旧系/環境により: Sibelius.PrintScore(score, ...);
+            // 不明な場合は同梱の Batch Processing > Export Folder as PDF を使うこと。
+            score.SaveAs(pdfPath, 'PDF');
+
+            score.Close(False);
+            count = count + 1;
+         }
+      }
+      Sibelius.MessageBox('完了: ' & count & ' 個の楽譜を PDF 化しました。\nCodoriで認識し tools/compare.mjs で照合してください。');
+      return True;
+   }"
+}
