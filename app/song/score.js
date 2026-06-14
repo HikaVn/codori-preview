@@ -98,6 +98,7 @@ function loadScoreData(parsed, kind) {
   scoreState.beatsPerBar = parsed.beatsPerBar || 4;
   scoreState.keySig = parsed.keySig || null;
   scoreState.beatCheck = parsed.beatCheck || null; // 拍検算（小節ごとの拍合計が拍子に合うか）
+  scoreState.layout = parsed.layout || null;       // 学習した元譜の配置（あれば元の配置で再現）
   // コード列 → events（startBeatは隣との差で拍数化）
   const chords = [...(parsed.chordEvents || [])].sort((a, b) => a.startBeat - b.startBeat);
   scoreState.events = [{ type: "section", label: kind, beats: 0, lineIndex: 0 }];

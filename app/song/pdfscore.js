@@ -745,6 +745,8 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     return {
       top: s.top,
       bottom: s.bottom,
+      spacing,
+      clefX: leftmostStaffX(glyphs, staves, nearestStaff, s),
       bars,
       chords,
       fifths: hasSmufl ? detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped) : null,
@@ -1028,8 +1030,20 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     problemCount: problems.length,
     problems: problems.slice(0, 50)
   };
+  // レイアウト（学習した元譜の配置）: 各システムの五線位置・小節線・調号・休符・コードを
+  // そのまま渡し、描画側で「拍から再構築」せず元の配置で再現できるようにする。
+  const layout = {
+    pageWidth: pageW, pageHeight: pageH, pages: pdf.numPages,
+    systems: allSystems.map((s) => ({
+      page: s.page, top: s.top, bottom: s.bottom, spacing: s.spacing, clefX: s.clefX,
+      fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
+      bars: s.bars,
+      chords: s.chords,
+      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1 }))
+    }))
+  };
   return {
-    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck, layout,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH
   };
