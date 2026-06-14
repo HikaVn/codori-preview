@@ -24,11 +24,17 @@ MusicXML を Codori に直接読み込めば（②を飛ばして）**MusicXML�
 ### 1. テスト譜と正解を生成
 ```
 node tools/gen-test-corpus.mjs
-# → tools/corpus/rhythm-test.musicxml     （Sibelius等で開く元）
-# → tools/corpus/rhythm-test.truth.json   （完璧な認識が返すべき正解）
+# リズム/休符/臨時記号/タイ/連桁/調号/拍子/3連符:
+#   → tools/corpus/rhythm-test.musicxml / rhythm-test.truth.json
+# アーティキュレーション（スタッカート/アクセント/テヌート/マルカート/スタッカーティシモ/フェルマータ）:
+#   → tools/corpus/artic-test.musicxml / artic-test.truth.json
+# 繰り返し（1番2番括弧）: 再生順の正解 playOrder つき:
+#   → tools/corpus/repeat-volta-test.musicxml / repeat-volta-test.truth.json
+# 繰り返し（D.C. al Fine）: 同上:
+#   → tools/corpus/repeat-dcfine-test.musicxml / repeat-dcfine-test.truth.json
 ```
-網羅内容: 全〜32分の音価×付点 / 各種休符×付点（**付点四分休符**含む） / 臨時記号 /
-タイ / 連桁 / 調号 / 拍子(4/4・3/4)。1小節=1パターンでラベル付き。
+繰り返しコーパスの `playOrder`（期待される再生順）は、実装と同じ `app/song/repeats.js` の
+`expandRepeats` で計算して埋め込む（生成器と実装が同じロジックを共有＝閉ループ）。
 
 ### 2.（PDF経路）Sibelius で PDF 化
 - 最短・確実: Sibelius 同梱の Batch Processing プラグイン

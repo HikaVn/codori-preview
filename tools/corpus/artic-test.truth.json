@@ -1,0 +1,373 @@
+{
+  "format": "codori-test-truth",
+  "version": 1,
+  "beatsPerBar": 4,
+  "fifths": 0,
+  "noteCount": 25,
+  "restCount": 0,
+  "notes": [
+    {
+      "beat": 0,
+      "beats": 1,
+      "midi": 72,
+      "artic": "staccato"
+    },
+    {
+      "beat": 1,
+      "beats": 1,
+      "midi": 74,
+      "artic": "staccato"
+    },
+    {
+      "beat": 2,
+      "beats": 1,
+      "midi": 76,
+      "artic": "staccato"
+    },
+    {
+      "beat": 3,
+      "beats": 1,
+      "midi": 77,
+      "artic": "staccato"
+    },
+    {
+      "beat": 4,
+      "beats": 1,
+      "midi": 72,
+      "artic": "accent"
+    },
+    {
+      "beat": 5,
+      "beats": 1,
+      "midi": 74,
+      "artic": "accent"
+    },
+    {
+      "beat": 6,
+      "beats": 1,
+      "midi": 76,
+      "artic": "accent"
+    },
+    {
+      "beat": 7,
+      "beats": 1,
+      "midi": 77,
+      "artic": "accent"
+    },
+    {
+      "beat": 8,
+      "beats": 1,
+      "midi": 72,
+      "artic": "tenuto"
+    },
+    {
+      "beat": 9,
+      "beats": 1,
+      "midi": 74,
+      "artic": "tenuto"
+    },
+    {
+      "beat": 10,
+      "beats": 1,
+      "midi": 76,
+      "artic": "tenuto"
+    },
+    {
+      "beat": 11,
+      "beats": 1,
+      "midi": 77,
+      "artic": "tenuto"
+    },
+    {
+      "beat": 12,
+      "beats": 1,
+      "midi": 72,
+      "artic": "marcato"
+    },
+    {
+      "beat": 13,
+      "beats": 1,
+      "midi": 74,
+      "artic": "marcato"
+    },
+    {
+      "beat": 14,
+      "beats": 1,
+      "midi": 76,
+      "artic": "marcato"
+    },
+    {
+      "beat": 15,
+      "beats": 1,
+      "midi": 77,
+      "artic": "marcato"
+    },
+    {
+      "beat": 16,
+      "beats": 0.5,
+      "midi": 72,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 16.5,
+      "beats": 0.5,
+      "midi": 74,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 17,
+      "beats": 0.5,
+      "midi": 76,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 17.5,
+      "beats": 0.5,
+      "midi": 77,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 18,
+      "beats": 0.5,
+      "midi": 79,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 18.5,
+      "beats": 0.5,
+      "midi": 81,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 19,
+      "beats": 0.5,
+      "midi": 79,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 19.5,
+      "beats": 0.5,
+      "midi": 77,
+      "artic": "staccatissimo"
+    },
+    {
+      "beat": 20,
+      "beats": 4,
+      "midi": 72,
+      "artic": "fermata"
+    }
+  ],
+  "rests": [],
+  "cases": [
+    {
+      "measure": 1,
+      "label": "スタッカート4分×4",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "4分",
+          "midi": 72,
+          "artic": "staccato"
+        },
+        {
+          "pitch": "D5",
+          "type": "4分",
+          "midi": 74,
+          "artic": "staccato"
+        },
+        {
+          "pitch": "E5",
+          "type": "4分",
+          "midi": 76,
+          "artic": "staccato"
+        },
+        {
+          "pitch": "F5",
+          "type": "4分",
+          "midi": 77,
+          "artic": "staccato"
+        }
+      ],
+      "rests": [],
+      "startBeat": 0
+    },
+    {
+      "measure": 2,
+      "label": "アクセント4分×4",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "4分",
+          "midi": 72,
+          "artic": "accent"
+        },
+        {
+          "pitch": "D5",
+          "type": "4分",
+          "midi": 74,
+          "artic": "accent"
+        },
+        {
+          "pitch": "E5",
+          "type": "4分",
+          "midi": 76,
+          "artic": "accent"
+        },
+        {
+          "pitch": "F5",
+          "type": "4分",
+          "midi": 77,
+          "artic": "accent"
+        }
+      ],
+      "rests": [],
+      "startBeat": 4
+    },
+    {
+      "measure": 3,
+      "label": "テヌート4分×4",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "4分",
+          "midi": 72,
+          "artic": "tenuto"
+        },
+        {
+          "pitch": "D5",
+          "type": "4分",
+          "midi": 74,
+          "artic": "tenuto"
+        },
+        {
+          "pitch": "E5",
+          "type": "4分",
+          "midi": 76,
+          "artic": "tenuto"
+        },
+        {
+          "pitch": "F5",
+          "type": "4分",
+          "midi": 77,
+          "artic": "tenuto"
+        }
+      ],
+      "rests": [],
+      "startBeat": 8
+    },
+    {
+      "measure": 4,
+      "label": "マルカート4分×4",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "4分",
+          "midi": 72,
+          "artic": "marcato"
+        },
+        {
+          "pitch": "D5",
+          "type": "4分",
+          "midi": 74,
+          "artic": "marcato"
+        },
+        {
+          "pitch": "E5",
+          "type": "4分",
+          "midi": 76,
+          "artic": "marcato"
+        },
+        {
+          "pitch": "F5",
+          "type": "4分",
+          "midi": 77,
+          "artic": "marcato"
+        }
+      ],
+      "rests": [],
+      "startBeat": 12
+    },
+    {
+      "measure": 5,
+      "label": "スタッカーティシモ8分×8",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "8分",
+          "midi": 72,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "D5",
+          "type": "8分",
+          "midi": 74,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "E5",
+          "type": "8分",
+          "midi": 76,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "F5",
+          "type": "8分",
+          "midi": 77,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "G5",
+          "type": "8分",
+          "midi": 79,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "A5",
+          "type": "8分",
+          "midi": 81,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "G5",
+          "type": "8分",
+          "midi": 79,
+          "artic": "staccatissimo"
+        },
+        {
+          "pitch": "F5",
+          "type": "8分",
+          "midi": 77,
+          "artic": "staccatissimo"
+        }
+      ],
+      "rests": [],
+      "startBeat": 16
+    },
+    {
+      "measure": 6,
+      "label": "フェルマータ（全音符）",
+      "key": 0,
+      "time": "4/4",
+      "notes": [
+        {
+          "pitch": "C5",
+          "type": "全",
+          "midi": 72,
+          "artic": "fermata"
+        }
+      ],
+      "rests": [],
+      "startBeat": 20
+    }
+  ]
+}
