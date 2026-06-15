@@ -441,8 +441,14 @@ function createScoreNotation(canvas, options = {}) {
       ctx.fillText(String(sys.measureStart || (si + 1)), 6, top - 6);
       // 休符（学習位置・学習した休符の種類で）
       for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats, r);
-      // コード（学習位置・五線の上）
+      // コード（学習位置・五線の上）。所属位置が分かるよう、各コードから五線の最上線まで
+      // 半透明の縦線で結ぶ。
       if (sys.chords && sys.chords.length) {
+        ctx.strokeStyle = "rgba(31,111,79,0.35)"; ctx.lineWidth = 1;
+        for (const c of sys.chords) {
+          const cx = mapX(c.x);
+          ctx.beginPath(); ctx.moveTo(cx, top - 13); ctx.lineTo(cx, top); ctx.stroke();
+        }
         ctx.fillStyle = "#1f6f4f"; ctx.font = "11px sans-serif";
         for (const c of sys.chords) ctx.fillText(c.text, mapX(c.x) - 4, top - 16);
       }
