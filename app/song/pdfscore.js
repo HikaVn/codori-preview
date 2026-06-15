@@ -470,13 +470,28 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const otherY = Math.abs(g.y - v.y0) < 3.2 ? v.y1 : v.y0;
     if (filledAtEnd(v, otherY)) stat.get(keyOf(g)).flagLike += 1;
   }
+  // 旗らしさ(符幹非依存): そのコードのグリフから縦に約符幹ぶん離れた近xに黒玉(自分の符頭)が
+  // あれば旗。旗は符幹の先端にあり stemAt が符幹を拾えず「符幹なし＝全/白玉」と誤判定されやすい。
+  const looksLikeFlag = (g) => filledGlyphs.some((f) =>
+    Math.abs(f.x - g.x) < spacing * 1.8 && Math.abs(f.y - g.y) > spacing * 1.5 && Math.abs(f.y - g.y) < spacing * 9);
+  // 楽譜エリア（五線群の上下端±余白）。旗は符幹の先＝五線の上下に出るので広めに取る。
+  // ページ上部のタイトル等で同コードが流用されても薄まらないよう、ヘッダ/フッタだけ除く。
+  const staffYs = staves.flatMap((s) => [s.top, s.bottom]);
+  const musicYLo = (staffYs.length ? Math.min(...staffYs) : 0) - spacing * 6;
+  const musicYHi = (staffYs.length ? Math.max(...staffYs) : Infinity) + spacing * 6;
+  const inMusicArea = (g) => g.y > musicYLo && g.y < musicYHi;
+  // 旗率は楽譜エリアのグリフだけで測る
+  const flagRate = (k) => {
+    const gg = glyphs.filter((x) => keyOf(x) === k && inMusicArea(x));
+    return gg.length ? gg.filter(looksLikeFlag).length / gg.length : 0;
+  };
   // 白玉（中抜き符頭）= 符幹の端に付くが、連桁と無縁で、旗でもないコード
   let openKey = null;
   let openBest = 0;
   for (const [k, s] of stat) {
     if (k === filledKey) continue;
     if (s.count >= 3 && s.ys.size >= 3 && s.stemEnd >= s.count * 0.3 &&
-        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && s.stemEnd > openBest) {
+        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && flagRate(k) < 0.3 && s.stemEnd > openBest) {
       openBest = s.stemEnd;
       openKey = k;
     }
@@ -500,7 +515,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const stemRate = s.stemEnd / s.count;
     const yDiv = s.ys.size / s.count;
     const xDiv = s.xs.size / s.count;
-    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6) {
+    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6 && flagRate(k) < 0.3) {
       const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
       if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
     }
