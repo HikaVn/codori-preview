@@ -732,6 +732,16 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
         g.x - n.x > 2 && g.x - n.x < 11 && Math.abs(g.y - n.y) < spacing * 0.85);
       if (dot) { n.beats = (n.beats || 1) * 1.5; n.dotted = true; }
     }
+  } else {
+    // 非SMuFL（ASCIIマップ音楽フォント）の臨時記号を音高に反映。符頭のすぐ左・同じ高さに
+    // 'b'=♭(-1)/'n'=♮(0)/'#'=♯(+1)。調号の♭は離れた左端ゾーンなので拾わない（x窓が狭い）。
+    const ASCII_ACC = { 0x62: -1, 0x6e: 0, 0x23: 1 };
+    for (const n of deduped) {
+      if (n.accidental !== undefined) continue;
+      const acc = glyphs.find((g) => ASCII_ACC[g.smufl] !== undefined &&
+        n.x - g.x > 1 && n.x - g.x < spacing * 2.8 && Math.abs(g.y - n.y) < spacing * 0.8);
+      if (acc) n.accidental = ASCII_ACC[acc.smufl];
+    }
   }
 
   // 拍子: 最上段の左端（クレフ・調号の後、最初の符頭より左）の、五線帯内に縦に並ぶ2桁。
