@@ -810,9 +810,16 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       if (last && g.x - last.lastX < spacing * 2.4 && g.font === last.font) { last.text += ch; last.lastX = g.x; }
       else tokens.push({ x: g.x, lastX: g.x, text: ch, font: g.font });
     }
-    const chords = tokens
-      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }))
-      .filter((t) => looksLikeChordToken(t.text));
+    // コードらしいトークンのうち、多数派フォント＝コードのフォント。別フォントの単独文字
+    // （リハーサル記号[A]等は別フォントで描かれる）はコードにしない。
+    const chordLike = tokens.filter((t) => looksLikeChordToken(t.text.replace(/n$/, "").trim()));
+    const fontFreq = {};
+    for (const t of chordLike) fontFreq[t.font] = (fontFreq[t.font] || 0) + 1;
+    let chordFont = null; let chordFontN = 0;
+    for (const f in fontFreq) if (fontFreq[f] > chordFontN) { chordFontN = fontFreq[f]; chordFont = f; }
+    const chords = chordLike
+      .filter((t) => t.font === chordFont || t.text.replace(/n$/, "").trim().length >= 2)
+      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }));
     return {
       top: s.top,
       bottom: s.bottom,
@@ -1069,6 +1076,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
+    sys._startMeasure = Math.round(beat / bpb) + 1; // この段の先頭小節番号（1始まり）
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
@@ -1275,6 +1283,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     pageWidth: pageW, pageHeight: pageH, pages: pdf.numPages,
     systems: allSystems.map((s) => ({
       page: s.page, top: s.top, bottom: s.bottom, spacing: s.spacing, clefX: s.clefX,
+      measureStart: s._startMeasure || 1,
       fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
       bars: s.bars,
       chords: s.chords,

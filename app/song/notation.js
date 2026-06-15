@@ -436,9 +436,9 @@ function createScoreNotation(canvas, options = {}) {
         const x = mapX(bx);
         ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + STAFF_H); ctx.stroke();
       }
-      // 段番号
+      // 小節番号（その段の先頭小節）。認識が渡す measureStart を使う。
       ctx.fillStyle = "#62717d"; ctx.font = "9px sans-serif";
-      ctx.fillText(String(si + 1), 6, top - 6);
+      ctx.fillText(String(sys.measureStart || (si + 1)), 6, top - 6);
       // 休符（学習位置・学習した休符の種類で）
       for (const r of sys.rests || []) drawRest(mapX(r.x), top, r.beats, r);
       // コード（学習位置・五線の上）
