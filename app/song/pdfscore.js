@@ -485,13 +485,21 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const gg = glyphs.filter((x) => keyOf(x) === k && inMusicArea(x));
     return gg.length ? gg.filter(looksLikeFlag).length / gg.length : 0;
   };
+  // 臨時記号らしさ: すぐ右隣（同じ高さ）に黒玉(符頭)があるグリフ＝♯♭♮などの臨時記号。
+  // 符幹が無く各音高にばらけるので全/白玉と誤判定されやすい（符頭の隣に幻の音符を生む）。
+  const looksLikeAccidental = (g) => filledGlyphs.some((f) =>
+    f.x - g.x > 1 && f.x - g.x < spacing * 2.6 && Math.abs(f.y - g.y) < spacing * 0.8);
+  const accRate = (k) => {
+    const gg = glyphs.filter((x) => keyOf(x) === k && inMusicArea(x));
+    return gg.length ? gg.filter(looksLikeAccidental).length / gg.length : 0;
+  };
   // 白玉（中抜き符頭）= 符幹の端に付くが、連桁と無縁で、旗でもないコード
   let openKey = null;
   let openBest = 0;
   for (const [k, s] of stat) {
     if (k === filledKey) continue;
     if (s.count >= 3 && s.ys.size >= 3 && s.stemEnd >= s.count * 0.3 &&
-        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && flagRate(k) < 0.3 && s.stemEnd > openBest) {
+        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && flagRate(k) < 0.3 && accRate(k) < 0.4 && s.stemEnd > openBest) {
       openBest = s.stemEnd;
       openKey = k;
     }
@@ -515,7 +523,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const stemRate = s.stemEnd / s.count;
     const yDiv = s.ys.size / s.count;
     const xDiv = s.xs.size / s.count;
-    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6 && flagRate(k) < 0.3) {
+    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6 && flagRate(k) < 0.3 && accRate(k) < 0.4) {
       const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
       if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
     }
