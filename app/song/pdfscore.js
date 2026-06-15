@@ -741,6 +741,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       const acc = glyphs.find((g) => ASCII_ACC[g.smufl] !== undefined &&
         n.x - g.x > 1 && n.x - g.x < spacing * 2.8 && Math.abs(g.y - n.y) < spacing * 0.8);
       if (acc) n.accidental = ASCII_ACC[acc.smufl];
+      // 付点: 音符の右の小さな点グリフ（このフォントでは uni 0x2122='™' にマップ）。音価1.5倍。
+      const dot = glyphs.find((g) => g.smufl === 0x2122 &&
+        g.x - n.x > spacing * 0.6 && g.x - n.x < spacing * 2.6 && Math.abs(g.y - n.y) < spacing * 1.0);
+      if (dot && !n.dotted) { n.beats = (n.beats || 1) * 1.5; n.dotted = true; }
     }
   }
 
