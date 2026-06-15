@@ -823,7 +823,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     for (const f in fontFreq) if (fontFreq[f] > chordFontN) { chordFontN = fontFreq[f]; chordFont = f; }
     const chords = chordLike
       .filter((t) => t.font === chordFont || t.text.replace(/n$/, "").trim().length >= 2)
-      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }));
+      .map((t) => ({ x: t.x, lastX: t.lastX, text: t.text.replace(/n$/, "").trim() }));
     return {
       top: s.top,
       bottom: s.bottom,
@@ -1097,7 +1097,9 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const sysNotes = melody.slice(sysMelodyStart).sort((a, b) => a.x - b.x);
       const usedByMeasure = new Map(); // 小節ごとに使った拍／コード名
       for (const c of (sys.chords || []).slice().sort((a, b) => a.x - b.x)) {
-        const cx = c.x + sys.spacing * 1.6;
+        // 小節判定はコードの「中心x」で行う。コードのxはテキスト左端なので、幅の広いコード
+        // （Dbmaj7等）だと左端が小節線の左に出て前の小節に誤割り当てされる。中心なら正しい小節。
+        const cx = (c.x + (c.lastX != null ? c.lastX : c.x)) / 2 + sys.spacing * 0.6;
         let m = sysMeasures.find((mm) => cx >= mm.xL && cx < mm.xR);
         if (!m && sysMeasures.length) {
           m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
