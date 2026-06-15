@@ -1105,24 +1105,31 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
           m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
         }
         if (!m) continue;
-        if (!usedByMeasure.has(m)) usedByMeasure.set(m, { beats: new Set(), texts: new Set() });
+        if (!usedByMeasure.has(m)) usedByMeasure.set(m, { beats: new Set(), assigned: [] });
         const used = usedByMeasure.get(m);
         const text = normalizeChordText(c.text);
-        if (used.texts.has(text)) continue; // 同じ小節に同じコードの重複は1つに
+        // 同名コードが同じ位置（±spacing*4）に重複検出されたときだけ1つに。
+        // C–G–C のように同小節内で同名・別位置のコードに戻る進行は残す。
+        if (used.assigned.some((a) => a.text === text && Math.abs(a.x - c.x) < sys.spacing * 4)) continue;
         const inMeasure = sysNotes.filter((n) => n.x >= m.xL - 2 && n.x < m.xR);
         // コードのx以右で未使用の音符を優先、無ければ小節内の未使用音符
         const after = inMeasure.filter((n) => n.x >= c.x - sys.spacing * 1.5 && !used.beats.has(n.startBeat));
         let note = after.length ? after[0] : inMeasure.find((n) => !used.beats.has(n.startBeat));
         let beat; let beatX;
         if (note) { beat = note.startBeat; beatX = note.x; }
-        else {
+        else if (Number.isFinite(m.xL) && Number.isFinite(m.xR) && m.xR - m.xL > 1) {
           // 空き音符なし: x位置から小節内の拍を推定（0.5グリッド）、衝突は後ろへ
-          const frac = Math.max(0, Math.min(0.99, (c.x - m.xL) / Math.max(1, m.xR - m.xL)));
+          const frac = Math.max(0, Math.min(0.99, (c.x - m.xL) / (m.xR - m.xL)));
           beat = m.startBeat + Math.round(frac * bpb / 0.5) * 0.5;
           while (used.beats.has(beat)) beat += 0.5;
           beatX = Math.max(m.xL, c.x);
+        } else {
+          // 小節範囲が無限/不定（行頭の休符だけ小節など）: 小節頭から空き拍へ（NaN防止）
+          beat = m.startBeat;
+          while (used.beats.has(beat)) beat += 0.5;
+          beatX = Number.isFinite(c.x) ? c.x : m.startBeat;
         }
-        used.beats.add(beat); used.texts.add(text);
+        used.beats.add(beat); used.assigned.push({ text, x: c.x });
         chordEvents.push({ startBeat: beat, chord: text });
         c.beatX = beatX;
       }
