@@ -144,22 +144,37 @@ function isSmuflFilled(u) { return u === SMUFL.noteheadBlack; }
 function smuflTimeSigDigit(u) { return (u >= 0xe080 && u <= 0xe089) ? u - 0xe080 : null; }
 
 // コード記号の文字（SMuFL csym臨時記号 ED60/61/62 と ASCII）→ 文字。コード以外は null。
+// 一部の浄書ソフトのコード記号フォントは toUnicode が壊れ、修飾文字（♭・m・maj・sus・dim・
+// half-dim）を ASCII 外の妙なコードに割り当てる。実譜で確認した対応を補う（標準フォントには無害）。
+const CHORD_FONT_FALLBACK = {
+  0xa8: "b",        // ♭ flat
+  0x2039: "m",      // m（マイナー）
+  0x152: "m",       // m（"maj" の m）
+  0x201e: "a",      // a（"maj"）
+  0x160: "j",       // j（"maj"）
+  0xba: "°",   // ° dim
+  0xd8: "ø",   // ø half-diminished
+  0x201c: "sus"     // sus
+};
 function chordCharFromSmufl(u) {
   if (u === 0xed60) return "b"; // csymAccidentalFlat ♭
   if (u === 0xed62) return "#"; // csymAccidentalSharp ♯
   if (u === 0xed61) return "n"; // csymAccidentalNatural（コード名では稀）
+  if (CHORD_FONT_FALLBACK[u] !== undefined) return CHORD_FONT_FALLBACK[u]; // 非標準コードフォント
   if (u >= 0x20 && u <= 0x7e) return String.fromCodePoint(u); // ASCII（英字・数字・記号）
   return null;
 }
 // 再構成したコード文字列が妥当か（A〜Gで始まる）
 function looksLikeChordToken(t) {
-  return /^[A-G][#b]?(maj|min|m|M|dim|aug|sus|add|°|\+|\d|\/|[#b])*$/.test(t) && t.length <= 10;
+  return /^[A-G][#b]?(maj|min|m|M|dim|aug|sus|add|°|ø|\+|\d|\/|\(|\)|[#b])*$/.test(t) && t.length <= 12;
 }
-// コード表記を整える（M7→maj7 など。表示はそのままでも可）
+// コード表記を整える（M7→maj7, ø→m7-5, 括弧除去 など。表示はそのままでも可）
 function normalizeChordText(t) {
   return String(t || "")
     .replace(/M7/g, "maj7")
+    .replace(/ø7?/g, "m7-5")  // half-diminished（7は冗長なので吸収）
     .replace(/°/g, "dim")
+    .replace(/[()]/g, "")      // C(sus4) → Csus4
     .trim();
 }
 
