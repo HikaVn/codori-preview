@@ -1080,6 +1080,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
+    const sysMelodyStart = melody.length; // この段の音符はここ以降に積まれる（コードのスナップに使う）
     sys._startMeasure = Math.round(beat / bpb) + 1; // この段の先頭小節番号（1始まり）
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
@@ -1089,16 +1090,28 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       noteCount += 1;
     };
     const assignChords = () => {
-      // 小節線のすぐ際にあるコードは「次の小節の頭」として扱う（譜面の慣習）。
-      // xを少し右へ寄せてから含む小節を探すことで、境界での所属の揺れを抑える。
-      const SNAP = 8;
+      // コードの所属ルール: まずコードが入る小節を決め、その小節内でコードの直下〜右に最も近い
+      // 音符のオンセット拍に属させる（小節頭コードは自然に最初の音符＝小節頭になる）。
+      // 音符が無い（休符だけの）小節はその小節の頭。遠い小節の音符には吸着しない。
+      const sysNotes = melody.slice(sysMelodyStart).sort((a, b) => a.x - b.x);
       for (const c of sys.chords || []) {
-        const cx = c.x + SNAP;
+        // 小節線のすぐ際のコードは次の小節の頭として扱う（xを少し右へ寄せて含む小節を探す）
+        const cx = c.x + sys.spacing * 1.6;
         let m = sysMeasures.find((mm) => cx >= mm.xL && cx < mm.xR);
         if (!m && sysMeasures.length) {
           m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
         }
-        if (m) chordEvents.push({ startBeat: m.startBeat, chord: normalizeChordText(c.text) });
+        if (!m) continue;
+        const inMeasure = sysNotes.filter((n) => n.x >= m.xL - 2 && n.x < m.xR);
+        const after = inMeasure.filter((n) => n.x >= c.x - sys.spacing * 1.5);
+        const note = after.length ? after[0] : (inMeasure.length ? inMeasure[0] : null);
+        if (note) {
+          chordEvents.push({ startBeat: note.startBeat, chord: normalizeChordText(c.text) });
+          c.beatX = note.x; // 接続線・所属位置はこの音符に合わせる
+        } else {
+          chordEvents.push({ startBeat: m.startBeat, chord: normalizeChordText(c.text) }); // 休符だけ＝小節頭
+          c.beatX = Math.max(m.xL, c.x);
+        }
       }
     };
     // 小節範囲 [edges[i], edges[i+1]]。小節線が無い場合はシステム全体を1小節扱い。
