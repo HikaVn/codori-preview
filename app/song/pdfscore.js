@@ -751,12 +751,16 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
   }
 
   // 段（システム）ごとに、小節線で区切る。
-  // 小節線＝五線をほぼ縦断する縦線のうち、どちらの端にも符頭が付いていないもの。
-  // （上の音から下の音へ伸びる符幹も五線を縦断しうるので、符頭の有無で見分ける＝人間と同じ）
+  // 小節線＝五線をほぼ縦断する縦線のうち、符幹でないもの。符幹は符頭が線の片端に「向き整合」で
+  // 付く（上向き＝符頭は下端で線の左／下向き＝符頭は上端で線の右）。小節線は次小節の音符が
+  // 端の逆側に来ても符幹ではない＝小節線と見分ける（人間と同じ）。
   const headAtEitherEnd = (v) => deduped.some((n) => {
     const dx = n.x - v.x;
-    if (dx <= -8 || dx >= 4) return false;
-    return Math.abs(n.y - v.y0) < 4 || Math.abs(n.y - v.y1) < 4;
+    const atTop = Math.abs(n.y - v.y0) < 4;
+    const atBottom = Math.abs(n.y - v.y1) < 4;
+    const upStem = atBottom && dx > -spacing * 1.5 && dx < 1;   // 下端・線の左＝上向き符幹
+    const downStem = atTop && dx < spacing * 1.5 && dx > -1;    // 上端・線の右＝下向き符幹
+    return upStem || downStem;
   });
   const systems = staves.map((s) => {
     const sh = s.bottom - s.top;
@@ -773,7 +777,8 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     }
     // コード記号: 五線のすぐ上の帯にある英字・数字・csym臨時記号グリフを
     // x順に集め、x間隔でトークンに割る。各トークン＝1コード。
-    const bandTop = s.top - spacing * 5;
+    // コードは五線の2間ほど上。帯を広げすぎるとテンポ表記(♩=120 Swing 等)を拾うので4間まで。
+    const bandTop = s.top - spacing * 4;
     const bandBot = s.top - spacing * 0.8;
     const chordGlyphs = glyphs
       .filter((g) => g.y >= bandTop && g.y < bandBot && chordCharFromSmufl(g.smufl) !== null)
@@ -782,8 +787,10 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     for (const g of chordGlyphs) {
       const ch = chordCharFromSmufl(g.smufl);
       const last = tokens[tokens.length - 1];
-      if (last && g.x - last.lastX < spacing * 2.4) { last.text += ch; last.lastX = g.x; }
-      else tokens.push({ x: g.x, lastX: g.x, text: ch });
+      // 1つのコードは同じフォントで描かれる。フォントが変わったら別トークン
+      // （リハーサル記号[A]等が隣のコードに連結して壊すのを防ぐ）。
+      if (last && g.x - last.lastX < spacing * 2.4 && g.font === last.font) { last.text += ch; last.lastX = g.x; }
+      else tokens.push({ x: g.x, lastX: g.x, text: ch, font: g.font });
     }
     const chords = tokens
       .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }))
@@ -1028,6 +1035,20 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     if (n.accSame && kf !== 0) alter = kf < 0 ? -1 : 1; // SMuFL無しPDF用フォールバック
     return n.midi + alter;
   };
+  // 全休符の正規化: 各システムの各小節（小節線区切り）で、音符が無く休符が1個だけなら
+  // 全休符（小節まるごと）＝拍子ぶん。配置・描画(layout)の両方で正しく扱えるよう先にマーク。
+  for (const sys of allSystems) {
+    const edges = (sys.bars || []).slice().sort((a, b) => a - b);
+    const bounds = [-Infinity, ...edges, Infinity];
+    for (let i = 0; i < bounds.length - 1; i += 1) {
+      const notesIn = (sys.notes || []).filter((n) => n.x >= bounds[i] - 2 && n.x < bounds[i + 1]);
+      const restsIn = (sys.rests || []).filter((r) => r.x >= bounds[i] - 2 && r.x < bounds[i + 1]);
+      if (notesIn.length === 0 && restsIn.length === 1) {
+        restsIn[0].restBeats = bpb;
+        restsIn[0].fullMeasure = true;
+      }
+    }
+  }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
     // 小節境界（最初の音符より前の小節線も含めて区切る）
@@ -1071,6 +1092,11 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       const inRests = (sys.rests || [])
         .filter((r) => r.x >= xL - 2 && r.x < xR)
         .map((r) => (r.smufl === SMUFL.restWhole ? { ...r, restBeats: bpb } : r));
+      // 音符が無く休符が1個だけの小節＝全休符（小節まるごと）＝拍子ぶん。
+      // フォントの休符グリフがSMuFLでなくても、空小節の全休符を正しく拾える。
+      if (inBar.length === 0 && inRests.length === 1) {
+        inRests[0] = { ...inRests[0], restBeats: bpb, dotted: false };
+      }
       // 同じx（±3px）の符頭は和音＝同時発音。1アイテムにまとめて同じ拍へ置く。
       const noteGroups = [];
       for (const n of inBar.slice().sort((a, b) => a.x - b.x)) {
@@ -1234,7 +1260,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
       bars: s.bars,
       chords: s.chords,
-      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1, smufl: r.smufl, dotted: !!r.dotted }))
+      rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.fullMeasure || r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1, smufl: r.fullMeasure ? SMUFL.restWhole : r.smufl, dotted: r.fullMeasure ? false : !!r.dotted }))
     }))
   };
   return {
