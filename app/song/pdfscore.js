@@ -823,7 +823,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     for (const f in fontFreq) if (fontFreq[f] > chordFontN) { chordFontN = fontFreq[f]; chordFont = f; }
     const chords = chordLike
       .filter((t) => t.font === chordFont || t.text.replace(/n$/, "").trim().length >= 2)
-      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }));
+      .map((t) => ({ x: t.x, lastX: t.lastX, text: t.text.replace(/n$/, "").trim() }));
     return {
       top: s.top,
       bottom: s.bottom,
@@ -1092,26 +1092,39 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const assignChords = () => {
       // コードの所属ルール: まずコードが入る小節を決め、その小節内でコードの直下〜右に最も近い
       // 音符のオンセット拍に属させる（小節頭コードは自然に最初の音符＝小節頭になる）。
-      // 音符が無い（休符だけの）小節はその小節の頭。遠い小節の音符には吸着しない。
+      // 同じ小節に複数コードがあるときは別の拍へ割り当て（同タイミング重複を防ぐ）。
+      // 音符が無い（休符だけの）小節は小節頭〜x位置から拍を出す。遠い小節の音符には吸着しない。
       const sysNotes = melody.slice(sysMelodyStart).sort((a, b) => a.x - b.x);
-      for (const c of sys.chords || []) {
-        // 小節線のすぐ際のコードは次の小節の頭として扱う（xを少し右へ寄せて含む小節を探す）
-        const cx = c.x + sys.spacing * 1.6;
+      const usedByMeasure = new Map(); // 小節ごとに使った拍／コード名
+      for (const c of (sys.chords || []).slice().sort((a, b) => a.x - b.x)) {
+        // 小節判定はコードの「中心x」で行う。コードのxはテキスト左端なので、幅の広いコード
+        // （Dbmaj7等）だと左端が小節線の左に出て前の小節に誤割り当てされる。中心なら正しい小節。
+        const cx = (c.x + (c.lastX != null ? c.lastX : c.x)) / 2 + sys.spacing * 0.6;
         let m = sysMeasures.find((mm) => cx >= mm.xL && cx < mm.xR);
         if (!m && sysMeasures.length) {
           m = sysMeasures.reduce((best, mm) => Math.abs((mm.xL + mm.xR) / 2 - c.x) < Math.abs((best.xL + best.xR) / 2 - c.x) ? mm : best);
         }
         if (!m) continue;
+        if (!usedByMeasure.has(m)) usedByMeasure.set(m, { beats: new Set(), texts: new Set() });
+        const used = usedByMeasure.get(m);
+        const text = normalizeChordText(c.text);
+        if (used.texts.has(text)) continue; // 同じ小節に同じコードの重複は1つに
         const inMeasure = sysNotes.filter((n) => n.x >= m.xL - 2 && n.x < m.xR);
-        const after = inMeasure.filter((n) => n.x >= c.x - sys.spacing * 1.5);
-        const note = after.length ? after[0] : (inMeasure.length ? inMeasure[0] : null);
-        if (note) {
-          chordEvents.push({ startBeat: note.startBeat, chord: normalizeChordText(c.text) });
-          c.beatX = note.x; // 接続線・所属位置はこの音符に合わせる
-        } else {
-          chordEvents.push({ startBeat: m.startBeat, chord: normalizeChordText(c.text) }); // 休符だけ＝小節頭
-          c.beatX = Math.max(m.xL, c.x);
+        // コードのx以右で未使用の音符を優先、無ければ小節内の未使用音符
+        const after = inMeasure.filter((n) => n.x >= c.x - sys.spacing * 1.5 && !used.beats.has(n.startBeat));
+        let note = after.length ? after[0] : inMeasure.find((n) => !used.beats.has(n.startBeat));
+        let beat; let beatX;
+        if (note) { beat = note.startBeat; beatX = note.x; }
+        else {
+          // 空き音符なし: x位置から小節内の拍を推定（0.5グリッド）、衝突は後ろへ
+          const frac = Math.max(0, Math.min(0.99, (c.x - m.xL) / Math.max(1, m.xR - m.xL)));
+          beat = m.startBeat + Math.round(frac * bpb / 0.5) * 0.5;
+          while (used.beats.has(beat)) beat += 0.5;
+          beatX = Math.max(m.xL, c.x);
         }
+        used.beats.add(beat); used.texts.add(text);
+        chordEvents.push({ startBeat: beat, chord: text });
+        c.beatX = beatX;
       }
     };
     // 小節範囲 [edges[i], edges[i+1]]。小節線が無い場合はシステム全体を1小節扱い。
@@ -1166,6 +1179,13 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         it.symOnset = acc;
         acc += it.rest ? (it.restBeats > 0 ? it.restBeats : fillBeats) : groupBeats(it);
       }
+      // 休符の確定音価を元の sys.rests へ伝播（描画が8分/4分など正しい休符種を出せるように）。
+      for (const it of items) {
+        if (!it.rest) continue;
+        const fb = it.restBeats > 0 ? it.restBeats : fillBeats;
+        const orig = (sys.rests || []).find((r) => Math.abs(r.x - it.x) < 1 && !r._beatsSet);
+        if (orig && fb > 0) { orig.restBeats = fb; orig._beatsSet = true; }
+      }
       // 実時間比ベース: 小節は先頭アイテム（拍0）〜小節線で拍子ぶん、と線形対応。
       // 記号の足し算が自己整合する小節（合計=拍子）は記号を信頼し、
       // 合わない小節（休符の見逃し・音価の読み違い）だけ実時間比で補正する。
@@ -1212,12 +1232,14 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     assignChords();
   }
 
-  // タイの結合: タイ印のある音を、直前の同音へまとめる（音価を加算し、別onsetを消す）
+  // タイの結合: タイ印のある音を、直前の同音へまとめる（音価を加算し、別onsetを消す）。
+  // タイは必ず同じ五線位置(同y)同士なので、臨時記号で最終midiがずれても同yなら結合する
+  // （結合後は前の音＝臨時記号が適用された音高・音価になり、後ろの音にも臨時記号が効く）。
   melody.sort((a, b) => a.startBeat - b.startBeat);
   const tied = [];
   for (const n of melody) {
     const prev = tied[tied.length - 1];
-    if (n.tiedFromPrev && prev && prev.midi === n.midi &&
+    if (n.tiedFromPrev && prev && (prev.midi === n.midi || Math.abs(prev.y - n.y) < 3) &&
         Math.abs(prev.startBeat + prev.beats - n.startBeat) < 0.3) {
       prev.beats += n.beats; // 1音に結合
       noteCount -= 1;
