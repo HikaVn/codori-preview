@@ -1718,7 +1718,7 @@ button {
 /* ===== 五線譜（読み取り再現・クリックで修正） ===== */
 .notation-wrap {
   width: 100%;
-  max-height: 420px;
+  max-height: 75vh;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
