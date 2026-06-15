@@ -485,13 +485,21 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const gg = glyphs.filter((x) => keyOf(x) === k && inMusicArea(x));
     return gg.length ? gg.filter(looksLikeFlag).length / gg.length : 0;
   };
+  // 臨時記号らしさ: すぐ右隣（同じ高さ）に黒玉(符頭)があるグリフ＝♯♭♮などの臨時記号。
+  // 符幹が無く各音高にばらけるので全/白玉と誤判定されやすい（符頭の隣に幻の音符を生む）。
+  const looksLikeAccidental = (g) => filledGlyphs.some((f) =>
+    f.x - g.x > 1 && f.x - g.x < spacing * 2.6 && Math.abs(f.y - g.y) < spacing * 0.8);
+  const accRate = (k) => {
+    const gg = glyphs.filter((x) => keyOf(x) === k && inMusicArea(x));
+    return gg.length ? gg.filter(looksLikeAccidental).length / gg.length : 0;
+  };
   // 白玉（中抜き符頭）= 符幹の端に付くが、連桁と無縁で、旗でもないコード
   let openKey = null;
   let openBest = 0;
   for (const [k, s] of stat) {
     if (k === filledKey) continue;
     if (s.count >= 3 && s.ys.size >= 3 && s.stemEnd >= s.count * 0.3 &&
-        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && flagRate(k) < 0.3 && s.stemEnd > openBest) {
+        s.beamEnd === 0 && s.flagLike <= s.count * 0.2 && flagRate(k) < 0.3 && accRate(k) < 0.4 && s.stemEnd > openBest) {
       openBest = s.stemEnd;
       openKey = k;
     }
@@ -515,7 +523,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const stemRate = s.stemEnd / s.count;
     const yDiv = s.ys.size / s.count;
     const xDiv = s.xs.size / s.count;
-    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6 && flagRate(k) < 0.3) {
+    if (s.count >= 2 && stemRate < 0.25 && yDiv > 0.5 && xDiv > 0.6 && flagRate(k) < 0.3 && accRate(k) < 0.4) {
       const dist = Math.min(Math.abs(numOf(k) - fNum), Math.abs(numOf(k) - oNum));
       if (dist <= 3 && dist < wholeDist) { wholeDist = dist; wholeKey = k; }
     }
@@ -724,6 +732,16 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
         g.x - n.x > 2 && g.x - n.x < 11 && Math.abs(g.y - n.y) < spacing * 0.85);
       if (dot) { n.beats = (n.beats || 1) * 1.5; n.dotted = true; }
     }
+  } else {
+    // 非SMuFL（ASCIIマップ音楽フォント）の臨時記号を音高に反映。符頭のすぐ左・同じ高さに
+    // 'b'=♭(-1)/'n'=♮(0)/'#'=♯(+1)。調号の♭は離れた左端ゾーンなので拾わない（x窓が狭い）。
+    const ASCII_ACC = { 0x62: -1, 0x6e: 0, 0x23: 1 };
+    for (const n of deduped) {
+      if (n.accidental !== undefined) continue;
+      const acc = glyphs.find((g) => ASCII_ACC[g.smufl] !== undefined &&
+        n.x - g.x > 1 && n.x - g.x < spacing * 2.8 && Math.abs(g.y - n.y) < spacing * 0.8);
+      if (acc) n.accidental = ASCII_ACC[acc.smufl];
+    }
   }
 
   // 拍子: 最上段の左端（クレフ・調号の後、最初の符頭より左）の、五線帯内に縦に並ぶ2桁。
@@ -792,9 +810,16 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       if (last && g.x - last.lastX < spacing * 2.4 && g.font === last.font) { last.text += ch; last.lastX = g.x; }
       else tokens.push({ x: g.x, lastX: g.x, text: ch, font: g.font });
     }
-    const chords = tokens
-      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }))
-      .filter((t) => looksLikeChordToken(t.text));
+    // コードらしいトークンのうち、多数派フォント＝コードのフォント。別フォントの単独文字
+    // （リハーサル記号[A]等は別フォントで描かれる）はコードにしない。
+    const chordLike = tokens.filter((t) => looksLikeChordToken(t.text.replace(/n$/, "").trim()));
+    const fontFreq = {};
+    for (const t of chordLike) fontFreq[t.font] = (fontFreq[t.font] || 0) + 1;
+    let chordFont = null; let chordFontN = 0;
+    for (const f in fontFreq) if (fontFreq[f] > chordFontN) { chordFontN = fontFreq[f]; chordFont = f; }
+    const chords = chordLike
+      .filter((t) => t.font === chordFont || t.text.replace(/n$/, "").trim().length >= 2)
+      .map((t) => ({ x: t.x, text: t.text.replace(/n$/, "").trim() }));
     return {
       top: s.top,
       bottom: s.bottom,
@@ -1051,6 +1076,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
+    sys._startMeasure = Math.round(beat / bpb) + 1; // この段の先頭小節番号（1始まり）
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
@@ -1257,6 +1283,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     pageWidth: pageW, pageHeight: pageH, pages: pdf.numPages,
     systems: allSystems.map((s) => ({
       page: s.page, top: s.top, bottom: s.bottom, spacing: s.spacing, clefX: s.clefX,
+      measureStart: s._startMeasure || 1,
       fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
       bars: s.bars,
       chords: s.chords,
