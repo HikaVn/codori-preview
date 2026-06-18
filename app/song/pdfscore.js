@@ -709,6 +709,13 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     if (q.length >= occ.length * 0.6) restCodes.add(k);
   }
   let restList = glyphs.filter((g) => restCodes.has(keyOf(g)) && restQualifies(g));
+  // 非SMuFL（ASCIIマップ音楽フォント）の休符グリフ→音価。実譜で確認した対応:
+  // ‰(0x2030)=8分休符(0.5)・Œ(0x152)=4分休符(1)・∑(0x2211)=全休符(=小節まるごと, 別処理)。
+  // 旗 'j'(0x6a) が休符に混じることがあるので除外する。
+  const FONT_REST_BEATS = { 0x2030: 0.5, 0x152: 1 };
+  restList = restList
+    .filter((g) => g.smufl !== 0x6a)
+    .map((g) => (FONT_REST_BEATS[g.smufl] != null ? { ...g, restBeats: FONT_REST_BEATS[g.smufl] } : g));
 
   // ===== SMuFL があれば、休符の拍数・臨時記号・付点を確定する =====
   const hasSmufl = glyphs.some((g) => isSmuflNotehead(g.smufl));
@@ -836,6 +843,20 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
     };
   });
+
+  // 臨時記号は同小節・同音位置(step)に有効。バーラインで解除（楽典どおり）。
+  // 符頭に直接付いた臨時記号(n.accidental)を、同じ小節の後続の同step音符へ伝播する。
+  // タイで次小節へ持ち越す分は、後段のタイ統合（同y統合）が音を連結するので別途不要。
+  for (const sy of systems) {
+    const bars = (sy.bars || []).slice().sort((a, b) => a - b);
+    const stepAcc = {};
+    let bi = 0;
+    for (const n of sy.notes) {
+      while (bi < bars.length && n.x >= bars[bi]) { for (const k in stepAcc) delete stepAcc[k]; bi++; }
+      if (n.accidental !== undefined) stepAcc[n.step] = n.accidental;
+      else if (stepAcc[n.step] !== undefined) n.accidental = stepAcc[n.step];
+    }
+  }
 
   // 調号: 段ごとの fifths（♭/♯グリフの数。SMuFL/ASCII音楽フォント両対応）の多数決。
   // 0以外が多数なら採用（転調も段ごとに反映済み）、全段0なら構造的クラスタ検出にフォールバック。
