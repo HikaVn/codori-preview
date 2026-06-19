@@ -976,6 +976,7 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
     const chords = chordLike
       .filter((t) => t.font === chordFont || t.text.replace(/n$/, "").trim().length >= 2)
       .map((t) => ({ x: t.x, lastX: t.lastX, text: t.text.replace(/n$/, "").trim() }));
+    const keyChanges = detectSystemKeyChanges(glyphs, s, bars, nearestStaff, spacing, deduped);
     return {
       top: s.top,
       bottom: s.bottom,
@@ -983,7 +984,8 @@ function readVectorScorePage(ol, OPS, pageH, pageW) {
       clefX: leftmostStaffX(glyphs, staves, nearestStaff, s),
       bars,
       chords,
-      fifths: detectStaffFifths(glyphs, s, nearestStaff, spacing, deduped),
+      fifths: keyChanges[0].fifths, // 段の基本調号（クレフ直後）
+      keyChanges,                   // 段内の調号変化 [{x, fifths}]（先頭は段の基本）
       notes: deduped.filter((n) => n.staffTop === s.top).sort((a, b) => a.x - b.x),
       rests: restList.filter((r) => nearestStaff(r.y).staff === s).sort((a, b) => a.x - b.x)
     };
@@ -1101,6 +1103,37 @@ function detectStaffFifths(glyphs, staff, nearestStaff, spacing, deduped) {
   const f = countKeySig(isFlatGlyph);
   const s = countKeySig(isSharpGlyph);
   return s > f ? s : -f;
+}
+
+// 段内の調号変化を検出。クレフ直後の調号（段の基本）に加え、各小節線の直後にも調号の
+// ♭/♯クラスタ（その小節の最初の符頭より spacing*1.2 以上左＝音符の臨時記号でない）があれば、
+// その小節から調号が変わる。転調する小節は調号が印字されるぶん最初の音符が大きく右にずれる
+// ので、それが目印になる。戻り値: [{x, fifths}] （先頭は x=-Infinity の段の基本調号）。
+function detectSystemKeyChanges(glyphs, staff, bars, nearestStaff, spacing, deduped) {
+  const mid = (staff.top + staff.bottom) / 2;
+  const heads = deduped.filter((n) => n.staffTop === staff.top).map((n) => n.x).sort((a, b) => a - b);
+  const lefts = [-Infinity, ...bars.slice().sort((a, b) => a - b)];
+  const count = (x0, x1, pred) => {
+    const firstNote = heads.find((hx) => hx > (x0 === -Infinity ? -Infinity : x0 + 1) && hx < x1);
+    const noteX = firstNote != null ? firstNote : x1;
+    return glyphs.filter((g) =>
+      pred(g.smufl) &&
+      (x0 === -Infinity || g.x > x0 + 1) && g.x < noteX - spacing * 1.2 &&
+      Math.abs(g.y - mid) < spacing * 5 && nearestStaff(g.y).staff === staff
+    ).length;
+  };
+  const changes = [];
+  let running = null;
+  for (let i = 0; i < lefts.length; i += 1) {
+    const x0 = lefts[i];
+    const x1 = lefts[i + 1] != null ? lefts[i + 1] : Infinity;
+    const fl = count(x0, x1, isFlatGlyph);
+    const sh = count(x0, x1, isSharpGlyph);
+    const f = sh > fl ? sh : -fl;
+    if (i === 0) { changes.push({ x: -Infinity, fifths: f }); running = f; }
+    else if (fl + sh > 0 && f !== running) { changes.push({ x: x0, fifths: f }); running = f; }
+  }
+  return changes;
 }
 
 // アーティキュレーション（スタッカート・アクセント・テヌート・マルカート・フェルマータ）。
@@ -1246,6 +1279,12 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
+    // 段内の調号変化（転調）を x で引く。x位置以前の最後の変化の fifths を返す。
+    const fifthsAtX = (x) => {
+      let f = sysFifths;
+      for (const c of (sys.keyChanges || [])) { if (c.x <= x + 1) f = (c.fifths == null ? sysFifths : c.fifths); }
+      return f;
+    };
     sys._startMeasure = Math.round(beat / bpb) + 1; // この段の先頭小節番号（1始まり）
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
@@ -1322,6 +1361,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     // さらに譜刻の性質「小節内の音符間隔 ≒ だいたい実時間比」を使い、
     // 記号ベースの拍（音価累積）とx位置比例の拍をブレンドして配置する。
     const placeBar = (xL, xR) => {
+      const mFifths = fifthsAtX(xL); // この小節の調号（段内転調を反映）
       sysMeasures.push({ xL, xR, startBeat: beat });
       const inBar = sys.notes.filter((n) => n.x >= xL - 2 && n.x < xR);
       // 全休符は拍子に関係なく「1小節まるごと休み」の慣習＝拍子ぶん（3/4なら3拍）。
@@ -1400,7 +1440,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const limit = Math.max(0.25, (nextItem ? nextItem.onset : bpb) - it.onset);
         for (const n of it.ns) {
           const beats = consistent ? Math.min(n.beats || 1, limit) : limit;
-          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, step: n.step, accidental: n.accidental, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, mFifths), page: sys.page, x: n.x, y: n.y, step: n.step, accidental: n.accidental, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: mFifths, artic: n.artic });
           noteCount += 1;
         }
       }
@@ -1508,6 +1548,8 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
       page: s.page, top: s.top, bottom: s.bottom, spacing: s.spacing, clefX: s.clefX,
       measureStart: s._startMeasure || 1,
       fifths: (s.fifths === null || s.fifths === undefined) ? fifths : s.fifths,
+      // 段内の調号変化（転調）。x有限のものだけ＝小節線途中で変わる調号（描画で五線に出す）。
+      keyChanges: (s.keyChanges || []).filter((c) => Number.isFinite(c.x)).map((c) => ({ x: c.x, fifths: c.fifths })),
       bars: s.bars,
       chords: s.chords,
       rests: (s.rests || []).map((r) => ({ x: r.x, beats: (r.fullMeasure || r.smufl === SMUFL.restWhole ? bpb : r.restBeats) || 1, smufl: r.fullMeasure ? SMUFL.restWhole : r.smufl, dotted: r.fullMeasure ? false : !!r.dotted }))
