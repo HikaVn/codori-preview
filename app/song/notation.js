@@ -510,7 +510,7 @@ function createScoreNotation(canvas, options = {}) {
   }
   // info（学習した休符）= {smufl, dotted}。あればその種類で描く。無ければ拍数から推定。
   function drawRest(x, staffTop, beats, info) {
-    const midY = staffTop + 2 * SPACING; // 第3線（SMuFL休符の基準）
+    const midY = staffTop + 2 * SPACING; // 第3線（休符の基準）
     let code;
     let dotted;
     if (info && info.smufl && SMUFL_REST_CODES.has(info.smufl)) {
@@ -524,8 +524,11 @@ function createScoreNotation(canvas, options = {}) {
       const base = dotted ? beats / 1.5 : beats;
       code = base >= 4 ? SMUFL.restWhole : base >= 2 ? SMUFL.restHalf : base >= 1 ? SMUFL.restQuarter : base >= 0.5 ? SMUFL.rest8 : SMUFL.rest16;
     }
-    ctx.smufl(code, x, midY, MUSIC, "middle", "#8a96a0");
-    if (dotted) ctx.smufl(SMUFL.dot, x + HEAD_HALF + 1, midY - SPACING * 0.5, MUSIC, "start", "#8a96a0");
+    // 全休符は「上から2本目の線（第4線）にぶら下がる」慣習。2分休符は第3線の上に乗る。
+    // それ以外の休符は第3線中心。全休符だけ1スペース上げて第4線から吊るす。
+    const restY = code === SMUFL.restWhole ? staffTop + SPACING : midY;
+    ctx.smufl(code, x, restY, MUSIC, "middle", "#8a96a0");
+    if (dotted) ctx.smufl(SMUFL.dot, x + HEAD_HALF + 1, restY - SPACING * 0.5, MUSIC, "start", "#8a96a0");
   }
 
   // アーティキュレーション記号をベクターで描く（フォント非依存）。

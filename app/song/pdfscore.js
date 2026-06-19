@@ -237,16 +237,41 @@ function findStaves(hseg, pageWidth, pageHeight) {
   const tol = spacing * 0.35;
   // 主要間隔で等間隔に並ぶ5本を貪欲に拾う
   const staves = [];
+  const used = new Array(lineYs.length).fill(false);
   for (let i = 0; i + 4 < lineYs.length; i += 1) {
+    if (used[i]) continue;
     let ok = true;
     for (let j = 1; j < 5; j += 1) {
       if (Math.abs((lineYs[i + j] - lineYs[i + j - 1]) - spacing) > tol) { ok = false; break; }
     }
     if (ok) {
       staves.push({ lines: lineYs.slice(i, i + 5), spacing, top: lineYs[i], bottom: lineYs[i + 4] });
+      for (let j = 0; j < 5; j += 1) used[i + j] = true;
       i += 4;
     }
   }
+  // 五線抽出漏れ対策: 5本そろわず「4本だけ等間隔」に並ぶ段（=PDFの描画都合で1本が
+  // 1本の横線セグメントにならず抽出漏れした段）を救済する。欠けた線の位置を上下に外挿し、
+  // その近くに（部分幅でも）横線セグメントの痕跡があれば五線として復元する。
+  // これが無いとページ先頭段などが丸ごと欠落し、以降の小節番号・コード割当がずれる。
+  const segNear = (y) => hseg.some((h) => Math.abs(h.y - y) < spacing * 0.6 && (h.x1 - h.x0) > spacing * 2);
+  for (let i = 0; i < lineYs.length;) {
+    if (used[i]) { i += 1; continue; }
+    let j = i;
+    while (j + 1 < lineYs.length && !used[j + 1] && Math.abs((lineYs[j + 1] - lineYs[j]) - spacing) <= tol) j += 1;
+    if (j - i + 1 === 4) {
+      const p = lineYs.slice(i, i + 4);
+      const topCand = p[0] - spacing; // 上端の線が欠けている場合
+      const botCand = p[3] + spacing; // 下端の線が欠けている場合
+      const topOk = topCand > 2 && segNear(topCand);
+      const botOk = botCand < (pageHeight || 842) - 2 && segNear(botCand);
+      if (topOk) staves.push({ lines: [topCand, ...p], spacing, top: topCand, bottom: p[3] });
+      else if (botOk) staves.push({ lines: [...p, botCand], spacing, top: p[0], bottom: botCand });
+      for (let k = i; k <= j; k += 1) used[k] = true;
+    }
+    i = j + 1;
+  }
+  staves.sort((a, b) => a.top - b.top);
   return staves;
 }
 
@@ -1221,21 +1246,19 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
   }
   for (const sys of allSystems) {
     const sysFifths = (sys.fifths === null || sys.fifths === undefined) ? fifths : sys.fifths;
-    const sysMelodyStart = melody.length; // この段の音符はここ以降に積まれる（コードのスナップに使う）
     sys._startMeasure = Math.round(beat / bpb) + 1; // この段の先頭小節番号（1始まり）
     // 小節境界（最初の音符より前の小節線も含めて区切る）
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
+    const sysOnsets = []; // {x, beat} 音符・休符のオンセット（コードの吸着に休符も使う）
     const place = (n, startBeat) => {
       melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, step: n.step, accidental: n.accidental, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
       noteCount += 1;
     };
     const assignChords = () => {
-      // コードの所属ルール: まずコードが入る小節を決め、その小節内でコードの直下〜右に最も近い
-      // 音符のオンセット拍に属させる（小節頭コードは自然に最初の音符＝小節頭になる）。
-      // 同じ小節に複数コードがあるときは別の拍へ割り当て（同タイミング重複を防ぐ）。
-      // 音符が無い（休符だけの）小節は小節頭〜x位置から拍を出す。遠い小節の音符には吸着しない。
-      const sysNotes = melody.slice(sysMelodyStart).sort((a, b) => a.x - b.x);
+      // コードの所属ルール: まずコードが入る小節を決め、その小節内で「コードの中心xに最も近い
+      // オンセット（音符・休符）」の拍に属させる。休符も対象にするので、小節頭の休符の上に
+      // あるコードは小節頭の拍に付く。同じ小節に複数コードがあるときは別の拍へ割り当てる。
       const usedByMeasure = new Map(); // 小節ごとに使った拍／コード名
       for (const c of (sys.chords || []).slice().sort((a, b) => a.x - b.x)) {
         // 小節判定はコードの「中心x」で行う。コードのxはテキスト左端なので、幅の広いコード
@@ -1252,20 +1275,29 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         // 同名コードが同じ位置（±spacing*4）に重複検出されたときだけ1つに。
         // C–G–C のように同小節内で同名・別位置のコードに戻る進行は残す。
         if (used.assigned.some((a) => a.text === text && Math.abs(a.x - c.x) < sys.spacing * 4)) continue;
-        const inMeasure = sysNotes.filter((n) => n.x >= m.xL - 2 && n.x < m.xR);
-        // コードのx以右で未使用の音符を優先、無ければ小節内の未使用音符
-        const after = inMeasure.filter((n) => n.x >= c.x - sys.spacing * 1.5 && !used.beats.has(n.startBeat));
-        let note = after.length ? after[0] : inMeasure.find((n) => !used.beats.has(n.startBeat));
+        // 小節内のオンセット（音符＋休符）から、コードの中心xに最も近いものへ吸着する。
+        // 休符を含めることで、小節頭の休符の上にあるコードが小節頭の拍に付く
+        // （後ろの音符に引っぱられない）。同じ拍に既出なら右の空きオンセット→後ろの空き拍へ。
+        const cCenter = (c.x + (c.lastX != null ? c.lastX : c.x)) / 2;
+        const onsetsIn = sysOnsets.filter((o) => o.x >= m.xL - 2 && o.x < m.xR).sort((a, b) => a.x - b.x);
         let beat; let beatX;
-        if (note) { beat = note.startBeat; beatX = note.x; }
-        else if (Number.isFinite(m.xL) && Number.isFinite(m.xR) && m.xR - m.xL > 1) {
-          // 空き音符なし: x位置から小節内の拍を推定（0.5グリッド）、衝突は後ろへ
+        if (onsetsIn.length) {
+          let best = onsetsIn[0]; let bd = Infinity;
+          for (const o of onsetsIn) { const d = Math.abs(o.x - cCenter); if (d < bd) { bd = d; best = o; } }
+          beat = best.beat; beatX = best.x;
+          if (used.beats.has(beat)) {
+            const free = onsetsIn.find((o) => o.x >= c.x - sys.spacing && !used.beats.has(o.beat));
+            if (free) { beat = free.beat; beatX = free.x; }
+            else { while (used.beats.has(beat)) beat += 0.5; }
+          }
+        } else if (Number.isFinite(m.xL) && Number.isFinite(m.xR) && m.xR - m.xL > 1) {
+          // オンセットなし: x位置から小節内の拍を推定（0.5グリッド）、衝突は後ろへ
           const frac = Math.max(0, Math.min(0.99, (c.x - m.xL) / (m.xR - m.xL)));
           beat = m.startBeat + Math.round(frac * bpb / 0.5) * 0.5;
           while (used.beats.has(beat)) beat += 0.5;
           beatX = Math.max(m.xL, c.x);
         } else {
-          // 小節範囲が無限/不定（行頭の休符だけ小節など）: 小節頭から空き拍へ（NaN防止）
+          // 小節範囲が無限/不定: 小節頭から空き拍へ（NaN防止）
           beat = m.startBeat;
           while (used.beats.has(beat)) beat += 0.5;
           beatX = Number.isFinite(c.x) ? c.x : m.startBeat;
@@ -1357,6 +1389,8 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         it.onset = onset;
         prev = onset;
       }
+      // 音符・休符のオンセットを記録（コードを小節頭の休符にも吸着できるように）。
+      for (const it of items) sysOnsets.push({ x: it.x, beat: beat + it.onset });
       const noteItems = items.filter((it) => !it.rest);
       for (let i = 0; i < noteItems.length; i += 1) {
         const it = noteItems[i];
