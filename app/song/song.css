@@ -1651,7 +1651,7 @@ button {
 
 .chord-edit-row {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 76px 34px;
+  grid-template-columns: 56px minmax(0, 1fr) 76px 28px 34px;
   gap: 8px;
   align-items: center;
   padding: 3px 4px;
@@ -1868,7 +1868,7 @@ button {
 
 .score-note-row {
   display: grid;
-  grid-template-columns: 32px 48px 64px 30px 72px 30px minmax(0, 1fr);
+  grid-template-columns: 32px 48px 64px 30px 72px 30px 56px minmax(0, 1fr);
   gap: 6px;
   align-items: center;
   padding: 2px 4px;
@@ -1881,6 +1881,34 @@ button {
 
 .score-note-row.is-changed {
   background: #fdf6e7;
+}
+
+.score-note-row.is-uncertain {
+  background: #fdeede;
+  box-shadow: inset 3px 0 0 #e08a2b;
+}
+
+.score-note-confirm {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #e08a2b;
+  border-radius: 6px;
+  background: #fff3e0;
+  color: #a85c10;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chord-edit-row.is-uncertain {
+  box-shadow: inset 3px 0 0 #e08a2b;
+}
+
+.chord-edit-confirm {
+  border: 1px solid #e08a2b;
+  border-radius: 6px;
+  background: #fff3e0;
+  color: #a85c10;
+  cursor: pointer;
 }
 
 .score-note-row.is-selected {

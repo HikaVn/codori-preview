@@ -406,8 +406,16 @@ function verifyScoreConsistency(melody, chords, keySig, bpb, barChecks) {
   const fifths = keySig ? keySig.fifths : 0;
   const mNo = (b) => Math.floor(b / bpb) + 1; // 1始まり小節番号
 
+  // 音符・コードに「低確度」の理由を登録するヘルパー（握りつぶさず人が後で確認・確定できるように）。
+  const addNoteFlag = (n, reason) => {
+    if (!n.uncertain) n.uncertain = [];
+    if (!n.uncertain.includes(reason)) n.uncertain.push(reason);
+  };
+
   // (1) 拍検算の再チェック: 記号音価合計が拍子と合わない小節を列挙。
-  //     合わない小節は配置時にx位置比で自動補正済み（rechecked）。残りは要確認。
+  //     合わない小節は配置時にx位置比で自動補正済みだが、リズムは要確認。
+  //     リズムは本質的に小節単位の概念なので音符ごとには付けず、小節番号のリストとして
+  //     登録し、五線譜で該当小節をハイライトする（人が後で確認・確定）。
   const beatProblems = (barChecks || [])
     .filter((b) => !b.consistent && b.items > 0)
     .map((b) => ({ measure: mNo(b.startBeat), total: b.symTotal, expected: bpb }));
@@ -415,37 +423,44 @@ function verifyScoreConsistency(melody, chords, keySig, bpb, barChecks) {
     measures: (barChecks || []).length,
     balanced: (barChecks || []).filter((b) => b.consistent).length,
     rechecked: beatProblems.length,
+    problemMeasures: beatProblems.map((p) => p.measure),
     problems: beatProblems.slice(0, 50)
   };
 
   // (2) 臨時記号の前後矛盾チェック: 同じ五線位置(step)の音が、隣り合う小節で
-  //     反対の臨時記号で現れる（異名・対斜）＝読み違いが疑われる箇所を列挙。
-  const byMeasure = new Map();
+  //     反対の臨時記号で現れる（異名・対斜）＝読み違いが疑われる箇所。該当音に
+  //     低確度フラグ "accidental" を登録する。
+  const byMeasure = new Map(); // 小節→(step→{alter, notes[]})
   for (const n of melody) {
     if (n.step === undefined) continue;
     const m = mNo(n.startBeat);
     if (!byMeasure.has(m)) byMeasure.set(m, new Map());
     const degMap = byMeasure.get(m);
-    // 小節内で同stepの最初の臨時記号（明示）を代表に
     const alt = n.accidental;
-    if (alt !== undefined && !degMap.has(n.step)) degMap.set(n.step, alt);
+    if (alt !== undefined) {
+      if (!degMap.has(n.step)) degMap.set(n.step, { alter: alt, notes: [] });
+      degMap.get(n.step).notes.push(n);
+    }
   }
   const accContradictions = [];
   const measuresWithAcc = [...byMeasure.keys()].sort((a, b) => a - b);
   for (const m of measuresWithAcc) {
     const degs = byMeasure.get(m);
-    for (const [step, alt] of degs) {
+    for (const [step, info] of degs) {
       // 後ろ隣の小節とだけ比べる（1組を1回だけ報告＝両方向の重複を防ぐ）。
       const nd = byMeasure.get(m + 1);
-      if (nd && nd.has(step) && nd.get(step) !== alt) {
-        accContradictions.push({ measure: m, neighbor: m + 1, step, alter: alt, neighborAlter: nd.get(step) });
+      if (nd && nd.has(step) && nd.get(step).alter !== info.alter) {
+        accContradictions.push({ measure: m, neighbor: m + 1, step, alter: info.alter, neighborAlter: nd.get(step).alter });
+        for (const n of info.notes) addNoteFlag(n, "accidental");
+        for (const n of nd.get(step).notes) addNoteFlag(n, "accidental");
       }
     }
   }
   const accidentals = { contradictions: accContradictions.slice(0, 50), count: accContradictions.length };
 
   // (3) 調号との相互チェック: スケール外の音・ノンダイアトニックなコードの割合を見て、
-  //     調号の取り違えが疑われるか判定（疑わしければ別調号の方が合うかも提示）。
+  //     調号の取り違えが疑われるか判定。握りつぶさず、別調号候補つきで低確度を登録し、
+  //     ノンダイアトニックなコードには低確度フラグを付ける（人が後で確定）。
   const scale = pdfScalePcs(fifths);
   let inW = 0; let outW = 0;
   for (const n of melody) {
@@ -458,10 +473,10 @@ function verifyScoreConsistency(melody, chords, keySig, bpb, barChecks) {
   for (const c of (chords || [])) {
     const root = pdfChordRootPc(c.chord);
     if (root === null) continue;
-    if (scale.has(root)) cDiat += 1; else cNon += 1;
+    if (scale.has(root)) { cDiat += 1; } else { cNon += 1; c.uncertain = true; }
   }
   const chordNonRatio = (cDiat + cNon) > 0 ? cNon / (cDiat + cNon) : 0;
-  // 別の調号仮説でスケール外がどれだけ減るか（コード根音ベースで最尤の調号）。
+  // 別の調号仮説でノンダイアトニックなコードがどれだけ減るか（コード根音ベースの最尤調号）。
   let bestK = fifths; let bestNon = cNon;
   for (let K = -7; K <= 7; K += 1) {
     const sc = pdfScalePcs(K);
@@ -469,14 +484,16 @@ function verifyScoreConsistency(melody, chords, keySig, bpb, barChecks) {
     for (const c of (chords || [])) { const r = pdfChordRootPc(c.chord); if (r !== null && !sc.has(r)) non += 1; }
     if (non < bestNon) { bestNon = non; bestK = K; }
   }
-  // 疑わしい＝音もコードも調号と大きく外れ、かつ別調号が明確に良い。
-  const suspect = noteOutRatio > 0.30 && chordNonRatio > 0.40 && bestK !== fifths && bestNon + 2 < cNon;
+  // 別調号の方が明確に合う、または外れが大きいなら調号を低確度として登録（人が確定）。
+  const hasAlt = bestK !== fifths && bestNon + 1 < cNon;
+  const suspect = hasAlt && (noteOutRatio > 0.30 || chordNonRatio > 0.30);
+  if (keySig) { keySig.uncertain = suspect; keySig.altFifths = hasAlt ? bestK : null; }
   const key = {
     fifths,
     noteOutOfScaleRatio: Math.round(noteOutRatio * 100) / 100,
     chordNonDiatonicRatio: Math.round(chordNonRatio * 100) / 100,
     suspect,
-    suggestedFifths: suspect ? bestK : null
+    suggestedFifths: hasAlt ? bestK : null
   };
 
   return { beats, accidentals, key };

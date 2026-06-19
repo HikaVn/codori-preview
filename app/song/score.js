@@ -71,6 +71,12 @@ function scoreKeySigName() {
   return `${names[k.tonic % 12]}${k.mode === "minor" ? "マイナー" : "メジャー"}${acc}`;
 }
 
+// 五度圏の数（♯=正/♭=負）を「♭3」「♯2」「なし」の表記に。
+function scoreFifthsName(fifths) {
+  if (!Number.isFinite(fifths) || fifths === 0) return "♯♭なし";
+  return fifths > 0 ? `♯${fifths}` : `♭${-fifths}`;
+}
+
 function scoreNameToMidi(name) {
   const m = String(name || "").trim().match(/^([A-Ga-g])([#b]?)(-?\d{1,2})$/);
   if (!m) return null;
@@ -123,15 +129,19 @@ function loadScoreData(parsed, kind) {
     chords.forEach((c, i) => {
       const next = chords[i + 1];
       const beats = next ? Math.max(0.25, next.startBeat - c.startBeat) : scoreState.beatsPerBar;
-      scoreState.events.push({ type: "chord", chord: c.chord, lyric: "", beats, lineIndex: 1 });
+      // uncertain: ノンダイアトニック等で低確度（人が後で確認・確定する）
+      scoreState.events.push({ type: "chord", chord: c.chord, lyric: "", beats, lineIndex: 1, uncertain: !!c.uncertain });
     });
   } else {
     scoreState.events.push({ type: "chord", chord: null, lyric: "", beats: scoreState.beatsPerBar, lineIndex: 1 });
   }
-  // メロディ（元推定値 origMidi と、PDF上の位置 page/x/y を保持）
+  // メロディ（元推定値 origMidi と、PDF上の位置 page/x/y を保持）。
+  // uncertain: 臨時記号の前後矛盾など低確度の理由（人が後で確認・確定する）。
   scoreState.melody = (parsed.melody || [])
-    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y, keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, artic: n.artic }))
+    .map((n) => ({ startBeat: n.startBeat, beats: n.beats, midi: n.midi, origMidi: n.midi, lyric: n.lyric || "", page: n.page, x: n.x, y: n.y, keyFifths: n.keyFifths, slurId: n.slurId, slurRole: n.slurRole, artic: n.artic, uncertain: Array.isArray(n.uncertain) ? n.uncertain.slice() : null }))
     .sort((a, b) => a.startBeat - b.startBeat);
+  // リズム要確認の小節番号（拍検算で拍子に合わなかった小節）。五線譜でハイライトする。
+  scoreState.rhythmUncertainMeasures = parsed.verification?.beats?.problemMeasures || [];
   // 歌詞
   if (parsed.words && parsed.words.length) {
     scoreState.lyricLines = [parsed.words.map((w) => w.text).join(" ")];
@@ -168,18 +178,21 @@ function renderScore() {
     if (rs.dsAlCoda) parts.push("D.S. al Coda");
     if (parts.length) repeatNote = ` / 繰り返し: ${parts.join("・")}（再生時に展開）`;
   }
-  // 相互チェック（臨時記号の前後矛盾・調号の取り違え疑い）を要確認として表示。
+  // 相互チェックで低確度に登録された項目を「要確認」としてまとめて表示（人が確定する）。
   let checkNote = "";
   const vf = scoreState.verification;
   if (vf) {
     const parts = [];
-    if (vf.accidentals && vf.accidentals.count > 0) {
-      parts.push(`臨時記号の前後矛盾${vf.accidentals.count}件（要確認）`);
+    const rhythmN = (scoreState.rhythmUncertainMeasures || []).length;
+    const accN = scoreState.melody.filter((n) => Array.isArray(n.uncertain) && n.uncertain.length).length;
+    const chordN = scoreState.events.filter((e) => e.type === "chord" && e.uncertain).length;
+    if (rhythmN > 0) parts.push(`リズム要確認${rhythmN}小節`);
+    if (accN > 0) parts.push(`臨時記号要確認${accN}音`);
+    if (chordN > 0) parts.push(`調号外コード${chordN}個`);
+    if (vf.key && vf.key.suspect && Number.isFinite(vf.key.suggestedFifths)) {
+      parts.push(`調号の取り違え疑い（候補: ${scoreFifthsName(vf.key.suggestedFifths)}）`);
     }
-    if (vf.key && vf.key.suspect) {
-      parts.push(`調号の取り違え疑い（スケール外音${Math.round(vf.key.noteOutOfScaleRatio * 100)}%・別調号候補あり）`);
-    }
-    if (parts.length) checkNote = ` / ⚠ ${parts.join(" / ")}`;
+    if (parts.length) checkNote = ` / ⚠要確認: ${parts.join(" / ")}`;
   }
   scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}${repeatNote}${checkNote}`;
   renderScoreChordEditor();
@@ -313,13 +326,15 @@ function renderScoreChordEditor() {
     const beatInBar = (runBeat % beatsPerBar) + 1;
     runBeat += Number(event.beats) || 0;
     const row = document.createElement("div");
-    row.className = "chord-edit-row";
+    row.className = "chord-edit-row" + (event.uncertain ? " is-uncertain" : "");
     row.innerHTML = `
       <span class="chord-edit-pos">${bar}-${Number.isInteger(beatInBar) ? beatInBar : beatInBar.toFixed(1)}</span>
-      <input class="chord-edit-name" type="text" value="${escapeHtml(event.chord || "")}" placeholder="(なし)" aria-label="コード">
+      <input class="chord-edit-name" type="text" value="${escapeHtml(event.chord || "")}" placeholder="(なし)" aria-label="コード"${event.uncertain ? ' title="調号外（ノンダイアトニック）：確認してね"' : ""}>
       <input class="chord-edit-beats" type="number" min="0.25" max="32" step="0.25" value="${event.beats}" aria-label="拍数">
+      ${event.uncertain ? '<button class="chord-edit-confirm" type="button" title="調号外コード：確認して確定">⚠</button>' : '<span class="chord-edit-confirm-slot"></span>'}
       <button class="chord-edit-del" type="button" title="削除">✕</button>`;
-    row.querySelector(".chord-edit-name").addEventListener("input", (e) => { event.chord = e.target.value.trim() || null; });
+    row.querySelector(".chord-edit-name").addEventListener("input", (e) => { event.chord = e.target.value.trim() || null; event.uncertain = false; row.classList.remove("is-uncertain"); });
+    row.querySelector(".chord-edit-confirm")?.addEventListener("click", () => { event.uncertain = false; renderScoreChordEditor(); });
     row.querySelector(".chord-edit-beats").addEventListener("change", (e) => { event.beats = Math.max(0.25, Number(e.target.value) || 0.25); renderScoreChordEditor(); });
     row.querySelector(".chord-edit-del").addEventListener("click", () => { const i = scoreState.events.indexOf(event); if (i >= 0) { scoreState.events.splice(i, 1); renderScoreChordEditor(); } });
     scoreEl.chordEditor.appendChild(row);
@@ -352,8 +367,10 @@ function renderScoreNoteTable() {
     const beatInBar = (note.startBeat % beatsPerBar) + 1;
     const changed = Number.isFinite(note.origMidi) && note.origMidi !== note.midi;
     const selected = scoreState.notation?.getSelected() === note;
+    const uncertain = Array.isArray(note.uncertain) && note.uncertain.length > 0;
+    const uReason = uncertain ? note.uncertain.map((r) => ({ accidental: "臨時記号が前後の小節と矛盾", rhythm: "リズム要確認", scale: "スケール外" }[r] || r)).join("・") : "";
     const row = document.createElement("div");
-    row.className = "score-note-row" + (changed ? " is-changed" : "") + (selected ? " is-selected" : "");
+    row.className = "score-note-row" + (changed ? " is-changed" : "") + (selected ? " is-selected" : "") + (uncertain ? " is-uncertain" : "");
     row.innerHTML = `
       <span class="score-note-idx">${index + 1}</span>
       <span class="score-note-pos">${bar}-${Number.isInteger(beatInBar) ? beatInBar : beatInBar.toFixed(1)}</span>
@@ -361,14 +378,17 @@ function renderScoreNoteTable() {
       <button class="score-note-step" data-d="-1" type="button">−</button>
       <input class="score-note-name" type="text" value="${scoreMidiToName(note.midi)}" aria-label="音名">
       <button class="score-note-step" data-d="1" type="button">＋</button>
+      ${uncertain ? `<button class="score-note-confirm" type="button" title="${escapeHtml(uReason)}：確認して確定">⚠確定</button>` : `<span class="score-note-confirm-slot"></span>`}
       <span class="score-note-lyric">${escapeHtml(note.lyric || "")}</span>`;
-    row.querySelector('[data-d="-1"]').addEventListener("click", () => { note.midi -= 1; afterNoteEdit(); });
-    row.querySelector('[data-d="1"]').addEventListener("click", () => { note.midi += 1; afterNoteEdit(); });
+    row.querySelector('[data-d="-1"]').addEventListener("click", () => { note.midi -= 1; note.uncertain = null; afterNoteEdit(); });
+    row.querySelector('[data-d="1"]').addEventListener("click", () => { note.midi += 1; note.uncertain = null; afterNoteEdit(); });
     row.querySelector(".score-note-name").addEventListener("change", (e) => {
       const m = scoreNameToMidi(e.target.value);
       if (m !== null) { note.midi = m; }
+      note.uncertain = null; // 修正＝確定
       afterNoteEdit();
     });
+    row.querySelector(".score-note-confirm")?.addEventListener("click", () => { note.uncertain = null; afterNoteEdit(); });
     // 行クリック → 五線譜・PDF側でも選択（入力・ボタン操作は除く）
     row.addEventListener("click", (e) => {
       if (e.target.closest("button, input")) return;
