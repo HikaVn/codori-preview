@@ -379,6 +379,109 @@ function choosePdfKeySignature(steps, hypotheses) {
   return best;
 }
 
+// ===== 認識結果の相互チェック（自己検証）用ヘルパー =====
+// 調号 fifths（♯=正/♭=負）の長音階の構成音（pitch class 集合）。
+// 短調は平行長調と同じ7音なので mode に依らず同じ集合でよい。
+function pdfScalePcs(fifths) {
+  const tonic = ((7 * (fifths || 0)) % 12 + 12) % 12; // 長調主音のpc
+  const set = new Set();
+  for (const iv of [0, 2, 4, 5, 7, 9, 11]) set.add((tonic + iv) % 12);
+  return set;
+}
+// コード名の根音 pitch class（先頭の音名＋♯/♭）。取れなければ null。
+function pdfChordRootPc(text) {
+  if (!text) return null;
+  const m = /^([A-G])([#b♭♯]?)/.exec(text.trim());
+  if (!m) return null;
+  const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]];
+  let pc = base;
+  if (m[2] === "#" || m[2] === "♯") pc += 1;
+  else if (m[2] === "b" || m[2] === "♭") pc -= 1;
+  return ((pc % 12) + 12) % 12;
+}
+
+// 認識結果の3つの相互チェック（拍・臨時記号・調号）。検出（と安全な範囲の補正）を行い、
+// レポート {beats, accidentals, key} を返す。melody要素は step/accidental を持つ前提。
+function verifyScoreConsistency(melody, chords, keySig, bpb, barChecks) {
+  const fifths = keySig ? keySig.fifths : 0;
+  const mNo = (b) => Math.floor(b / bpb) + 1; // 1始まり小節番号
+
+  // (1) 拍検算の再チェック: 記号音価合計が拍子と合わない小節を列挙。
+  //     合わない小節は配置時にx位置比で自動補正済み（rechecked）。残りは要確認。
+  const beatProblems = (barChecks || [])
+    .filter((b) => !b.consistent && b.items > 0)
+    .map((b) => ({ measure: mNo(b.startBeat), total: b.symTotal, expected: bpb }));
+  const beats = {
+    measures: (barChecks || []).length,
+    balanced: (barChecks || []).filter((b) => b.consistent).length,
+    rechecked: beatProblems.length,
+    problems: beatProblems.slice(0, 50)
+  };
+
+  // (2) 臨時記号の前後矛盾チェック: 同じ五線位置(step)の音が、隣り合う小節で
+  //     反対の臨時記号で現れる（異名・対斜）＝読み違いが疑われる箇所を列挙。
+  const byMeasure = new Map();
+  for (const n of melody) {
+    if (n.step === undefined) continue;
+    const m = mNo(n.startBeat);
+    if (!byMeasure.has(m)) byMeasure.set(m, new Map());
+    const degMap = byMeasure.get(m);
+    // 小節内で同stepの最初の臨時記号（明示）を代表に
+    const alt = n.accidental;
+    if (alt !== undefined && !degMap.has(n.step)) degMap.set(n.step, alt);
+  }
+  const accContradictions = [];
+  const measuresWithAcc = [...byMeasure.keys()].sort((a, b) => a - b);
+  for (const m of measuresWithAcc) {
+    const degs = byMeasure.get(m);
+    for (const [step, alt] of degs) {
+      // 後ろ隣の小節とだけ比べる（1組を1回だけ報告＝両方向の重複を防ぐ）。
+      const nd = byMeasure.get(m + 1);
+      if (nd && nd.has(step) && nd.get(step) !== alt) {
+        accContradictions.push({ measure: m, neighbor: m + 1, step, alter: alt, neighborAlter: nd.get(step) });
+      }
+    }
+  }
+  const accidentals = { contradictions: accContradictions.slice(0, 50), count: accContradictions.length };
+
+  // (3) 調号との相互チェック: スケール外の音・ノンダイアトニックなコードの割合を見て、
+  //     調号の取り違えが疑われるか判定（疑わしければ別調号の方が合うかも提示）。
+  const scale = pdfScalePcs(fifths);
+  let inW = 0; let outW = 0;
+  for (const n of melody) {
+    const pc = ((n.midi % 12) + 12) % 12;
+    const w = n.beats || 1;
+    if (scale.has(pc)) inW += w; else outW += w;
+  }
+  const noteOutRatio = (inW + outW) > 0 ? outW / (inW + outW) : 0;
+  let cDiat = 0; let cNon = 0;
+  for (const c of (chords || [])) {
+    const root = pdfChordRootPc(c.chord);
+    if (root === null) continue;
+    if (scale.has(root)) cDiat += 1; else cNon += 1;
+  }
+  const chordNonRatio = (cDiat + cNon) > 0 ? cNon / (cDiat + cNon) : 0;
+  // 別の調号仮説でスケール外がどれだけ減るか（コード根音ベースで最尤の調号）。
+  let bestK = fifths; let bestNon = cNon;
+  for (let K = -7; K <= 7; K += 1) {
+    const sc = pdfScalePcs(K);
+    let non = 0;
+    for (const c of (chords || [])) { const r = pdfChordRootPc(c.chord); if (r !== null && !sc.has(r)) non += 1; }
+    if (non < bestNon) { bestNon = non; bestK = K; }
+  }
+  // 疑わしい＝音もコードも調号と大きく外れ、かつ別調号が明確に良い。
+  const suspect = noteOutRatio > 0.30 && chordNonRatio > 0.40 && bestK !== fifths && bestNon + 2 < cNon;
+  const key = {
+    fifths,
+    noteOutOfScaleRatio: Math.round(noteOutRatio * 100) / 100,
+    chordNonDiatonicRatio: Math.round(chordNonRatio * 100) / 100,
+    suspect,
+    suggestedFifths: suspect ? bestK : null
+  };
+
+  return { beats, accidentals, key };
+}
+
 // ページ単位でベクター譜を読む → メロディノート（実験的）。
 // 人間の読譜のプロセスに寄せた構造ベースの記号認識:
 //  ・符頭 = 「符幹の端にぶら下がるグリフ」（出現統計でなく構造で同定）
@@ -1107,7 +1210,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     const edges = sys.bars.slice();
     const sysMeasures = []; // {xL, xR, startBeat} コードを小節へ割り当てるため
     const place = (n, startBeat) => {
-      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
+      melody.push({ startBeat, beats: n.beats || 1, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, step: n.step, accidental: n.accidental, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
       noteCount += 1;
     };
     const assignChords = () => {
@@ -1246,7 +1349,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
         const limit = Math.max(0.25, (nextItem ? nextItem.onset : bpb) - it.onset);
         for (const n of it.ns) {
           const beats = consistent ? Math.min(n.beats || 1, limit) : limit;
-          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
+          melody.push({ startBeat: beat + it.onset, beats, midi: keyedMidi(n, sysFifths), page: sys.page, x: n.x, y: n.y, step: n.step, accidental: n.accidental, tiedFromPrev: n.tiedFromPrev, slurId: n.slurId, slurRole: n.slurRole, keyFifths: sysFifths, artic: n.artic });
           noteCount += 1;
         }
       }
@@ -1306,6 +1409,8 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     problemCount: problems.length,
     problems: problems.slice(0, 50)
   };
+  // 認識結果の相互チェック（自己検証）: 拍・臨時記号・調号の整合を確認しレポート化。
+  const verification = verifyScoreConsistency(melody, dedupChords, keySig, bpb, barChecks);
   // 繰り返し構造: 検出した反復記号(allRepeatMarks)を拍位置に写像し、再生順展開用の
   // structure を組み立てる。記号が無ければ空（既存譜面に無影響）。
   const totalEnd = melody.reduce((m, n) => Math.max(m, n.startBeat + n.beats), 0);
@@ -1358,7 +1463,7 @@ async function extractPdfVectorMelody(file, getDocument, OPS, onProgress, beatsP
     }))
   };
   return {
-    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck, layout,
+    melody, noteCount, keySig, tempo, chordEvents: dedupChords, keyChanges, beatCheck, verification, layout,
     repeatStructure,
     timeSig: detectedTS, beatsPerBar: bpb,
     pages: pdf.numPages, pageWidth: pageW, pageHeight: pageH

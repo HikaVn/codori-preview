@@ -107,6 +107,7 @@ function loadScoreData(parsed, kind) {
   scoreState.beatsPerBar = parsed.beatsPerBar || 4;
   scoreState.keySig = parsed.keySig || null;
   scoreState.beatCheck = parsed.beatCheck || null; // 拍検算（小節ごとの拍合計が拍子に合うか）
+  scoreState.verification = parsed.verification || null; // 相互チェック（拍・臨時記号・調号の整合）
   scoreState.layout = parsed.layout || null;       // 学習した元譜の配置（あれば元の配置で再現）
   scoreState.repeatStructure = parsed.repeatStructure || null; // 繰り返し構造（リピート/D.C./D.S.）
   // 繰り返しの「再生順」（拍区間の並び）。記号があれば展開、無ければnull（通常再生）。
@@ -167,7 +168,20 @@ function renderScore() {
     if (rs.dsAlCoda) parts.push("D.S. al Coda");
     if (parts.length) repeatNote = ` / 繰り返し: ${parts.join("・")}（再生時に展開）`;
   }
-  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}${repeatNote}`;
+  // 相互チェック（臨時記号の前後矛盾・調号の取り違え疑い）を要確認として表示。
+  let checkNote = "";
+  const vf = scoreState.verification;
+  if (vf) {
+    const parts = [];
+    if (vf.accidentals && vf.accidentals.count > 0) {
+      parts.push(`臨時記号の前後矛盾${vf.accidentals.count}件（要確認）`);
+    }
+    if (vf.key && vf.key.suspect) {
+      parts.push(`調号の取り違え疑い（スケール外音${Math.round(vf.key.noteOutOfScaleRatio * 100)}%・別調号候補あり）`);
+    }
+    if (parts.length) checkNote = ` / ⚠ ${parts.join(" / ")}`;
+  }
+  scoreEl.summary.textContent = `コード${chordCount}個 / メロディ${scoreState.melody.length}音 / 歌詞${scoreState.lyricLines.length}行${keyName ? ` / 調: ${keyName}` : ""}${beatNote}${repeatNote}${checkNote}`;
   renderScoreChordEditor();
   syncScoreNotation();
   syncScorePianoRoll();
