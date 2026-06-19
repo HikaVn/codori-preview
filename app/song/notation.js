@@ -453,10 +453,36 @@ function createScoreNotation(canvas, options = {}) {
         ctx.fillStyle = "#1f6f4f"; ctx.font = "11px sans-serif";
         for (const c of sys.chords) ctx.fillText(c.text, mapX(c.x) - 4, top - 16);
       }
+      // 小節線をまたぐタイ音符（再生用は1音に結合済み）は、描画時に小節ごとのセグメントへ
+      // 分割して「正しい音価＋タイ」で描く。3/4に全音符…のような不正音価を出さないため。
+      const bpbR = state.beatsPerBar || 4;
+      const barsSorted = (sys.bars || []).slice().sort((a, b) => a - b);
+      const ties = []; // {a, b} 分割セグメントの連結（同音高をタイで結ぶ）
+      const renderNotes = []; // {note, ox} 描画する音符（分割後）
+      for (const n of notes) {
+        const mEnd = (Math.floor(n.startBeat / bpbR + 1e-6) + 1) * bpbR;
+        if (n.startBeat + n.beats <= mEnd + 0.01) { renderNotes.push({ note: n, ox: n.x }); continue; }
+        // またぐ: 小節ごとに分割。継続セグメントは「またいだ小節線の少し右」に置く。
+        const crossing = barsSorted.filter((b) => b > n.x + 1);
+        let curBeat = n.startBeat; let remain = n.beats; let k = 0; let prev = null;
+        while (remain > 0.01 && k < 8) {
+          if (k > 0 && crossing[k - 1] == null) break; // 段をまたぐ分は描けない（別段で描画）
+          const segEnd = (Math.floor(curBeat / bpbR + 1e-6) + 1) * bpbR;
+          const segDur = Math.min(remain, segEnd - curBeat);
+          const ox = k === 0 ? n.x : crossing[k - 1] + 7;
+          const dobj = Object.assign({}, n, { beats: Math.round(segDur * 1000) / 1000, startBeat: curBeat });
+          if (k > 0) dobj.lyric = ""; // 歌詞は先頭セグメントだけ
+          const item = { note: dobj, ox };
+          renderNotes.push(item);
+          if (prev) ties.push({ a: prev, b: item });
+          prev = item;
+          curBeat += segDur; remain -= segDur; k += 1;
+        }
+      }
       // 音符: 連桁は「同じ拍で連続する8分以下」でまとめる（音楽的グルーピング）
-      const placed = notes.map((n) => ({
-        note: n, x: mapX(n.x),
-        base: (n.beats === 0.75 || n.beats === 1.5 || n.beats === 3 || n.beats === 6) ? n.beats / 1.5 : n.beats
+      const placed = renderNotes.map((it) => ({
+        note: it.note, x: mapX(it.ox),
+        base: (it.note.beats === 0.75 || it.note.beats === 1.5 || it.note.beats === 3 || it.note.beats === 6) ? it.note.beats / 1.5 : it.note.beats
       }));
       const groups = [];
       let run = null;
@@ -479,6 +505,19 @@ function createScoreNotation(canvas, options = {}) {
         ctx.strokeStyle = state.selected && g.items.some((d) => d.note === state.selected) ? "#d89b2b" : "#1f2933";
         ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.moveTo(x0, tipY); ctx.lineTo(x1, tipY); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      // タイ（小節またぎ分割の連結）。同音高なので符頭の右端〜左端を浅い弧で結ぶ。
+      for (const t of ties) {
+        const flat = (Number.isFinite(t.a.note.keyFifths) ? t.a.note.keyFifths : state.fifths) < 0;
+        const ay = stepToY(notationMidiToStaff(t.a.note.midi, flat).step, top);
+        const ax = mapX(t.a.ox) + HEAD_HALF;
+        const bx = mapX(t.b.ox) - HEAD_HALF;
+        ctx.strokeStyle = "#1f2933"; ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay + 2);
+        ctx.quadraticCurveTo((ax + bx) / 2, ay + SPACING * 1.3, bx, ay + 2);
+        ctx.stroke();
         ctx.lineWidth = 1;
       }
     }
