@@ -436,6 +436,16 @@ function createScoreNotation(canvas, options = {}) {
         const x = mapX(bx);
         ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + STAFF_H); ctx.stroke();
       }
+      // 段内の調号変化（転調）: 変化した小節線の直後に新しい調号を描く。
+      // その小節以降の音符は note.keyFifths が新調号なので、五線の調号と整合する。
+      for (const kc of sys.keyChanges || []) {
+        const kf = kc.fifths || 0;
+        if (!kf) continue;
+        const steps = kf > 0 ? NOTATION_SHARP_STEPS : NOTATION_FLAT_STEPS;
+        const accCode = kf > 0 ? SMUFL.accSharp : SMUFL.accFlat;
+        const x0 = mapX(kc.x) + 3;
+        for (let i = 0; i < Math.abs(kf); i += 1) ctx.smufl(accCode, x0 + i * 7, stepToY(steps[i], top), MUSIC, "start", "#1f2933");
+      }
       // 小節番号（その段の先頭小節）。認識が渡す measureStart を使う。
       ctx.fillStyle = "#62717d"; ctx.font = "9px sans-serif";
       ctx.fillText(String(sys.measureStart || (si + 1)), 6, top - 6);
