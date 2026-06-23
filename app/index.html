@@ -4,17 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260612-song-mode-v1">
+    <link rel="stylesheet" href="./styles.css?v=20260614-home-resume-v1">
   </head>
   <body class="is-mode-select-only">
     <main class="app-shell">
       <header class="top-bar">
-        <div class="brand-block">
+        <div class="brand-block" id="brand-home" role="button" tabindex="0" aria-label="トップにもどる">
           <img class="app-logo" src="../assets/logo/codori-logo-app-header-rough-04.svg" alt="Codori">
           <h1>音のきもちをおぼえる</h1>
         </div>
-        <div class="progress" aria-live="polite">
-          <span id="card-count">1 / 4</span>
+        <div class="top-bar-actions">
+          <button class="home-button" id="home-button" type="button" aria-label="トップにもどってちゅうだんする">
+            <span class="home-button-icon" aria-hidden="true">⌂</span>
+            <span>ホーム</span>
+          </button>
+          <div class="progress" aria-live="polite">
+            <span id="card-count">1 / 4</span>
+          </div>
         </div>
       </header>
 
@@ -126,6 +132,8 @@
           <div class="filter-buttons" id="family-filter"></div>
         </div>
       </section>
+        </div>
+      </details>
 
       <nav class="tabs" aria-label="表示切り替え">
         <button class="tab is-active" type="button" data-view="card">
@@ -154,8 +162,6 @@
         <p id="mode-description">1つのコードを、鳥・音・運指・きもちでゆっくり見る。</p>
         <p class="first-step-tip" id="first-step-tip">まずは青い「音をきく」から。</p>
       </section>
-        </div>
-      </details>
 
       <section class="view is-active" id="card-view" aria-label="コードカード">
         <div class="card-stage">
@@ -258,6 +264,6 @@
       </section>
     </main>
 
-    <script src="./main.js?v=20260610-mode-select-v1"></script>
+    <script src="./main.js?v=20260614-home-resume-v1"></script>
   </body>
 </html>

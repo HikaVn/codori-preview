@@ -63,6 +63,54 @@ button {
   min-width: 0;
 }
 
+body:not(.is-mode-select-only) .brand-block {
+  cursor: pointer;
+}
+
+.brand-block:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.home-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid rgba(45, 105, 167, 0.32);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--blue);
+  cursor: pointer;
+  font-family: var(--font-codori);
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 6px 16px rgba(45, 105, 167, 0.1);
+  white-space: nowrap;
+}
+
+.home-button:hover {
+  background: #eef6ff;
+}
+
+.home-button-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+body.is-mode-select-only .home-button {
+  display: none;
+}
+
 .app-logo {
   display: block;
   width: min(280px, 64vw);
@@ -1664,6 +1712,16 @@ body.is-catalog-active .learning-menu-switch {
 
   h1 {
     display: none;
+  }
+
+  .top-bar-actions {
+    gap: 6px;
+  }
+
+  .home-button {
+    min-height: 38px;
+    padding: 7px 12px;
+    font-size: 13px;
   }
 
   .progress {
