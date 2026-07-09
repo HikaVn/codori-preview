@@ -34,6 +34,20 @@ const FAMILY_FINGERING_SUFFIX = {
   aug: "aug",
   "m7-5": "m7_5"
 };
+// 図鑑データ（all-main-chords.json）でのコード名。運指ファイル名とはm7-5だけ表記が違う
+const FAMILY_CATALOG_SUFFIX = { ...FAMILY_FINGERING_SUFFIX, "m7-5": "m7-5" };
+
+// 展開形の基本形を運指アセットと同じ形にするため、図鑑データの押さえ方を読み込んでおく
+let catalogFingerings = null;
+fetch("../../assets/app/data/all-main-chords.json")
+  .then((response) => (response.ok ? response.json() : null))
+  .then((rows) => {
+    if (!Array.isArray(rows)) {
+      return;
+    }
+    catalogFingerings = new Map(rows.map((row) => [row.display_name, row.ukulele_fingering]));
+  })
+  .catch(() => {});
 
 const SHARP_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT_TO_SHARP = { Db: "C#", Eb: "D#", Gb: "F#", Ab: "G#", Bb: "A#" };
@@ -183,6 +197,7 @@ const el = {
   stageChord: document.querySelector("#stage-chord"),
   stageFingering: document.querySelector(".stage-fingering"),
   stageFingeringImg: document.querySelector("#stage-fingering-img"),
+  stageFormButton: document.querySelector("#stage-form-button"),
   stageNext: document.querySelector("#stage-next"),
   nextChordName: document.querySelector("#next-chord-name"),
   nextFingeringImg: document.querySelector("#next-fingering-img"),
@@ -272,6 +287,73 @@ function fingeringAssetForChord(chord) {
   root = SHARP_TO_FLAT[root] || root;
   const suffix = FAMILY_FINGERING_SUFFIX[chordFamily(chord)] ?? "";
   return `${FINGERING_BASE}ukulele_${root}${suffix}_vertical_strings.svg`;
+}
+
+// ===== 展開形（同じコードの別の押さえ方）=====
+
+// 展開形の選択は「移調前のコード名」をキーに song.chordForms へ覚える
+function chordFormKey(chord) {
+  return String(chord || "").split("/")[0].trim();
+}
+
+// 運指アセットの代用ルールと同じ考え方で、図鑑データ上のコード名を求める
+function catalogNameForChord(chord) {
+  const main = String(chord || "").split("/")[0].trim();
+  const match = main.match(/^([A-G])(#|b)?/);
+  if (!match) {
+    return null;
+  }
+  let root = match[1] + (match[2] || "");
+  root = SHARP_TO_FLAT[root] || root;
+  return `${root}${FAMILY_CATALOG_SUFFIX[chordFamily(chord)] ?? ""}`;
+}
+
+function formsForShownChord(shownChord) {
+  if (!window.CodoriChordForms) {
+    return [];
+  }
+  const name = chordFormKey(shownChord);
+  if (!name) {
+    return [];
+  }
+  const catalogName = catalogNameForChord(name);
+  const baseFrets = catalogName && catalogFingerings ? catalogFingerings.get(catalogName) : null;
+  return CodoriChordForms.formsForChord(name, { baseFrets });
+}
+
+function selectedFormIndex(baseChord) {
+  const key = chordFormKey(baseChord);
+  if (!key || !song?.chordForms) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(Number(song.chordForms[key]) || 0));
+}
+
+// 選択中の展開形。移調でフォーム数が減っていたら、いちばん上の形に丸める
+function resolvedChordForm(shownChord, baseChord) {
+  const index = selectedFormIndex(baseChord);
+  if (index <= 0 || !window.CodoriChordForms) {
+    return null;
+  }
+  const forms = formsForShownChord(shownChord);
+  if (forms.length < 2) {
+    return null;
+  }
+  return forms[Math.min(index, forms.length - 1)];
+}
+
+// 運指図のsrc: 基本形は既存アセット、展開形は動的生成SVG
+function fingeringSrcForChord(shownChord, baseChord) {
+  const form = resolvedChordForm(shownChord, baseChord);
+  return form
+    ? CodoriChordForms.fingeringDataUri(form.name, form.frets)
+    : fingeringAssetForChord(shownChord);
+}
+
+// 伴奏音: 展開形を選んでいるコードは、その押さえ方の実音で鳴らす
+function chordFrequenciesForPlayback(shownChord, baseChord) {
+  const form = resolvedChordForm(shownChord, baseChord);
+  return form ? form.frequencies : chordFrequencies(shownChord);
 }
 
 function midiToFrequency(midi) {
@@ -433,8 +515,7 @@ const CHORD_CHANGE_GAP = 0.07;
 // スウィングの8分ウラの位置（0.5=ストレート, 0.667=三連スウィング）。やや浅めの三連寄り。
 const SWING_RATIO = 0.64;
 
-function strumChord(chord, time, beats, strumGain = 1) {
-  const frequencies = chordFrequencies(chord);
+function strumChord(chord, time, beats, strumGain = 1, frequencies = chordFrequencies(chord)) {
   if (!frequencies) {
     return;
   }
@@ -623,12 +704,12 @@ function schedulerTick() {
       }
       player.lastHitChord = chordName;
       if (hit.arpIndex !== null && hit.arpIndex !== undefined) {
-        const frequencies = chordFrequencies(chordName);
+        const frequencies = chordFrequenciesForPlayback(chordName, hit.chord);
         if (frequencies) {
           playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain, "sine", true);
         }
       } else {
-        strumChord(chordName, time, hit.beats, hit.gain);
+        strumChord(chordName, time, hit.beats, hit.gain, chordFrequenciesForPlayback(chordName, hit.chord));
       }
     }
     player.nextHitIdx += 1;
@@ -878,7 +959,9 @@ function updateActiveNote(beat) {
     const shown = transposeChord(note.chord, song.transpose);
     el.stageChord.textContent = shown;
     el.stageBirdImg.src = characterAssetForChord(note.chord);
-    setFingeringImage(el.stageFingeringImg, shown);
+    setFingeringImage(el.stageFingeringImg, shown, note.chord);
+    stageBaseChord = note.chord;
+    updateStageFormButton();
     el.stageBird.classList.remove("is-pop");
     void el.stageBird.offsetWidth;
     el.stageBird.classList.add("is-pop");
@@ -892,17 +975,76 @@ function updateActiveNote(beat) {
   renderCurrentLine(note);
 }
 
-function setFingeringImage(image, chordName) {
+function setFingeringImage(image, chordName, baseChord = chordName) {
   if (!image) {
     return;
   }
-  const asset = chordName ? fingeringAssetForChord(chordName) : null;
+  const asset = chordName ? fingeringSrcForChord(chordName, baseChord) : null;
   if (!asset) {
     image.style.visibility = "hidden";
     return;
   }
   image.style.visibility = "visible";
   image.src = asset;
+}
+
+// ステージに表示中のコード（移調前）。展開形切り替えボタンの対象になる
+let stageBaseChord = null;
+let nextBaseChord = null;
+
+function updateStageFormButton() {
+  const button = el.stageFormButton;
+  if (!button) {
+    return;
+  }
+  const forms = stageBaseChord ? formsForShownChord(transposeChord(stageBaseChord, song.transpose)) : [];
+  if (forms.length < 2) {
+    button.classList.add("is-hidden");
+    return;
+  }
+  button.classList.remove("is-hidden");
+  const index = Math.min(selectedFormIndex(stageBaseChord), forms.length - 1);
+  button.textContent = `${forms[index].label} ▸`;
+  button.setAttribute("aria-label", `いまのコードの押さえ方を切り替える（いまは${forms[index].label}）`);
+}
+
+// 展開形を切り替えたコードの運指図を、ステージ・つぎ・レーンのぜんぶで描き替える
+function refreshChordFormImages(key) {
+  if (stageBaseChord && chordFormKey(stageBaseChord) === key) {
+    setFingeringImage(el.stageFingeringImg, transposeChord(stageBaseChord, song.transpose), stageBaseChord);
+  }
+  if (nextBaseChord && chordFormKey(nextBaseChord) === key) {
+    setFingeringImage(el.nextFingeringImg, transposeChord(nextBaseChord, song.transpose), nextBaseChord);
+  }
+  positioned.notes.forEach((note) => {
+    if (!note.chord || chordFormKey(note.chord) !== key) {
+      return;
+    }
+    const image = el.laneTrack.querySelector(`.note[data-index="${note.index}"] .note-fingering`);
+    if (image) {
+      image.src = fingeringSrcForChord(transposeChord(note.chord, song.transpose), note.chord);
+    }
+  });
+}
+
+function cycleStageChordForm() {
+  if (!stageBaseChord) {
+    return;
+  }
+  const forms = formsForShownChord(transposeChord(stageBaseChord, song.transpose));
+  if (forms.length < 2) {
+    return;
+  }
+  const key = chordFormKey(stageBaseChord);
+  const next = (Math.min(selectedFormIndex(stageBaseChord), forms.length - 1) + 1) % forms.length;
+  song.chordForms = song.chordForms || {};
+  if (next === 0) {
+    delete song.chordForms[key];
+  } else {
+    song.chordForms[key] = next;
+  }
+  updateStageFormButton();
+  refreshChordFormImages(key);
 }
 
 // 「つぎ」のコード表示（現在コードのすぐ隣）
@@ -918,10 +1060,11 @@ function updateNextChordDisplay(fromNoteIndex) {
     }
   }
   el.stageNext.classList.toggle("is-hidden", !next);
+  nextBaseChord = next ? next.chord : null;
   if (next) {
     const shown = transposeChord(next.chord, song.transpose);
     el.nextChordName.textContent = shown;
-    setFingeringImage(el.nextFingeringImg, shown);
+    setFingeringImage(el.nextFingeringImg, shown, next.chord);
   }
 }
 
@@ -977,6 +1120,8 @@ function updateStageForBeat(beat) {
   if (index < 0) {
     el.stageChord.textContent = "-";
     setFingeringImage(el.stageFingeringImg, null);
+    stageBaseChord = null;
+    updateStageFormButton();
     updateNextChordDisplay(positioned.notes.length);
     return;
   }
@@ -984,7 +1129,9 @@ function updateStageForBeat(beat) {
   const shown = transposeChord(note.chord, song.transpose);
   el.stageChord.textContent = shown;
   el.stageBirdImg.src = characterAssetForChord(note.chord);
-  setFingeringImage(el.stageFingeringImg, shown);
+  setFingeringImage(el.stageFingeringImg, shown, note.chord);
+  stageBaseChord = note.chord;
+  updateStageFormButton();
   updateNextChordDisplay(index);
 }
 
@@ -1051,7 +1198,7 @@ function renderLane() {
     const isStart = Math.abs(note.startBeat - player.startBeat) < 0.001;
     if (note.chord) {
       const shown = transposeChord(note.chord, song.transpose);
-      const fingering = fingeringAssetForChord(shown);
+      const fingering = fingeringSrcForChord(shown, note.chord);
       html += `<div class="note${isStart ? " is-start" : ""}" data-index="${note.index}" data-beat="${note.startBeat}" style="left:${x}px;width:${width}px">`
         + `<div class="note-top">`
         + `<div class="note-bird"><img src="${characterAssetForChord(note.chord)}" alt="" loading="lazy" style="animation-delay:-${(order % 6) * 0.4}s"></div>`
@@ -1234,6 +1381,7 @@ function blankSong() {
     events: [],
     melody: [],
     rhythmPattern: "whole",
+    chordForms: {},
     updatedAt: null
   };
 }
@@ -1293,6 +1441,7 @@ function serializeSong() {
     }),
     melody: (song.melody || []).map((note) => ({ ...note })),
     rhythmPattern: song.rhythmPattern || "whole",
+    chordForms: { ...(song.chordForms || {}) },
     updatedAt: new Date().toISOString()
   };
 }
@@ -1319,6 +1468,7 @@ function loadSongById(id) {
     haltPlayback();
   }
   song = { ...blankSong(), ...data, events: (data.events || []).map((event) => ({ ...event })) };
+  song.chordForms = { ...(data.chordForms || {}) };
   library.lastId = id;
   saveLibrary();
   player.startBeat = 0;
@@ -1394,6 +1544,7 @@ function importSongFile(file) {
       next.events = Array.isArray(data.events) && data.events.length
         ? data.events.map((event) => ({ ...event }))
         : buildEventsFromSource(next.source, next.defaultBeats);
+      next.chordForms = data.chordForms && typeof data.chordForms === "object" ? { ...data.chordForms } : {};
       song = next;
       player.startBeat = 0;
       player.pausedBeat = null;
@@ -1494,6 +1645,7 @@ function applyImportedSong(data, audioInfo) {
   song = { ...blankSong(), ...data };
   song.events = (data.events || []).map((event) => ({ ...event }));
   song.melody = (data.melody || []).map((note) => ({ ...note }));
+  song.chordForms = { ...(data.chordForms || {}) };
   importedAudio = audioInfo || null;
   player.startBeat = 0;
   player.pausedBeat = null;
@@ -1570,6 +1722,8 @@ el.bpmInput.addEventListener("change", (event) => applyBpmChange(event.target.va
 
 el.transposeDown.addEventListener("click", () => setTranspose((song.transpose || 0) - 1));
 el.transposeUp.addEventListener("click", () => setTranspose((song.transpose || 0) + 1));
+
+el.stageFormButton?.addEventListener("click", cycleStageChordForm);
 
 el.noteSpeed.addEventListener("input", (event) => {
   pxPerBeat = Number(event.target.value) || 110;

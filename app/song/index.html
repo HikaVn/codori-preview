@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori うた練習</title>
-    <link rel="stylesheet" href="./song.css?v=20260615-midkey-v1">
+    <link rel="stylesheet" href="./song.css?v=20260709-chord-forms-v1">
   </head>
   <body>
     <main class="song-shell">
@@ -168,7 +168,10 @@
               <img id="stage-bird-img" src="../../assets/app/characters/action-candidate-integrated-v3/action-major.png" alt="いまのコードのCodori">
             </div>
             <div class="stage-info">
-              <div class="stage-chord" id="stage-chord">-</div>
+              <div class="stage-chord-block">
+                <div class="stage-chord" id="stage-chord">-</div>
+                <button class="stage-form-button is-hidden" id="stage-form-button" type="button" aria-label="いまのコードの押さえ方を切り替える">基本形 ▸</button>
+              </div>
               <div class="stage-fingering">
                 <img id="stage-fingering-img" alt="いまのコードのウクレレ運指" style="visibility:hidden">
               </div>
@@ -612,7 +615,8 @@
         </div>
       </section>
     </main>
-    <script src="./song.js?v=20260615-midkey-v1"></script>
+    <script src="../chord-forms.js?v=20260709-chord-forms-v1"></script>
+    <script src="./song.js?v=20260709-chord-forms-v1"></script>
     <script src="./dsp.js?v=20260615-midkey-v1"></script>
     <script src="./pianoroll.js?v=20260615-midkey-v1"></script>
     <script src="./notation.js?v=20260615-midkey-v1"></script>

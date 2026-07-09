@@ -310,6 +310,10 @@ let isModeSelectOnly = shouldStartOnModeSelect;
 let isStoryListVisible = false;
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
+// 音カードの展開形えらび（コードごとの選択はセッション中だけ覚える）
+let cardChordForms = [];
+let cardFormIndex = 0;
+const cardFormSelections = new Map();
 const missingAudioFiles = new Set();
 
 const elements = {
@@ -360,6 +364,7 @@ const elements = {
   birdImage: document.querySelector("#bird-image"),
   birdAccent: document.querySelector("#bird-accent"),
   fingeringImage: document.querySelector("#fingering-image"),
+  fingeringFormSelector: document.querySelector("#fingering-form-selector"),
   learningNote: document.querySelector("#learning-note"),
   memoryHint: document.querySelector("#memory-hint"),
   playCurrent: document.querySelector("#play-current"),
@@ -1331,6 +1336,7 @@ function renderCard() {
     elements.birdAccent.innerHTML = "";
     elements.fingeringImage.removeAttribute("src");
     elements.fingeringImage.alt = "条件に合う運指はまだ見つかりません";
+    renderCardFormSelector(null);
     elements.learningNote.textContent = "そのコードは、いまの森では見つからなかった。";
     elements.memoryHint.textContent = "検索文字を少し短くするか、音名・コード種類のしぼりこみをゆるめてみよう。";
     return;
@@ -1345,10 +1351,62 @@ function renderCard() {
   elements.birdImage.src = assetPath(characterAssetFor(chord));
   elements.birdImage.alt = `${chord.display_name}のCodori鳥`;
   updateOnePointAccent(elements.birdAccent, chord);
-  elements.fingeringImage.src = assetPath(chord.fingering_asset);
-  elements.fingeringImage.alt = `${chord.display_name}のウクレレ運指`;
+  renderCardFormSelector(chord);
   elements.learningNote.textContent = chord.learning_note;
   elements.memoryHint.textContent = chord.memory_hint;
+}
+
+// 音カードの運指図: 基本形はレビュー済みアセット、展開形は動的生成SVGを表示する
+function applyCardFormImage(chord) {
+  const form = cardFormIndex > 0 ? cardChordForms[cardFormIndex] : null;
+  if (form && window.CodoriChordForms) {
+    elements.fingeringImage.src = CodoriChordForms.fingeringDataUri(chord.display_name, form.frets);
+    elements.fingeringImage.alt = `${chord.display_name}の${form.label}のウクレレ運指`;
+  } else {
+    elements.fingeringImage.src = assetPath(chord.fingering_asset);
+    elements.fingeringImage.alt = `${chord.display_name}のウクレレ運指`;
+  }
+}
+
+function renderCardFormSelector(chord) {
+  const container = elements.fingeringFormSelector;
+  cardChordForms = [];
+  cardFormIndex = 0;
+  if (!container) {
+    return;
+  }
+  container.innerHTML = "";
+  if (!chord || !window.CodoriChordForms) {
+    container.classList.add("is-hidden");
+    return;
+  }
+  cardChordForms = CodoriChordForms.formsForChord(chord.display_name, { baseFrets: chord.ukulele_fingering });
+  if (cardChordForms.length < 2) {
+    container.classList.add("is-hidden");
+    applyCardFormImage(chord);
+    return;
+  }
+  container.classList.remove("is-hidden");
+  cardFormIndex = Math.min(cardFormSelections.get(chord.code_id) || 0, cardChordForms.length - 1);
+  cardChordForms.forEach((form, index) => {
+    const button = document.createElement("button");
+    button.className = "form-option";
+    button.type = "button";
+    button.textContent = form.shortLabel;
+    button.title = `${form.label}（${form.fretText}）`;
+    button.setAttribute("aria-pressed", String(index === cardFormIndex));
+    button.setAttribute("aria-label", `${chord.display_name}の${form.label}を見る`);
+    button.addEventListener("click", () => {
+      cardFormIndex = index;
+      cardFormSelections.set(chord.code_id, index);
+      container.querySelectorAll(".form-option").forEach((option, optionIndex) => {
+        option.setAttribute("aria-pressed", String(optionIndex === index));
+      });
+      applyCardFormImage(chord);
+    });
+    container.appendChild(button);
+  });
+  applyCardFormImage(chord);
 }
 
 function renderCompare() {
@@ -2098,10 +2156,11 @@ async function playChord(chord, options = {}) {
     recordChordHeard(chord);
   }
   const context = await ensureAudioContextReady();
-  if (await playAudioFile(chord)) {
+  // 展開形を選んでいるときは、録音済み音源（基本形の音）ではなく実際の押さえ方の音を鳴らす
+  if (!options.frequencies && await playAudioFile(chord)) {
     return;
   }
-  playSyntheticChord(chord, context);
+  playSyntheticChord(chord, context, options.frequencies);
 }
 
 async function playAudioFile(chord) {
@@ -2123,7 +2182,8 @@ async function playAudioFile(chord) {
   }
 }
 
-function playSyntheticChord(chord, context = getAudioContext()) {
+function playSyntheticChord(chord, context = getAudioContext(), frequencies = null) {
+  const audioNotes = frequencies || chord.temp_audio_notes;
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
@@ -2132,7 +2192,7 @@ function playSyntheticChord(chord, context = getAudioContext()) {
   master.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
   master.connect(context.destination);
 
-  chord.temp_audio_notes.forEach((frequency, index) => {
+  audioNotes.forEach((frequency, index) => {
     const start = now + index * ARPEGGIO_NOTE_INTERVAL_SECONDS;
     const oscillator = context.createOscillator();
     const harmonic = context.createOscillator();
@@ -2199,7 +2259,10 @@ elements.clearSearch.addEventListener("click", () => {
   elements.chordSearch.focus();
 });
 
-elements.playCurrent.addEventListener("click", () => playChord(chordData[currentIndex]));
+elements.playCurrent.addEventListener("click", () => {
+  const form = cardFormIndex > 0 ? cardChordForms[cardFormIndex] : null;
+  playChord(chordData[currentIndex], form ? { frequencies: form.frequencies } : {});
+});
 elements.playCompare.addEventListener("click", playSelectedCompare);
 elements.playQuiz.addEventListener("click", playQuizChord);
 elements.playRootAssist.addEventListener("click", playRootAssist);
