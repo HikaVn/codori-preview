@@ -1105,6 +1105,38 @@ body.is-catalog-active .learning-menu-switch {
   object-fit: contain;
 }
 
+/* 運指の形（基本形・展開形）えらび */
+.form-selector {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px 12px;
+}
+
+.form-selector.is-hidden {
+  display: none;
+}
+
+.form-option {
+  min-width: 46px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7fafb;
+  color: var(--ink);
+  font-family: var(--font-codori);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.form-option[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #ffffff;
+}
+
 .learning-note {
   font-family: var(--font-codori);
   margin: 16px 0 0;
