@@ -95,10 +95,11 @@ const TUNING_PRESETS = {
   "voice-uke": {
     label: "声＋ウクレレ",
     chromaMinHz: 200, chromaMaxHz: 2000, chromaPreset: "custom", chromaLogCompress: false,
-    melodyMinHz: 90, melodyMaxHz: 1200,
+    melodyMinHz: 180, melodyMaxHz: 1200,
     vocalSideFactor: 1.3, clarityThreshold: 0.5,
-    changePenalty: 0.14, keyStrength: 0.10,
-    separationMethod: "center-repet", repetStrength: 1.0
+    changePenalty: 0.03, keyStrength: 0.04,
+    separationMethod: "center-repet", repetStrength: 1.0,
+    quantize: "8t"
   }
 };
 
@@ -961,6 +962,10 @@ function applyTuningPreset(name) {
     if (importEl.tuneKeyVal) { importEl.tuneKeyVal.textContent = preset.keyStrength.toFixed(2); }
   }
   if (importEl.separationMethod) { importEl.separationMethod.value = preset.separationMethod; }
+  if (preset.quantize) {
+    const el = importEl.quantize;
+    if (el) { el.value = preset.quantize; }
+  }
 
   // 分離方法・音域が変わるので、解析済みならまるごと再解析する（未解析なら次の「解析する」で反映）
   if (importState.analysis) {
