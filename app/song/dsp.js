@@ -808,7 +808,8 @@ async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
     }
     rms = Math.sqrt(rms / winSize);
     if (rms > rmsGate) {
-      const found = yinPitch(frame, rate);
+      // minHz/maxHz は呼び出し元から渡される音域指定（声などプリセットに応じて変える）
+      const found = yinPitch(frame, rate, options.minHz || 75, options.maxHz || 900);
       if (found && found.clarity > clarityThreshold) {
         pitches[f] = midiFromFrequency(found.freq);
       }

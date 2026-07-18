@@ -42,6 +42,7 @@ const importEl = {
   chromaMinHz: document.querySelector("#chroma-min"),
   chromaMaxHz: document.querySelector("#chroma-max"),
   chromaLog: document.querySelector("#chroma-log"),
+  tuningPreset: document.querySelector("#tuning-preset"),
   tuneRepet: document.querySelector("#tune-repet"),
   tuneRepetVal: document.querySelector("#tune-repet-val"),
   reanalyzeMelody: document.querySelector("#reanalyze-melody"),
@@ -75,7 +76,9 @@ const importTuning = {
   chromaMaxHz: 5000,
   chromaLogCompress: false,
   beatsPerBar: 4,
-  keyStrength: 0.06
+  keyStrength: 0.06,
+  melodyMinHz: 75,
+  melodyMaxHz: 900
 };
 
 // コード解析の音域プリセット（楽器ごとに和音が見えやすい帯域へ絞る）
@@ -85,6 +88,18 @@ const CHROMA_PRESETS = {
   piano: { label: "ピアノ（55–2200Hz）", minHz: 55, maxHz: 2200 },
   bass: { label: "低音重視・根音（50–700Hz）", minHz: 50, maxHz: 700 },
   backing: { label: "高音のバッキング（200–2000Hz）", minHz: 200, maxHz: 2000 }
+};
+
+// 楽器プリセット: 複数のつまみをまとめて設定する。声＝メロディ、ウクレレ＝コード向け。
+const TUNING_PRESETS = {
+  "voice-uke": {
+    label: "声＋ウクレレ",
+    chromaMinHz: 200, chromaMaxHz: 2000, chromaPreset: "custom", chromaLogCompress: false,
+    melodyMinHz: 90, melodyMaxHz: 1200,
+    vocalSideFactor: 1.3, clarityThreshold: 0.5,
+    changePenalty: 0.14, keyStrength: 0.10,
+    separationMethod: "center-repet", repetStrength: 1.0
+  }
 };
 
 const importState = {
@@ -231,7 +246,11 @@ async function runImportAnalysis() {
       analysis.vocal,
       IMPORT_RATE,
       (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.22),
-      { clarityThreshold: importTuning.clarityThreshold, shouldCancel: () => importState.cancelRequested }
+      {
+        clarityThreshold: importTuning.clarityThreshold,
+        minHz: importTuning.melodyMinHz, maxHz: importTuning.melodyMaxHz,
+        shouldCancel: () => importState.cancelRequested
+      }
     );
     analysis.pitches = melody.pitches;
     analysis.pitchFrameRate = melody.frameRate;
@@ -585,7 +604,11 @@ async function reanalyzeMelodyOnly() {
       importState.analysis.vocal,
       IMPORT_RATE,
       (ratio) => setImportProgress("メロディを聞き取りなおしてる…", 0.2 + ratio * 0.75),
-      { clarityThreshold: importTuning.clarityThreshold, shouldCancel: () => importState.cancelRequested }
+      {
+        clarityThreshold: importTuning.clarityThreshold,
+        minHz: importTuning.melodyMinHz, maxHz: importTuning.melodyMaxHz,
+        shouldCancel: () => importState.cancelRequested
+      }
     );
     importState.analysis.pitches = melody.pitches;
     importState.analysis.pitchFrameRate = melody.frameRate;
@@ -629,7 +652,10 @@ async function reanalyzeFull() {
       analysis.vocal,
       IMPORT_RATE,
       (ratio) => setImportProgress("メロディを聞き取ってる…", 0.72 + ratio * 0.25),
-      { clarityThreshold: importTuning.clarityThreshold }
+      {
+        clarityThreshold: importTuning.clarityThreshold,
+        minHz: importTuning.melodyMinHz, maxHz: importTuning.melodyMaxHz
+      }
     );
     analysis.pitches = melody.pitches;
     analysis.pitchFrameRate = melody.frameRate;
@@ -889,6 +915,64 @@ if (importEl.chromaPreset) {
     importTuning.chromaLogCompress = importEl.chromaLog.checked;
   });
 }
+
+// 楽器プリセット（声＋ウクレレ等）をまとめて適用する。分離方法・音域・メロディ音域などの
+// つまみを一括で書き換え、対応するUIとラベルも同期する。
+function applyTuningPreset(name) {
+  const preset = TUNING_PRESETS[name];
+  if (!preset) {
+    return;
+  }
+  importTuning.chromaMinHz = preset.chromaMinHz;
+  importTuning.chromaMaxHz = preset.chromaMaxHz;
+  importTuning.chromaPreset = preset.chromaPreset;
+  importTuning.chromaLogCompress = preset.chromaLogCompress;
+  importTuning.melodyMinHz = preset.melodyMinHz;
+  importTuning.melodyMaxHz = preset.melodyMaxHz;
+  importTuning.vocalSideFactor = preset.vocalSideFactor;
+  importTuning.clarityThreshold = preset.clarityThreshold;
+  importTuning.changePenalty = preset.changePenalty;
+  importTuning.keyStrength = preset.keyStrength;
+  importTuning.separationMethod = preset.separationMethod;
+  importTuning.repetStrength = preset.repetStrength;
+
+  if (importEl.chromaMinHz) { importEl.chromaMinHz.value = String(preset.chromaMinHz); }
+  if (importEl.chromaMaxHz) { importEl.chromaMaxHz.value = String(preset.chromaMaxHz); }
+  if (importEl.chromaLog) { importEl.chromaLog.checked = preset.chromaLogCompress; }
+  if (importEl.chromaPreset) { importEl.chromaPreset.value = preset.chromaPreset; }
+  if (importEl.tunePenalty) {
+    importEl.tunePenalty.value = String(preset.changePenalty);
+    if (importEl.tunePenaltyVal) { importEl.tunePenaltyVal.textContent = preset.changePenalty.toFixed(2); }
+  }
+  if (importEl.tuneVocal) {
+    importEl.tuneVocal.value = String(preset.vocalSideFactor);
+    if (importEl.tuneVocalVal) { importEl.tuneVocalVal.textContent = preset.vocalSideFactor.toFixed(1); }
+  }
+  if (importEl.tuneClarity) {
+    importEl.tuneClarity.value = String(preset.clarityThreshold);
+    if (importEl.tuneClarityVal) { importEl.tuneClarityVal.textContent = preset.clarityThreshold.toFixed(2); }
+  }
+  if (importEl.tuneRepet) {
+    importEl.tuneRepet.value = String(preset.repetStrength);
+    if (importEl.tuneRepetVal) { importEl.tuneRepetVal.textContent = preset.repetStrength.toFixed(1); }
+  }
+  if (importEl.tuneKey) {
+    importEl.tuneKey.value = String(preset.keyStrength);
+    if (importEl.tuneKeyVal) { importEl.tuneKeyVal.textContent = preset.keyStrength.toFixed(2); }
+  }
+  if (importEl.separationMethod) { importEl.separationMethod.value = preset.separationMethod; }
+
+  // 分離方法・音域が変わるので、解析済みならまるごと再解析する（未解析なら次の「解析する」で反映）
+  if (importState.analysis) {
+    reanalyzeFull();
+  }
+}
+importEl.tuningPreset?.addEventListener("change", () => {
+  if (importEl.tuningPreset.value) {
+    applyTuningPreset(importEl.tuningPreset.value);
+  }
+});
+
 importEl.tuneRepet?.addEventListener("input", () => {
   importTuning.repetStrength = Number(importEl.tuneRepet.value);
   importEl.tuneRepetVal.textContent = importTuning.repetStrength.toFixed(1);
