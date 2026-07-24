@@ -182,6 +182,7 @@ const el = {
   swingToggle: document.querySelector("#swing-toggle"),
   rhythmPattern: document.querySelector("#rhythm-pattern"),
   melodyGuideToggle: document.querySelector("#melody-guide-toggle"),
+  chordPianoToggle: document.querySelector("#chord-piano-toggle"),
   originalToggle: document.querySelector("#original-toggle"),
   fullscreenToggle: document.querySelector("#fullscreen-toggle"),
   fsPause: document.querySelector("#fs-pause"),
@@ -510,6 +511,10 @@ function cutRingingChords(time) {
 // 余韻はコード切り替え時に cutRingingChords で全音同時にカットされる。
 const STRUM_ARPEGGIO_INTERVAL = 0.03;
 const STRUM_HARMONIC_RATIO = 0.2;
+// 「コードをピアノ音で」トグルON時の音色。倍音を多めに重ねて鍵盤らしい響きにする。
+const PIANO_CHORD_PARTIALS = [[1, 1], [2, 0.5], [3, 0.28], [4, 0.14], [5, 0.07]];
+// ピアノ音のアタック（秒）。ストラムより速く立ち上がり、そのあとは指数減衰する。
+const PIANO_ATTACK = 0.005;
 // コードが切り替わる直前に作るわずかな隙間（秒）。次のコードへ被らせない。
 const CHORD_CHANGE_GAP = 0.07;
 // スウィングの8分ウラの位置（0.5=ストレート, 0.667=三連スウィング）。やや浅めの三連寄り。
@@ -519,6 +524,8 @@ function strumChord(chord, time, beats, strumGain = 1, frequencies = chordFreque
   if (!frequencies) {
     return;
   }
+  // 「コードをピアノ音で」トグル。OFF時は従来どおりのウクレレ・ストラム音のまま。
+  const piano = el.chordPianoToggle?.checked;
   const ctx = audioCtx;
   const secPerBeatNow = 60 / song.bpm;
   // コードが切り替わる際に、ほんの少し前で音を切って隙間を作る（次のコードへ被らせない）。
@@ -537,6 +544,24 @@ function strumChord(chord, time, beats, strumGain = 1, frequencies = chordFreque
   frequencies.forEach((frequency, index) => {
     const start = time + index * STRUM_ARPEGGIO_INTERVAL;
     const end = Math.max(start + 0.2, time + duration);
+    if (piano) {
+      // ピアノ風の声：倍音を重ねた減衰音（保持せず、立ち上がり後は指数的に鳴り減っていく）
+      const attackEnd = Math.min(start + PIANO_ATTACK, end - 0.02);
+      PIANO_CHORD_PARTIALS.forEach(([mult, amp]) => {
+        const posc = ctx.createOscillator();
+        const pgain = ctx.createGain();
+        posc.type = "sine";
+        posc.frequency.value = frequency * mult;
+        pgain.gain.setValueAtTime(0.0001, start);
+        pgain.gain.linearRampToValueAtTime(0.16 * amp, attackEnd);
+        pgain.gain.exponentialRampToValueAtTime(0.0001, end);
+        posc.connect(pgain);
+        pgain.connect(master);
+        posc.start(start);
+        posc.stop(end + 0.05);
+      });
+      return;
+    }
     const hold = Math.min(start + 1.05, end - 0.1);
     const osc = ctx.createOscillator();
     const harmonic = ctx.createOscillator();
@@ -706,7 +731,9 @@ function schedulerTick() {
       if (hit.arpIndex !== null && hit.arpIndex !== undefined) {
         const frequencies = chordFrequenciesForPlayback(chordName, hit.chord);
         if (frequencies) {
-          playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain, "sine", true);
+          // 「コードをピアノ音で」トグルON時は分散和音も明るめの波形にする
+          const arpType = el.chordPianoToggle?.checked ? "triangle" : "sine";
+          playTone(frequencies[hit.arpIndex % frequencies.length], time, hit.beats * secPerBeat(), 0.14 * hit.gain, arpType, true);
         }
       } else {
         strumChord(chordName, time, hit.beats, hit.gain, chordFrequenciesForPlayback(chordName, hit.chord));
