@@ -99,7 +99,7 @@ const TUNING_PRESETS = {
     vocalSideFactor: 1.3, clarityThreshold: 0.5,
     changePenalty: 0.03, keyStrength: 0.04,
     separationMethod: "center-repet", repetStrength: 1.0,
-    quantize: "8t"
+    quantize: "8"
   }
 };
 
