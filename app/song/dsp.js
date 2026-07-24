@@ -20,7 +20,9 @@ const CHORD_TEMPLATES = (() => {
     { suffix: "m", notes: [0, 3, 7], bonus: 0.02 },
     { suffix: "7", notes: [0, 4, 7, 10], bonus: 0 },
     { suffix: "m7", notes: [0, 3, 7, 10], bonus: 0 },
-    { suffix: "maj7", notes: [0, 4, 7, 11], bonus: 0 }
+    { suffix: "maj7", notes: [0, 4, 7, 11], bonus: 0 },
+    { suffix: "sus4", notes: [0, 5, 7], bonus: 0 },
+    { suffix: "6", notes: [0, 4, 7, 9], bonus: 0 }
   ];
   const templates = [];
   for (let root = 0; root < 12; root += 1) {
@@ -745,6 +747,162 @@ function mergeBeatLabels(beatLabels) {
 
 // ===== メロディ（YIN） =====
 
+// メロディ後処理の既定値（オクターブ補正パス数、中央値フィルタ窓幅、有声/無声ヒステリシスのフレーム数、
+// 最短ノート長、同音程の結合ギャップ）。trackMelody() / melodyNotesFromPitches() から使う。
+const MELODY_SMOOTH_DEFAULTS = {
+  octaveJumpPasses: 2,
+  octaveJumpRadius: 5,
+  octaveJumpMinNeighbors: 4,
+  medianWindow: 5, // フレーム窓幅（奇数推奨）。半径は (window-1)/2
+  medianMinVoiced: 3,
+  hysteresisFrames: 3
+};
+const MELODY_NOTE_DEFAULTS = {
+  minDurSec: 0.15,
+  mergeGapSec: 0.08
+};
+
+function isVoicedPitch(value) {
+  return value !== null && value !== undefined && !Number.isNaN(value);
+}
+
+// オクターブ跳躍補正: 各有声フレームを ±radius フレーム窓内（有声のみ）の中央値と比較し、
+// ほぼ±1オクターブ（±1.5半音以内）ずれていればオクターブぶん補正する。既定2パス。
+function octaveJumpCorrect(pitches, passes = MELODY_SMOOTH_DEFAULTS.octaveJumpPasses, radius = MELODY_SMOOTH_DEFAULTS.octaveJumpRadius, minNeighbors = MELODY_SMOOTH_DEFAULTS.octaveJumpMinNeighbors) {
+  if (!pitches || pitches.length === 0) {
+    return pitches ? pitches.slice() : [];
+  }
+  let work = pitches.slice();
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = work.slice();
+    for (let i = 0; i < work.length; i += 1) {
+      const p = work[i];
+      if (!isVoicedPitch(p)) {
+        continue;
+      }
+      const neigh = [];
+      for (let d = -radius; d <= radius; d += 1) {
+        if (d === 0) {
+          continue;
+        }
+        const v = work[i + d];
+        if (isVoicedPitch(v)) {
+          neigh.push(v);
+        }
+      }
+      if (neigh.length < minNeighbors) {
+        continue;
+      }
+      neigh.sort((a, b) => a - b);
+      const median = neigh[Math.floor(neigh.length / 2)];
+      const diff = p - median;
+      const absDiff = Math.abs(diff);
+      if (absDiff >= 10.5 && absDiff <= 13.5) {
+        next[i] = diff > 0 ? p - 12 : p + 12;
+      }
+    }
+    work = next;
+  }
+  return work;
+}
+
+// 有声フレームのみを対象にした中央値フィルタ（既定窓5フレーム = 半径2）。
+// 無声フレームはnullのまま、有声近傍が足りないフレームはそのまま残す。
+function medianFilterVoiced(pitches, radius = Math.max(1, Math.round((MELODY_SMOOTH_DEFAULTS.medianWindow - 1) / 2)), minVoiced = MELODY_SMOOTH_DEFAULTS.medianMinVoiced) {
+  if (!pitches || pitches.length === 0) {
+    return pitches ? pitches.slice() : [];
+  }
+  const out = pitches.slice();
+  for (let i = 0; i < pitches.length; i += 1) {
+    const p = pitches[i];
+    if (!isVoicedPitch(p)) {
+      continue;
+    }
+    const win = [];
+    for (let d = -radius; d <= radius; d += 1) {
+      const v = pitches[i + d];
+      if (isVoicedPitch(v)) {
+        win.push(v);
+      }
+    }
+    if (win.length < minVoiced) {
+      continue;
+    }
+    win.sort((a, b) => a - b);
+    out[i] = win[Math.floor(win.length / 2)];
+  }
+  return out;
+}
+
+// 有声/無声のヒステリシス（デバウンス）: onFrames 連続で有声にならないと区間開始を確定せず、
+// offFrames 連続で無声にならないと区間終了を確定しない。短い誤検出のオン/オフを吸収する。
+function voicedHysteresis(pitches, onFrames = MELODY_SMOOTH_DEFAULTS.hysteresisFrames, offFrames = MELODY_SMOOTH_DEFAULTS.hysteresisFrames) {
+  if (!pitches || pitches.length === 0) {
+    return pitches ? pitches.slice() : [];
+  }
+  const out = new Array(pitches.length).fill(null);
+  let state = false; // 確定済み有声か
+  let vCount = 0;
+  let uCount = 0;
+  const pending = [];
+  for (let i = 0; i < pitches.length; i += 1) {
+    const raw = pitches[i];
+    const voiced = isVoicedPitch(raw);
+    if (voiced) {
+      vCount += 1;
+      uCount = 0;
+    } else {
+      uCount += 1;
+      vCount = 0;
+    }
+    if (!state) {
+      if (voiced) {
+        pending.push(i);
+        if (vCount >= onFrames) {
+          for (const idx of pending) {
+            out[idx] = pitches[idx];
+          }
+          pending.length = 0;
+          state = true;
+        }
+      } else {
+        pending.length = 0;
+      }
+    } else {
+      out[i] = raw;
+      if (!voiced && uCount >= offFrames) {
+        for (let k = 0; k < offFrames - 1; k += 1) {
+          const idx = i - k;
+          if (idx >= 0) {
+            out[idx] = null;
+          }
+        }
+        state = false;
+      }
+    }
+  }
+  return out;
+}
+
+// メロディ後処理まとめ: オクターブ補正 → 有声区間の中央値フィルタ → 有声/無声ヒステリシス。
+// trackMelody() が返す前フレーム配列に適用する（既存の3点中央値フィルタの後段）。
+function smoothMelodyPitches(pitches, options = {}) {
+  if (!pitches || pitches.length === 0) {
+    return pitches ? pitches.slice() : [];
+  }
+  const octaveJumpPasses = options.octaveJumpPasses ?? MELODY_SMOOTH_DEFAULTS.octaveJumpPasses;
+  const octaveJumpRadius = options.octaveJumpRadius ?? MELODY_SMOOTH_DEFAULTS.octaveJumpRadius;
+  const octaveJumpMinNeighbors = options.octaveJumpMinNeighbors ?? MELODY_SMOOTH_DEFAULTS.octaveJumpMinNeighbors;
+  const medianWindow = options.medianWindow ?? MELODY_SMOOTH_DEFAULTS.medianWindow;
+  const medianRadius = Math.max(1, Math.round((medianWindow - 1) / 2));
+  const medianMinVoiced = options.medianMinVoiced ?? MELODY_SMOOTH_DEFAULTS.medianMinVoiced;
+  const hysteresisFrames = options.hysteresisFrames ?? MELODY_SMOOTH_DEFAULTS.hysteresisFrames;
+  let out = octaveJumpCorrect(pitches, octaveJumpPasses, octaveJumpRadius, octaveJumpMinNeighbors);
+  out = medianFilterVoiced(out, medianRadius, medianMinVoiced);
+  out = voicedHysteresis(out, hysteresisFrames, hysteresisFrames);
+  return out;
+}
+
 function yinPitch(frame, sampleRate, minHz = 75, maxHz = 900, threshold = 0.15) {
   const maxLag = Math.floor(sampleRate / minHz);
   const minLag = Math.max(2, Math.floor(sampleRate / maxHz));
@@ -831,7 +989,10 @@ async function trackMelody(vocal, sampleRate, onProgress, options = {}) {
     triple.sort((x, y) => x - y);
     return triple[Math.floor(triple.length / 2)];
   });
-  return { pitches: filtered, frameRate: rate / hop };
+  // 追加のなめらか化: オクターブ跳躍補正＋5フレーム中央値＋有声/無声ヒステリシス。
+  // options.smoothMelody === false で無効化できる（既定は有効）。
+  const smoothed = options.smoothMelody === false ? filtered : smoothMelodyPitches(filtered, options);
+  return { pitches: smoothed, frameRate: rate / hop };
 }
 
 // unit は単一のグリッド幅（例: 0.25）か、複数グリッドの配列（例: [0.25, 1/3]）。
@@ -860,8 +1021,16 @@ function minQuantUnit(unit) {
 // ピッチフレーム列 → クオンタイズ済みノート列
 // options.secToBeat があれば、秒→拍の変換にそれを使う（検出した実拍の位置に従う）。
 function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit, options = {}) {
+  if (!pitches || pitches.length === 0 || !frameRate) {
+    return [];
+  }
   const notes = [];
-  const minFrames = Math.max(2, Math.round(0.06 * frameRate));
+  // rawMeta[i] は notes[i] に対応する量子化前の秒単位区間（{startSec, endSec, midi}）。
+  // 同音程・短ギャップのノート結合を、量子化後の拍単位ではなく生の時間で判定するために使う。
+  const rawMeta = [];
+  const minDurSec = options.minDurSec ?? MELODY_NOTE_DEFAULTS.minDurSec;
+  const mergeGapSec = options.mergeGapSec ?? MELODY_NOTE_DEFAULTS.mergeGapSec;
+  const minFrames = Math.max(2, Math.round(minDurSec * frameRate));
   // 秒→拍。実拍ベースの変換が渡されればそれを、なければ一様テンポで。
   const secToBeat = options.secToBeat || ((sec) => ((sec - beat0Sec) * bpm) / 60);
   let runStart = -1;
@@ -877,15 +1046,30 @@ function melodyNotesFromPitches(pitches, frameRate, bpm, beat0Sec, quantUnit, op
     const midi = Math.round(sorted[Math.floor(sorted.length / 2)]);
     const startSec = runStart / frameRate;
     const endSec = endFrame / frameRate;
+    if (endSec - startSec < minDurSec) {
+      runStart = -1;
+      runValues = [];
+      return;
+    }
     const startBeat = quantizeBeat(secToBeat(startSec), quantUnit);
     const rawBeats = Math.max(0, secToBeat(endSec) - secToBeat(startSec));
     const beats = Math.max(minQuantUnit(quantUnit), quantizeBeat(rawBeats, quantUnit));
     if (startBeat >= 0 && midi >= 40 && midi <= 96) {
       const last = notes[notes.length - 1];
+      const lastMeta = rawMeta[rawMeta.length - 1];
       if (last && last.startBeat === startBeat && last.midi === midi) {
         last.beats = Math.max(last.beats, beats);
+        if (lastMeta) {
+          lastMeta.endSec = Math.max(lastMeta.endSec, endSec);
+        }
+      } else if (last && lastMeta && lastMeta.midi === midi && startSec - lastMeta.endSec < mergeGapSec) {
+        // 直前ノートと同じ音程で、ギャップが小さい（<mergeGapSec）ので1音に結合する
+        const mergedBeats = Math.max(minQuantUnit(quantUnit), quantizeBeat(secToBeat(endSec) - secToBeat(lastMeta.startSec), quantUnit));
+        last.beats = mergedBeats;
+        lastMeta.endSec = endSec;
       } else {
         notes.push({ startBeat, beats, midi });
+        rawMeta.push({ startSec, endSec, midi });
       }
     }
     runStart = -1;
@@ -1672,6 +1856,12 @@ if (typeof module !== "undefined" && module.exports) {
     quantizeBeat,
     minQuantUnit,
     melodyNotesFromPitches,
+    octaveJumpCorrect,
+    medianFilterVoiced,
+    voicedHysteresis,
+    smoothMelodyPitches,
+    MELODY_SMOOTH_DEFAULTS,
+    MELODY_NOTE_DEFAULTS,
     buildScoreFromAnalysis,
     assignLyricsToEvents,
     assignTimedLyricsToEvents,
