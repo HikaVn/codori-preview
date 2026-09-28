@@ -385,6 +385,7 @@ const elements = {
   quizOptions: document.querySelector("#quiz-options"),
   quizResult: document.querySelector("#quiz-result"),
   nextQuiz: document.querySelector("#next-quiz"),
+  nextCourseQuiz: document.querySelector("#next-course-quiz"),
   progressionTitle: document.querySelector("#progression-title"),
   progressionNote: document.querySelector("#progression-note"),
   progressionSelector: document.querySelector("#progression-selector"),
@@ -1465,6 +1466,7 @@ function renderQuiz() {
     elements.quizAccent.innerHTML = "";
     elements.quizAnswerDetail.classList.add("is-hidden");
     elements.nextQuiz.disabled = true;
+    elements.nextCourseQuiz.hidden = true;
     elements.playQuiz.disabled = true;
     elements.playRootAssist.disabled = true;
     elements.quizScore.textContent = quizScoreText();
@@ -1480,8 +1482,9 @@ function renderQuiz() {
   elements.quizImage.alt = `${chord.display_name}のCodori鳥`;
   updateOnePointAccent(elements.quizAccent, chord);
   elements.quizAnswerDetail.classList.add("is-hidden");
-  elements.nextQuiz.disabled = !quizComplete;
-  elements.nextQuiz.textContent = quizComplete ? nextCourseButtonText() : "次の音へ";
+  elements.nextQuiz.disabled = true;
+  elements.nextCourseQuiz.hidden = !quizComplete;
+  elements.nextCourseQuiz.textContent = nextCourseButtonText();
   elements.quizAnswerName.textContent = chord.display_name;
   elements.quizAnswerNote.textContent = chord.learning_note;
   elements.quizFingeringImage.src = assetPath(chord.fingering_asset);
@@ -1491,7 +1494,7 @@ function renderQuiz() {
   document.querySelector(".quiz-listen-label").textContent = "音をきく";
   elements.quizScore.textContent = quizScoreText();
   elements.quizResult.textContent = quizComplete
-    ? "音あて完了。次のコースへ進めるよ。"
+    ? "このStageは完了済み。もう一度遊ぶなら音をきいてね。"
     : quizPromptForCurrentStage();
   elements.quizOptions.innerHTML = "";
 
@@ -1765,6 +1768,7 @@ function setPracticeStage(stageId, options = {}) {
     search: ""
   };
   resetQuizState();
+  quizAnsweredCount = Math.min(quizAnsweredTotalForStage(stageProgress()), quizTargetCount());
   renderedCompareKey = "";
   if (options.restore !== false) {
     restorePracticePosition();
@@ -1912,14 +1916,6 @@ function recordChordHeard(chord) {
   const heardCodeIds = new Set(heardCodeIdsForStage(stageProgress()));
   heardCodeIds.add(chord.code_id);
   updateStageProgress({ heardCodeIds: [...heardCodeIds] });
-
-  if (activeView === "card" && isStageHeardComplete(activePracticeStage, stageProgress())) {
-    window.setTimeout(() => {
-      if (isPracticeMode() && activeView === "card") {
-        setView("quiz");
-      }
-    }, 0);
-  }
 }
 
 function enableQuizOptions() {
@@ -1933,11 +1929,9 @@ function playQuizChord() {
     return;
   }
   quizHasPlayed = true;
-  if (!quizHasAnswered && !(isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress()))) {
+  if (!quizHasAnswered) {
     enableQuizOptions();
     elements.quizResult.textContent = quizReadyPromptForCurrentStage();
-  } else if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
   }
   playChord(chordData[quizIndex], { trackProgress: false });
 }
@@ -1994,11 +1988,6 @@ function handleQuizOption(button, option) {
     return;
   }
 
-  if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
-    return;
-  }
-
   if (quizHasAnswered) {
     playChord(option, { trackProgress: false });
     elements.quizResult.textContent = option.code_id === currentChord.code_id
@@ -2019,12 +2008,16 @@ function checkQuizAnswer(button, isCorrect) {
   document.querySelectorAll(".quiz-option").forEach((optionButton) => {
     optionButton.disabled = true;
   });
+  const wasQuizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   quizHasAnswered = true;
-  quizAnsweredCount += 1;
-  updateStageProgress({ quizAnsweredTotal: quizAnsweredCount });
+  if (!wasQuizComplete) {
+    quizAnsweredCount += 1;
+    updateStageProgress({ quizAnsweredTotal: quizAnsweredCount });
+  }
   const quizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   elements.nextQuiz.disabled = false;
-  elements.nextQuiz.textContent = quizComplete ? nextCourseButtonText() : "次の音へ";
+  elements.nextCourseQuiz.hidden = !quizComplete;
+  elements.nextCourseQuiz.textContent = nextCourseButtonText();
   elements.playQuiz.classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").textContent = "もう一度きく";
   elements.quizAnswerDetail.classList.remove("is-hidden");
@@ -2046,12 +2039,6 @@ function checkQuizAnswer(button, isCorrect) {
     optionButton.classList.add("is-reviewable");
   });
   elements.quizScore.textContent = quizScoreText();
-  if (quizComplete) {
-    document.querySelectorAll(".quiz-option").forEach((optionButton) => {
-      optionButton.disabled = true;
-    });
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
-  }
 }
 
 function setView(viewName) {
@@ -2307,14 +2294,11 @@ elements.nextQuiz.addEventListener("click", () => {
   if (!chordData.length) {
     return;
   }
-  if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
-    goToNextCourse();
-    return;
-  }
   quizIndex = chooseNextQuizIndex();
   saveLastLocation();
   renderQuiz();
 });
+elements.nextCourseQuiz.addEventListener("click", goToNextCourse);
 
 const mobileMenuMedia = window.matchMedia(MOBILE_MENU_QUERY);
 if (mobileMenuMedia.addEventListener) {
