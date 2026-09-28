@@ -1933,11 +1933,9 @@ function playQuizChord() {
     return;
   }
   quizHasPlayed = true;
-  if (!quizHasAnswered && !(isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress()))) {
+  if (!quizHasAnswered) {
     enableQuizOptions();
     elements.quizResult.textContent = quizReadyPromptForCurrentStage();
-  } else if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
   }
   playChord(chordData[quizIndex], { trackProgress: false });
 }
@@ -1994,11 +1992,6 @@ function handleQuizOption(button, option) {
     return;
   }
 
-  if (isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress())) {
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
-    return;
-  }
-
   if (quizHasAnswered) {
     playChord(option, { trackProgress: false });
     elements.quizResult.textContent = option.code_id === currentChord.code_id
@@ -2020,8 +2013,10 @@ function checkQuizAnswer(button, isCorrect) {
     optionButton.disabled = true;
   });
   quizHasAnswered = true;
-  quizAnsweredCount += 1;
-  updateStageProgress({ quizAnsweredTotal: quizAnsweredCount });
+  quizAnsweredCount = isPracticeMode()
+    ? Math.min(quizAnsweredCount + 1, quizTargetCount())
+    : quizAnsweredCount + 1;
+  updateStageProgress({ quizAnsweredTotal: Math.max(quizAnsweredCount, quizAnsweredTotalForStage()) });
   const quizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   elements.nextQuiz.disabled = false;
   elements.nextQuiz.textContent = quizComplete ? nextCourseButtonText() : "次の音へ";
@@ -2046,12 +2041,6 @@ function checkQuizAnswer(button, isCorrect) {
     optionButton.classList.add("is-reviewable");
   });
   elements.quizScore.textContent = quizScoreText();
-  if (quizComplete) {
-    document.querySelectorAll(".quiz-option").forEach((optionButton) => {
-      optionButton.disabled = true;
-    });
-    elements.quizResult.textContent = "音あて完了。次のコースへ進めるよ。";
-  }
 }
 
 function setView(viewName) {
