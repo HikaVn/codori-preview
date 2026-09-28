@@ -295,7 +295,7 @@ let quizCorrectCount = 0;
 let quizAnsweredCount = 0;
 let quizHasPlayed = false;
 let quizHasAnswered = false;
-let currentQuizAssist = { mode: "foundation", root: "C" };
+let currentQuizAssist = null;
 let activeView = initialView;
 let renderedCompareKey = "";
 let activeFilters = {
@@ -487,34 +487,13 @@ function updateOnePointAccent(element, chord) {
   element.innerHTML = onePointAccentImage(chord);
 }
 
-function quizReferenceRoot() {
-  if (activePracticeStage?.quiz_reference_root) {
-    return activePracticeStage.quiz_reference_root;
-  }
-  if (activeFilters.root !== ALL_FILTER) {
-    return activeFilters.root;
-  }
-  return "C";
-}
-
-function quizAssistForOptions(options) {
-  const roots = [...new Set(options.map((option) => rootForChord(option)))];
-  if (roots.length === 1) {
-    return {
-      mode: "foundation",
-      root: roots[0],
-      label: "土台をきく",
-      ariaLabel: "音あての土台をきく",
-      message: "土台を鳴らしたよ。同じ根っこのまま、響きの色を聞いてみよう。"
-    };
-  }
-  const root = quizReferenceRoot();
+function quizAssistForChord(chord) {
   return {
-    mode: "reference",
-    root,
-    label: "基準をきく",
-    ariaLabel: `${root}の基準音をきく`,
-    message: `${root}の基準音を鳴らしたよ。答えの根音ではなく、耳のものさしとして聞いてみよう。`
+    mode: "chord-root",
+    root: rootForChord(chord),
+    label: "基準音をきく",
+    ariaLabel: "今の問題の基準音をきく",
+    message: "今の問題の基準音を鳴らしたよ。コードの響きと聞き比べてみよう。"
   };
 }
 
@@ -1502,7 +1481,7 @@ function renderQuiz() {
   const optionPool = shuffle(chordData.filter((option) => option.code_id !== chord.code_id))
     .slice(0, Math.min(optionLimit, chordData.length - 1));
   const quizOptions = shuffle([chord, ...optionPool]);
-  updateQuizAssistButton(quizAssistForOptions(quizOptions));
+  updateQuizAssistButton(quizAssistForChord(chord));
   quizOptions.forEach((option) => {
     const button = document.createElement("button");
     button.className = "quiz-option";
@@ -1941,8 +1920,8 @@ async function playRootAssist() {
     return;
   }
 
-  const root = currentQuizAssist.root || "C";
-  const frequency = ROOT_NOTE_FREQUENCIES[root] || chordData[quizIndex].temp_audio_notes?.[0];
+  const root = rootForChord(chordData[quizIndex]);
+  const frequency = ROOT_NOTE_FREQUENCIES[root];
   if (!frequency) {
     return;
   }

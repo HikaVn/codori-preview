@@ -302,25 +302,12 @@ assets/app/characters/action-candidate-old-c-v7/
 
 ## 音あて補助音
 
-音あては絶対音感テストにしない。
-ただし、答えの根音を常に鳴らすと、根音が混ざるStageではそれだけで回答できてしまう。
-
-そのため、補助音は以下のように切り替える。
-
-```text
-選択肢の根音が同じ場合: 土台をきく
-選択肢の根音が混ざる場合: 基準をきく
-```
-
-`土台をきく`は、同じ根音のコード種類を聞き分けるために、答えと同じ根音を鳴らす。
-例：`C / Cm / C7 / Cadd9`
-
-`基準をきく`は、答えの根音ではなく、Stageの中心音を鳴らす。
+`基準音をきく`は、現在の問題コードの根音を鳴らす。Cの問題ならC、DmならD、G7ならGに切り替わる。
+問題の答えを文字で明かさないよう、ボタンと回答前の案内文には音名を表示しない。
+ただし根音が異なる選択肢を含む問題では、この補助音が回答の手がかりになる。
 
 補助音は聞き取りやすさを優先し、基音に対して約20%の第2倍音を加える。
-例：CのまわりのStageではC、minorキーの入口ではAを鳴らす。
-
-Stageごとの基準音は`assets/app/data/practice-stages.json`の`quiz_reference_root`で指定する。
+`assets/app/data/practice-stages.json`の`quiz_reference_root`は旧仕様のStage中心音で、現在の音あて補助音には使わない。
 
 ```text
 assets/logo/codori-logo-app-header-rough-04.svg
