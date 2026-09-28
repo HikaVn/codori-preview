@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260709-chord-forms-v1">
+    <link rel="stylesheet" href="./styles.css?v=20260928-quiz-replay-v1">
   </head>
   <body class="is-mode-select-only">
     <main class="app-shell">
@@ -244,7 +244,10 @@
             <p class="quiz-score" id="quiz-score">0 / 0</p>
             <div class="quiz-options" id="quiz-options"></div>
             <p class="quiz-result" id="quiz-result" aria-live="polite"></p>
-            <button class="secondary-button" id="next-quiz" type="button">次の音へ</button>
+            <div class="quiz-actions">
+              <button class="secondary-button" id="next-quiz" type="button">次の音へ</button>
+              <button class="primary-button" id="next-course-quiz" type="button" hidden>次のコースへ</button>
+            </div>
           </div>
         </div>
       </section>
@@ -266,6 +269,6 @@
     </main>
 
     <script src="./chord-forms.js?v=20260709-chord-forms-v1"></script>
-    <script src="./main.js?v=20260709-chord-forms-v1"></script>
+    <script src="./main.js?v=20260928-quiz-replay-v1"></script>
   </body>
 </html>
