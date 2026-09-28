@@ -170,7 +170,7 @@ const PRACTICE_SOURCE_PATHS = [
   "../assets/app/data/expansion-set-01.json",
   "../assets/app/data/m7-set-01.json"
 ];
-const DATA_CACHE_VERSION = "20260603-hide-answer-placeholder-v1";
+const DATA_CACHE_VERSION = "20260916-root-tone-assist-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
 const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
@@ -284,7 +284,7 @@ let quizCorrectCount = 0;
 let quizAnsweredCount = 0;
 let quizHasPlayed = false;
 let quizHasAnswered = false;
-let currentQuizAssist = { mode: "foundation", root: "C" };
+let currentQuizAssist = { mode: "root", root: "C", message: "", quizCodeId: null };
 let activeView = initialView;
 let renderedCompareKey = "";
 let activeFilters = {
@@ -299,6 +299,10 @@ let isStoryListVisible = false;
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
 const missingAudioFiles = new Set();
+const activeSyntheticPlaybacks = new Set();
+const activeAudioElements = new Set();
+const pendingPlaybackTimers = new Set();
+let playbackGeneration = 0;
 
 const elements = {
   practiceStageDescription: document.querySelector("#practice-stage-description"),
@@ -467,43 +471,27 @@ function updateOnePointAccent(element, chord) {
   element.innerHTML = onePointAccentImage(chord);
 }
 
-function quizReferenceRoot() {
-  if (activePracticeStage?.quiz_reference_root) {
-    return activePracticeStage.quiz_reference_root;
-  }
-  if (activeFilters.root !== ALL_FILTER) {
-    return activeFilters.root;
-  }
-  return "C";
-}
-
-function quizAssistForOptions(options) {
-  const roots = [...new Set(options.map((option) => rootForChord(option)))];
-  if (roots.length === 1) {
-    return {
-      mode: "foundation",
-      root: roots[0],
-      label: "土台をきく",
-      ariaLabel: "音あての土台をきく",
-      message: "土台を鳴らしたよ。同じ根っこのまま、響きの色を聞いてみよう。"
-    };
-  }
-  const root = quizReferenceRoot();
+function quizAssistForChord(chord) {
+  const root = rootForChord(chord);
   return {
-    mode: "reference",
+    mode: "root",
     root,
-    label: "基準をきく",
-    ariaLabel: `${root}の基準音をきく`,
-    message: `${root}の基準音を鳴らしたよ。答えの根音ではなく、耳のものさしとして聞いてみよう。`
+    label: "ルート音をきく",
+    ariaLabel: `${root}のルート音をきく`,
+    message: `${root}のルート音を鳴らしたよ。コードの響きと名前をつなげて聞いてみよう。`
   };
 }
 
-function updateQuizAssistButton(assist) {
-  currentQuizAssist = assist;
+function updateQuizAssistButton(assist, chord = null) {
+  currentQuizAssist = {
+    ...assist,
+    quizCodeId: chord?.code_id || null,
+  };
   elements.playRootAssist.textContent = assist.label;
   elements.playRootAssist.setAttribute("aria-label", assist.ariaLabel);
   elements.playRootAssist.dataset.assistMode = assist.mode;
   elements.playRootAssist.dataset.assistRoot = assist.root;
+  elements.playRootAssist.dataset.assistCodeId = chord?.code_id || "";
 }
 
 function isPracticeMode() {
@@ -1135,6 +1123,7 @@ function updateTabAvailability() {
 }
 
 function applyFilters() {
+  stopAudioPlayback();
   chordData = filteredChordData();
   currentIndex = 0;
   resetQuizState();
@@ -1236,6 +1225,8 @@ function renderQuiz() {
   quizHasPlayed = false;
   quizHasAnswered = false;
   if (!chord) {
+    currentQuizAssist = { mode: "root", root: "C", message: "", quizCodeId: null };
+    elements.playRootAssist.dataset.assistCodeId = "";
     elements.quizImage.removeAttribute("src");
     elements.quizImage.alt = "条件に合うCodori鳥はまだ見つかりません";
     elements.quizAccent.innerHTML = "";
@@ -1272,7 +1263,7 @@ function renderQuiz() {
   const optionPool = shuffle(chordData.filter((option) => option.code_id !== chord.code_id))
     .slice(0, Math.min(optionLimit, chordData.length - 1));
   const quizOptions = shuffle([chord, ...optionPool]);
-  updateQuizAssistButton(quizAssistForOptions(quizOptions));
+  updateQuizAssistButton(quizAssistForChord(chord), chord);
   quizOptions.forEach((option) => {
     const button = document.createElement("button");
     button.className = "quiz-option";
@@ -1290,6 +1281,7 @@ async function setChordSet(setId) {
     return;
   }
 
+  stopAudioPlayback();
   activePracticeStage = null;
   activeSet = nextSet;
   saveLastLocation();
@@ -1353,6 +1345,7 @@ function renderStageTargets() {
     button.setAttribute("style", keyStyle(chord));
     button.setAttribute("aria-label", `${chord.display_name}の音カードへ`);
     button.addEventListener("click", () => {
+      stopAudioPlayback();
       currentIndex = index;
       renderCard();
       updateStageProgress();
@@ -1507,6 +1500,7 @@ function setPracticeStage(stageId, options = {}) {
     return;
   }
 
+  stopAudioPlayback();
   activePracticeStage = nextStage;
   activeView = options.view || (activeView === "progression" && !activePracticeStage.progressions.length ? "card" : activeView);
   fullChordData = resolveStageCodes(activePracticeStage);
@@ -1628,13 +1622,18 @@ function playSelectedProgression() {
     return;
   }
 
+  const playbackToken = stopAudioPlayback();
   resumeAudioContext();
   updateStageProgress({ progressionHeard: true, heard: true });
   progression.code_ids
     .map((codeId) => practiceCatalog.get(codeId))
     .filter(Boolean)
     .forEach((chord, index) => {
-      window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
+      const timer = window.setTimeout(() => {
+        pendingPlaybackTimers.delete(timer);
+        playChord(chord, { trackProgress: false, playbackToken });
+      }, index * 950);
+      pendingPlaybackTimers.add(timer);
     });
 }
 
@@ -1643,10 +1642,15 @@ function playSelectedCompare() {
     return;
   }
 
+  const playbackToken = stopAudioPlayback();
   resumeAudioContext();
   updateStageProgress({ heard: true });
   chordData.slice(0, Math.min(chordData.length, 8)).forEach((chord, index) => {
-    window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
+    const timer = window.setTimeout(() => {
+      pendingPlaybackTimers.delete(timer);
+      playChord(chord, { trackProgress: false, playbackToken });
+    }, index * 950);
+    pendingPlaybackTimers.add(timer);
   });
 }
 
@@ -1669,48 +1673,42 @@ function playQuizChord() {
 }
 
 async function playRootAssist() {
-  if (!chordData[quizIndex]) {
+  let chord = chordData[quizIndex];
+  if (!chord) {
     return;
   }
 
-  const root = currentQuizAssist.root || "C";
-  const frequency = ROOT_NOTE_FREQUENCIES[root] || chordData[quizIndex].temp_audio_notes?.[0];
+  if (currentQuizAssist.quizCodeId !== chord.code_id) {
+    stopAudioPlayback();
+    renderQuiz();
+    chord = chordData[quizIndex];
+  }
+  if (!chord || currentQuizAssist.quizCodeId !== chord.code_id) {
+    return;
+  }
+
+  const assist = currentQuizAssist;
+  const questionCodeId = chord.code_id;
+  const root = rootForChord(chord);
+  const frequency = ROOT_NOTE_FREQUENCIES[root];
   if (!frequency) {
+    console.warn(`Unknown quiz assist root: ${root}`);
     return;
   }
 
+  const playbackToken = stopAudioPlayback();
   const context = await ensureAudioContextReady();
-  const now = context.currentTime;
-  const fundamental = context.createOscillator();
-  const harmonic = context.createOscillator();
-  const fundamentalGain = context.createGain();
-  const harmonicGain = context.createGain();
-
-  fundamental.type = "sine";
-  fundamental.frequency.value = frequency;
-  harmonic.type = "sine";
-  harmonic.frequency.value = frequency * 2;
-
-  fundamentalGain.gain.setValueAtTime(0.0001, now);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
-  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  harmonicGain.gain.setValueAtTime(0.0001, now);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
-  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-
-  fundamental.connect(fundamentalGain);
-  harmonic.connect(harmonicGain);
-  fundamentalGain.connect(context.destination);
-  harmonicGain.connect(context.destination);
-  fundamental.start(now);
-  harmonic.start(now);
-  fundamental.stop(now + 0.95);
-  harmonic.stop(now + 0.95);
+  if (
+    playbackToken !== playbackGeneration
+    || chordData[quizIndex]?.code_id !== questionCodeId
+    || currentQuizAssist.quizCodeId !== questionCodeId
+  ) {
+    return;
+  }
+  playSyntheticTone(frequency, context);
 
   if (!quizHasAnswered) {
-    elements.quizResult.textContent = currentQuizAssist.message;
+    elements.quizResult.textContent = assist.message;
   }
 }
 
@@ -1768,8 +1766,12 @@ function checkQuizAnswer(button, isCorrect) {
 }
 
 function setView(viewName) {
+  const previousView = activeView;
   if (viewName === "progression" && isPracticeMode() && !activeProgressions().length) {
     viewName = "card";
+  }
+  if (previousView !== viewName) {
+    stopAudioPlayback();
   }
   activeView = viewName;
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -1860,39 +1862,94 @@ function resumeAudioContext() {
   return context;
 }
 
-async function playChord(chord, options = {}) {
-  const context = await ensureAudioContextReady();
-  if (options.trackProgress !== false) {
-    updateStageProgress({ heard: true });
-  }
-  if (await playAudioFile(chord)) {
-    return;
-  }
-  playSyntheticChord(chord, context);
+function registerSyntheticPlayback(context, master, sources, durationSeconds) {
+  let stopped = false;
+  const stopPlayback = () => {
+    if (stopped) return;
+    stopped = true;
+    const now = context.currentTime;
+    try {
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(0.0001, now);
+    } catch (error) {
+      console.warn("Failed to mute synthetic playback", error);
+    }
+    sources.forEach(({ node, startTime }) => {
+      try {
+        node.stop(Math.max(now + 0.02, startTime + 0.001));
+      } catch (error) {
+        // Nodes that already stopped are safe to ignore during cleanup.
+      }
+    });
+    activeSyntheticPlaybacks.delete(stopPlayback);
+  };
+
+  activeSyntheticPlaybacks.add(stopPlayback);
+  window.setTimeout(() => activeSyntheticPlaybacks.delete(stopPlayback), (durationSeconds + 0.2) * 1000);
 }
 
-async function playAudioFile(chord) {
-  if (!chord.sound_file_ready || !chord.sound_file || missingAudioFiles.has(chord.sound_file)) {
-    return false;
-  }
-
-  const soundUrl = assetPath(chord.sound_file);
-  try {
-    const audio = new Audio(soundUrl);
-    audio.preload = "auto";
-    await audio.play();
-    return true;
-  } catch (error) {
-    if (!TRANSIENT_AUDIO_ERROR_NAMES.has(error?.name)) {
-      missingAudioFiles.add(chord.sound_file);
+function stopAudioPlayback() {
+  playbackGeneration += 1;
+  pendingPlaybackTimers.forEach((timer) => window.clearTimeout(timer));
+  pendingPlaybackTimers.clear();
+  activeSyntheticPlaybacks.forEach((stopPlayback) => stopPlayback());
+  activeAudioElements.forEach((audio) => {
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (error) {
+      console.warn("Failed to stop audio file", error);
     }
-    return false;
-  }
+  });
+  activeAudioElements.clear();
+  return playbackGeneration;
+}
+
+function playSyntheticTone(frequency, context, durationSeconds = 0.95) {
+  const now = context.currentTime;
+  const master = context.createGain();
+  const fundamental = context.createOscillator();
+  const harmonic = context.createOscillator();
+  const fundamentalGain = context.createGain();
+  const harmonicGain = context.createGain();
+
+  master.gain.setValueAtTime(1, now);
+  master.connect(context.destination);
+  fundamental.type = "sine";
+  fundamental.frequency.value = frequency;
+  harmonic.type = "sine";
+  harmonic.frequency.value = frequency * 2;
+  fundamentalGain.gain.setValueAtTime(0.0001, now);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
+  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  harmonicGain.gain.setValueAtTime(0.0001, now);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
+  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  fundamental.connect(fundamentalGain);
+  harmonic.connect(harmonicGain);
+  fundamentalGain.connect(master);
+  harmonicGain.connect(master);
+  fundamental.start(now);
+  harmonic.start(now);
+  fundamental.stop(now + durationSeconds);
+  harmonic.stop(now + durationSeconds);
+  registerSyntheticPlayback(
+    context,
+    master,
+    [
+      { node: fundamental, startTime: now },
+      { node: harmonic, startTime: now },
+    ],
+    durationSeconds,
+  );
 }
 
 function playSyntheticChord(chord, context = getAudioContext()) {
   const now = context.currentTime;
   const master = context.createGain();
+  const sources = [];
   master.gain.setValueAtTime(0.0001, now);
   master.gain.exponentialRampToValueAtTime(0.16, now + 0.04);
   master.gain.setValueAtTime(0.16, now + 1.15);
@@ -1925,11 +1982,61 @@ function playSyntheticChord(chord, context = getAudioContext()) {
     harmonic.start(start);
     oscillator.stop(start + 2.6);
     harmonic.stop(start + 2.6);
+    sources.push(
+      { node: oscillator, startTime: start },
+      { node: harmonic, startTime: start },
+    );
   });
+  registerSyntheticPlayback(context, master, sources, 2.6);
+}
+
+async function playChord(chord, options = {}) {
+  if (!chord) return;
+  const playbackToken = options.playbackToken ?? stopAudioPlayback();
+  const context = await ensureAudioContextReady();
+  if (playbackToken !== playbackGeneration) return;
+  if (options.trackProgress !== false) {
+    updateStageProgress({ heard: true });
+  }
+  if (await playAudioFile(chord, () => playbackToken === playbackGeneration)) {
+    return;
+  }
+  if (playbackToken !== playbackGeneration) return;
+  playSyntheticChord(chord, context);
+}
+
+async function playAudioFile(chord, shouldContinue = () => true) {
+  if (!chord.sound_file_ready || !chord.sound_file || missingAudioFiles.has(chord.sound_file)) {
+    return false;
+  }
+
+  const soundUrl = assetPath(chord.sound_file);
+  let cleanup = () => {};
+  try {
+    const audio = new Audio(soundUrl);
+    cleanup = () => activeAudioElements.delete(audio);
+    audio.preload = "auto";
+    audio.addEventListener("ended", cleanup, { once: true });
+    activeAudioElements.add(audio);
+    await audio.play();
+    if (!shouldContinue()) {
+      cleanup();
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    return true;
+  } catch (error) {
+    cleanup();
+    if (!TRANSIENT_AUDIO_ERROR_NAMES.has(error?.name)) {
+      missingAudioFiles.add(chord.sound_file);
+    }
+    return false;
+  }
 }
 
 function handleAppReturn() {
   if (document.hidden) {
+    stopAudioPlayback();
     return;
   }
   if (audioContext?.state === "closed") {
@@ -1992,6 +2099,7 @@ elements.prevCard.addEventListener("click", () => {
   if (!chordData.length) {
     return;
   }
+  stopAudioPlayback();
   currentIndex = (currentIndex - 1 + chordData.length) % chordData.length;
   updateStageProgress();
   renderCard();
@@ -2000,6 +2108,7 @@ elements.nextCard.addEventListener("click", () => {
   if (!chordData.length) {
     return;
   }
+  stopAudioPlayback();
   currentIndex = (currentIndex + 1) % chordData.length;
   updateStageProgress();
   renderCard();
@@ -2008,6 +2117,7 @@ elements.nextQuiz.addEventListener("click", () => {
   if (!chordData.length) {
     return;
   }
+  stopAudioPlayback();
   quizIndex = chooseNextQuizIndex();
   saveLastLocation();
   renderQuiz();
