@@ -1418,6 +1418,9 @@ function setDiagramMode(mode) {
     || (mode === "piano" && !window.CodoriChordForms?.keyboardDataUri)) {
     return;
   }
+  if (diagramMode === "ukulele" && mode === "piano") {
+    cardFormSelections.clear();
+  }
   diagramMode = mode;
   try {
     localStorage.setItem(DIAGRAM_MODE_STORAGE_KEY, mode);
@@ -1427,8 +1430,7 @@ function setDiagramMode(mode) {
   updateDiagramModeButtons();
   const cardChord = chordData[currentIndex];
   if (cardChord) {
-    applyCardFormImage(cardChord);
-    elements.fingeringFormSelector.classList.toggle("is-hidden", mode === "piano" || cardChordForms.length < 2);
+    renderCardFormSelector(cardChord);
   }
   const quizChord = chordData[quizIndex];
   if (quizChord) {
