@@ -1164,6 +1164,15 @@ body.is-catalog-active .learning-menu-switch {
   max-height: none;
 }
 
+.playable-diagram {
+  cursor: pointer;
+}
+
+.playable-diagram:focus-visible {
+  outline: 3px solid #1e5aa8;
+  outline-offset: 3px;
+}
+
 /* 運指の形（基本形・展開形）えらび */
 .form-selector {
   display: flex;

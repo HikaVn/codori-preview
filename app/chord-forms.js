@@ -403,13 +403,38 @@
     return keyboardUriCache.get(key);
   }
 
+  // SVGと同じ座標系で、画像上の操作位置を単音へ変換する。
+  function diagramNoteAt(mode, x, y, options = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (mode === "ukulele") {
+      const frets = parseBaseFrets(options.frets);
+      if (!frets || x < 32 || x > 208 || y < 62 || y > 300) return null;
+      const index = Math.max(0, Math.min(3, Math.round((x - 54) / 44)));
+      return { midi: OPEN_STRING_MIDIS[index] + frets[index], label: `${STRING_LABELS[index]}弦`, index };
+    }
+    if (mode !== "piano") return null;
+    const top = options.compact ? 10 : 48;
+    if (x < 18 || x >= 242 || y < top || y >= top + 88) return null;
+    const blackKeys = [[1, 0], [3, 1], [6, 3], [8, 4], [10, 5]];
+    for (const [pitchClass, whiteIndex] of blackKeys) {
+      const left = 40 + whiteIndex * 32;
+      if (x >= left && x < left + 20 && y < top + 56) {
+        return { midi: 60 + pitchClass, label: SIMPLE_NOTE_NAMES[pitchClass] };
+      }
+    }
+    const whiteKeys = [0, 2, 4, 5, 7, 9, 11];
+    const pitchClass = whiteKeys[Math.floor((x - 18) / 32)];
+    return pitchClass === undefined ? null : { midi: 60 + pitchClass, label: SIMPLE_NOTE_NAMES[pitchClass] };
+  }
+
   const api = {
     formsForChord,
     fingeringSvg,
     fingeringDataUri,
     keyboardNotesForChord,
     keyboardSvg,
-    keyboardDataUri
+    keyboardDataUri,
+    diagramNoteAt
   };
 
   if (typeof window !== "undefined") {

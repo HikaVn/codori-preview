@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { keyboardNotesForChord, keyboardSvg } = require("../app/chord-forms.js");
+const { keyboardNotesForChord, keyboardSvg, diagramNoteAt } = require("../app/chord-forms.js");
 
 function checkChord(name, expected) {
   assert.deepEqual(keyboardNotesForChord(name)?.noteNames, expected, name);
@@ -22,6 +22,16 @@ assert.match(svg, /<svg /);
 assert.match(svg, /C · E · G · D\(9\)/);
 assert.equal((svg.match(/data-selected="true"/g) || []).length, 4);
 assert.equal((keyboardSvg("Cadd9", { compact: true }).match(/data-selected="true"/g) || []).length, 4);
+
+assert.deepEqual(diagramNoteAt("ukulele", 54, 160, { frets: "0003" }), { midi: 67, label: "G弦", index: 0 });
+assert.deepEqual(diagramNoteAt("ukulele", 186, 160, { frets: "0003" }), { midi: 72, label: "A弦", index: 3 });
+assert.deepEqual(diagramNoteAt("ukulele", 54, 160, { frets: [5, 4, 3, 3] }), { midi: 72, label: "G弦", index: 0 });
+assert.equal(diagramNoteAt("ukulele", 54, 160, { frets: "invalid" }), null);
+assert.deepEqual(diagramNoteAt("piano", 25, 60), { midi: 60, label: "C" });
+assert.deepEqual(diagramNoteAt("piano", 45, 60), { midi: 61, label: "Db" });
+assert.deepEqual(diagramNoteAt("piano", 45, 110), { midi: 60, label: "C" });
+assert.deepEqual(diagramNoteAt("piano", 232, 30, { compact: true }), { midi: 71, label: "B" });
+assert.equal(diagramNoteAt("piano", 25, 5), null);
 
 let checked = 0;
 let voicingsWithOmissions = 0;

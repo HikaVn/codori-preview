@@ -1355,6 +1355,56 @@ function applyDiagramImage(image, chord, options = {}) {
   image.src = diagram.src;
   image.alt = diagram.alt;
   image.classList.toggle("is-piano", diagram.isPiano);
+  makeDiagramPlayable(image, chord, options);
+}
+
+function makeDiagramPlayable(image, chord, options = {}) {
+  const piano = image.classList.contains("is-piano");
+  const mode = piano ? "piano" : "ukulele";
+  const frets = options.frets || chord.ukulele_fingering;
+  const notes = piano ? CodoriChordForms.keyboardNotesForChord(chord.display_name) : null;
+  let selected = piano ? notes?.root || 0 : 0;
+  const names = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const selectedNote = () => piano
+    ? { midi: 60 + selected, label: names[selected] }
+    : CodoriChordForms.diagramNoteAt("ukulele", 54 + 44 * selected, 160, { frets });
+  const updateLabel = () => {
+    const note = selectedNote();
+    image.setAttribute("aria-label", `${chord.display_name}の${piano ? "鍵盤" : "運指"}。左右キーで${piano ? "鍵" : "弦"}を選び、Enterで${note.label}を鳴らす`);
+  };
+  image.classList.add("playable-diagram");
+  image.tabIndex = 0;
+  image.setAttribute("role", "button");
+  updateLabel();
+  image.onclick = (event) => {
+    const rect = image.getBoundingClientRect();
+    const style = getComputedStyle(image);
+    const left = parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+    const top = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+    const width = rect.width - left - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+    const height = rect.height - top - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom);
+    const svgWidth = piano ? 260 : 240;
+    const svgHeight = piano ? (options.compact ? 108 : 180) : 320;
+    const scale = Math.min(width / svgWidth, height / svgHeight);
+    const x = (event.clientX - rect.left - left - (width - svgWidth * scale) / 2) / scale;
+    const y = (event.clientY - rect.top - top - (height - svgHeight * scale) / 2) / scale;
+    const note = CodoriChordForms.diagramNoteAt(mode, x, y, { frets, compact: options.compact });
+    if (!note) return;
+    selected = piano ? note.midi - 60 : note.index;
+    updateLabel();
+    playDiagramNote(note.midi);
+  };
+  image.onkeydown = (event) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      selected = (selected + (event.key === "ArrowRight" ? 1 : -1) + (piano ? 12 : 4)) % (piano ? 12 : 4);
+      updateLabel();
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const note = selectedNote();
+      if (note) playDiagramNote(note.midi);
+    }
+  };
 }
 
 function updateDiagramModeButtons() {
@@ -1406,6 +1456,11 @@ function renderCard() {
     elements.fingeringImage.removeAttribute("src");
     elements.fingeringImage.alt = "条件に合う運指はまだ見つかりません";
     elements.fingeringImage.classList.remove("is-piano");
+    elements.fingeringImage.onclick = null;
+    elements.fingeringImage.onkeydown = null;
+    elements.fingeringImage.removeAttribute("tabindex");
+    elements.fingeringImage.removeAttribute("role");
+    elements.fingeringImage.classList.remove("playable-diagram");
     document.querySelector(".fingering-frame").classList.remove("is-piano");
     renderCardFormSelector(null);
     elements.learningNote.textContent = "そのコードは、いまの森では見つからなかった。";
@@ -1442,6 +1497,9 @@ function applyCardFormImage(chord) {
   } else {
     elements.fingeringImage.src = assetPath(chord.fingering_asset);
     elements.fingeringImage.alt = `${chord.display_name}のウクレレ運指`;
+  }
+  if (window.CodoriChordForms?.diagramNoteAt) {
+    makeDiagramPlayable(elements.fingeringImage, chord, { frets: form?.frets || chord.ukulele_fingering });
   }
 }
 
@@ -1518,6 +1576,7 @@ function renderCompare() {
       <img class="compare-fingering${diagram.isPiano ? " is-piano" : ""}" src="${diagram.src}" alt="${diagram.alt}" loading="lazy">
     `;
     card.querySelector("button").addEventListener("click", () => playChord(chord));
+    makeDiagramPlayable(card.querySelector(".compare-fingering"), chord, { compact: true });
     elements.compareGrid.appendChild(card);
   });
 }
@@ -1934,6 +1993,7 @@ function renderProgression() {
       <img class="progression-fingering${diagram.isPiano ? " is-piano" : ""}" src="${diagram.src}" alt="${diagram.alt}" loading="lazy">
     `;
     step.querySelector("button").addEventListener("click", () => playChord(chord));
+    makeDiagramPlayable(step.querySelector(".progression-fingering"), chord, { compact: true });
     elements.progressionPath.appendChild(step);
 
     if (index < routeChords.length - 1) {
@@ -2228,7 +2288,7 @@ async function playChord(chord, options = {}) {
   if (!options.frequencies && await playAudioFile(chord)) {
     return;
   }
-  playSyntheticChord(chord, context, options.frequencies);
+  playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes);
 }
 
 async function playAudioFile(chord) {
@@ -2250,8 +2310,7 @@ async function playAudioFile(chord) {
   }
 }
 
-function playSyntheticChord(chord, context = getAudioContext(), frequencies = null) {
-  const audioNotes = frequencies || chord.temp_audio_notes;
+function playSyntheticNotes(context, audioNotes) {
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
@@ -2287,6 +2346,18 @@ function playSyntheticChord(chord, context = getAudioContext(), frequencies = nu
     oscillator.stop(start + 2.6);
     harmonic.stop(start + 2.6);
   });
+}
+
+async function playDiagramNote(midi) {
+  if (!Number.isInteger(midi) || midi < 0 || midi > 127) return;
+  try {
+    const context = await ensureAudioContextReady();
+    if (context.state !== "running") return;
+    const frequency = 440 * Math.pow(2, (midi - 69) / 12);
+    playSyntheticNotes(context, [frequency]);
+  } catch (error) {
+    console.warn("Diagram note playback failed.", error);
+  }
 }
 
 function handleAppReturn() {
