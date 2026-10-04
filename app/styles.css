@@ -898,6 +898,59 @@ a.song-mode-link {
   text-align: center;
 }
 
+.diagram-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.diagram-switch {
+  display: flex;
+  min-width: 0;
+}
+
+.diagram-mode-button {
+  min-width: 88px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.diagram-mode-button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.diagram-mode-button:last-child {
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+
+.diagram-mode-button[aria-pressed="true"] {
+  position: relative;
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #ffffff;
+}
+
+.diagram-mode-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.diagram-mode-button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
 .view {
   display: none;
 }
@@ -909,6 +962,7 @@ a.song-mode-link {
 body.is-mode-select-only .progress,
 body.is-mode-select-only .tabs,
 body.is-mode-select-only .mode-guide,
+body.is-mode-select-only .diagram-toolbar,
 body.is-mode-select-only .filter-panel,
 body.is-mode-select-only .view.is-active {
   display: none;
@@ -1105,6 +1159,20 @@ body.is-catalog-active .learning-menu-switch {
   object-fit: contain;
 }
 
+.fingering-frame.is-piano img {
+  width: min(100%, 280px);
+  max-height: none;
+}
+
+.playable-diagram {
+  cursor: pointer;
+}
+
+.playable-diagram:focus-visible {
+  outline: 3px solid #1e5aa8;
+  outline-offset: 3px;
+}
+
 /* 運指の形（基本形・展開形）えらび */
 .form-selector {
   display: flex;
@@ -1255,6 +1323,11 @@ body.is-catalog-active .learning-menu-switch {
 
 .compare-fingering {
   padding: 10px;
+}
+
+.compare-card img.compare-fingering.is-piano {
+  aspect-ratio: 2.4;
+  padding: 4px;
 }
 
 .compare-name {
@@ -1424,6 +1497,15 @@ body.is-catalog-active .learning-menu-switch {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.quiz-answer-detail.is-piano {
+  grid-template-columns: 1fr;
+}
+
+.quiz-answer-detail.is-piano img {
+  width: min(100%, 260px);
+  justify-self: center;
 }
 
 .quiz-listen-actions.is-hidden,
@@ -1728,6 +1810,10 @@ body.is-catalog-active .learning-menu-switch {
 
   .app-shell {
     padding: 10px;
+  }
+
+  .diagram-toolbar {
+    justify-content: space-between;
   }
 
   .top-bar {
