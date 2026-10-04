@@ -11,6 +11,10 @@
   const HIGHER_POSITION_STEP = 3; // 「さらに上の形」と見なすポジション差
 
   const ROOT_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const NOTE_LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+  const NATURAL_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+  const SIMPLE_NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const INTERVAL_LETTER_STEPS = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 4, 10: 6, 11: 6, 14: 8 };
   const QUALITY_INTERVALS = {
     "": [0, 4, 7],
     maj7: [0, 4, 7, 11],
@@ -32,7 +36,7 @@
     mmaj7: [0, 3, 7, 11],
     "m7-5": [0, 3, 6, 10],
     m7b5: [0, 3, 6, 10],
-    // ウクレレの運指図の慣習（既存アセットも同じ）に合わせて、dimはdim7の形で探す
+    // 学習画面の既存運指と仮音源に合わせ、dimはdim7相当の4音として扱う。
     dim: [0, 3, 6, 9],
     dim7: [0, 3, 6, 9],
     aug: [0, 4, 8],
@@ -52,7 +56,7 @@
     } else if (match[2] === "b") {
       semitone -= 1;
     }
-    return { semitone: (semitone + 12) % 12, suffix: match[3] || "" };
+    return { semitone: (semitone + 12) % 12, suffix: match[3] || "", rootLetter: match[1] };
   }
 
   function intervalsForSuffix(suffix) {
@@ -321,10 +325,91 @@
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fingeringSvg(chordName, frets))}`;
   }
 
+  function keyboardNotesForChord(chordName) {
+    const parsed = parseChordName(chordName);
+    if (!parsed || !Object.prototype.hasOwnProperty.call(QUALITY_INTERVALS, parsed.suffix)) {
+      return null;
+    }
+    const rootLetterIndex = NOTE_LETTERS.indexOf(parsed.rootLetter);
+    const pitchClasses = [];
+    const noteNames = [];
+    const displayNames = [];
+    for (const interval of QUALITY_INTERVALS[parsed.suffix]) {
+      const pitchClass = (parsed.semitone + interval) % 12;
+      if (pitchClasses.includes(pitchClass)) {
+        continue;
+      }
+      const letterStep = interval === 9
+        ? (parsed.suffix === "dim" || parsed.suffix === "dim7" ? 6 : 5)
+        : INTERVAL_LETTER_STEPS[interval];
+      if (letterStep === undefined) {
+        return null;
+      }
+      const letterIndex = (rootLetterIndex + letterStep) % NOTE_LETTERS.length;
+      let accidental = (pitchClass - NATURAL_SEMITONES[letterIndex] + 12) % 12;
+      if (accidental > 6) {
+        accidental -= 12;
+      }
+      const noteName = Math.abs(accidental) > 1
+        ? SIMPLE_NOTE_NAMES[pitchClass]
+        : NOTE_LETTERS[letterIndex] + (accidental === 1 ? "#" : accidental === -1 ? "b" : "");
+      pitchClasses.push(pitchClass);
+      noteNames.push(noteName);
+      displayNames.push(interval === 14 ? `${noteName}(9)` : noteName);
+    }
+    return { root: parsed.semitone, pitchClasses, noteNames, displayNames };
+  }
+
+  function keyboardSvg(chordName, options = {}) {
+    const notes = keyboardNotesForChord(chordName);
+    if (!notes) {
+      return null;
+    }
+    const compact = options.compact === true;
+    const keyboardY = compact ? 10 : 48;
+    const whiteKeys = [0, 2, 4, 5, 7, 9, 11];
+    const blackKeys = [[1, 0], [3, 1], [6, 3], [8, 4], [10, 5]];
+    const fillFor = (pitchClass, black) => {
+      if (pitchClass === notes.root) return "#efba46";
+      if (notes.pitchClasses.includes(pitchClass)) return black ? "#3f91c7" : "#bedef2";
+      return black ? "#273743" : "#ffffff";
+    };
+    const whiteMarkup = whiteKeys.map((pitchClass, index) => {
+      const selected = notes.pitchClasses.includes(pitchClass) ? ' data-selected="true"' : "";
+      const root = pitchClass === notes.root ? ' data-root="true"' : "";
+      return `<rect x="${18 + index * 32}" y="${keyboardY}" width="32" height="88" rx="3" fill="${fillFor(pitchClass, false)}" stroke="#526473" stroke-width="1.5"${selected}${root}/>`;
+    }).join("");
+    const blackMarkup = blackKeys.map(([pitchClass, whiteIndex]) => {
+      const selected = notes.pitchClasses.includes(pitchClass) ? ' data-selected="true"' : "";
+      const root = pitchClass === notes.root ? ' data-root="true"' : "";
+      return `<rect x="${40 + whiteIndex * 32}" y="${keyboardY}" width="20" height="56" rx="2" fill="${fillFor(pitchClass, true)}"${selected}${root}/>`;
+    }).join("");
+    const title = compact ? "" : `<text x="130" y="32" text-anchor="middle" font-size="26" font-weight="700" fill="#1e5aa8">${escapeXml(chordName)}</text>`;
+    const noteList = compact ? "" : `<text x="130" y="165" text-anchor="middle" font-size="14" font-weight="700" fill="#263238">${escapeXml(notes.displayNames.join(" · "))}</text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="${compact ? 108 : 180}" viewBox="0 0 260 ${compact ? 108 : 180}" role="img" aria-label="${escapeXml(chordName)}: ${escapeXml(notes.displayNames.join(", "))}">
+  <rect width="260" height="${compact ? 108 : 180}" rx="8" fill="#ffffff"/>
+  ${title}${whiteMarkup}${blackMarkup}${noteList}
+</svg>`;
+  }
+
+  const keyboardUriCache = new Map();
+  function keyboardDataUri(chordName, options = {}) {
+    const compact = options.compact === true;
+    const key = `${chordName}|${compact}`;
+    if (!keyboardUriCache.has(key)) {
+      const svg = keyboardSvg(chordName, { compact });
+      keyboardUriCache.set(key, svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null);
+    }
+    return keyboardUriCache.get(key);
+  }
+
   const api = {
     formsForChord,
     fingeringSvg,
-    fingeringDataUri
+    fingeringDataUri,
+    keyboardNotesForChord,
+    keyboardSvg,
+    keyboardDataUri
   };
 
   if (typeof window !== "undefined") {

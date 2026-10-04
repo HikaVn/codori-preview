@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260709-chord-forms-v1">
+    <link rel="stylesheet" href="./styles.css?v=20261004-diagram-toggle-v1">
   </head>
   <body class="is-mode-select-only">
     <main class="app-shell">
@@ -159,9 +159,17 @@
           <p class="eyebrow" id="mode-eyebrow">いまの歩き方</p>
           <h2 id="mode-title">音カード</h2>
         </div>
-        <p id="mode-description">1つのコードを、鳥・音・運指・きもちでゆっくり見る。</p>
+        <p id="mode-description">1つのコードを、鳥・音・コード図・きもちでゆっくり見る。</p>
         <p class="first-step-tip" id="first-step-tip">まずは青い「音をきく」から。</p>
       </section>
+
+      <div class="diagram-toolbar">
+        <span>コード図</span>
+        <div class="diagram-switch" role="group" aria-label="コード図の表示">
+          <button class="diagram-mode-button" type="button" data-diagram-mode="ukulele" aria-pressed="true">ウクレレ</button>
+          <button class="diagram-mode-button" type="button" data-diagram-mode="piano" aria-pressed="false">ピアノ</button>
+        </div>
+      </div>
 
       <section class="view is-active" id="card-view" aria-label="コードカード">
         <div class="card-stage">
@@ -265,7 +273,7 @@
       </section>
     </main>
 
-    <script src="./chord-forms.js?v=20260709-chord-forms-v1"></script>
-    <script src="./main.js?v=20260928-quiz-answer-v1"></script>
+    <script src="./chord-forms.js?v=20261004-diagram-toggle-v1"></script>
+    <script src="./main.js?v=20261004-diagram-toggle-v1"></script>
   </body>
 </html>
