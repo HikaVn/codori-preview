@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20261005-practice-navigation-v1">
+    <link rel="stylesheet" href="./styles.css?v=20261005-history-reset-v1">
   </head>
   <body class="is-mode-select-only">
     <main class="app-shell">
@@ -79,6 +79,10 @@
             <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
           </div>
           <p class="stage-number-note" id="stage-number-note">迷ったら「最初から」。慣れたらリストから好きなStageを選ぶ。</p>
+          <div class="history-reset">
+            <button class="stage-reset-button" id="reset-practice-history" type="button">学習履歴をリセット</button>
+            <p id="history-reset-status" role="status">このブラウザの全Stageの学習記録と、続きの位置を消します。</p>
+          </div>
           <button class="catalog-button" id="open-catalog" type="button">コード図鑑へ</button>
           <a class="catalog-button song-mode-link" href="./song/">うた練習（β） 曲をつくって弾く</a>
         </div>
@@ -276,7 +280,19 @@
       </section>
     </main>
 
+    <dialog class="history-reset-dialog" id="reset-history-dialog" aria-labelledby="reset-history-title" aria-describedby="reset-history-description">
+      <form method="dialog">
+        <h2 id="reset-history-title">学習履歴をリセットしますか？</h2>
+        <p id="reset-history-description">このブラウザの全Stageの聞いた記録・音あて回数・続きの位置を消します。この操作は取り消せません。</p>
+        <p>うた練習の曲と練習記録、楽器の表示設定は残ります。</p>
+        <div class="quiz-actions">
+          <button class="secondary-button" type="submit" value="cancel" autofocus>キャンセル</button>
+          <button class="primary-button history-reset-confirm" type="submit" value="reset">履歴をリセットする</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="./chord-forms.js?v=20261004-diagram-sound-v1"></script>
-    <script src="./main.js?v=20261005-practice-navigation-v1"></script>
+    <script src="./main.js?v=20261005-history-reset-v1"></script>
   </body>
 </html>

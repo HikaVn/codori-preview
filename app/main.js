@@ -327,6 +327,9 @@ const elements = {
   stageContinue: document.querySelector("#stage-continue"),
   stageProgressBadges: document.querySelector("#stage-progress-badges"),
   resetStageProgress: document.querySelector("#reset-stage-progress"),
+  resetPracticeHistory: document.querySelector("#reset-practice-history"),
+  resetHistoryDialog: document.querySelector("#reset-history-dialog"),
+  historyResetStatus: document.querySelector("#history-reset-status"),
   nextStageGuide: document.querySelector("#next-stage-guide"),
   nextStageMessage: document.querySelector("#next-stage-message"),
   nextStageButton: document.querySelector("#next-stage-button"),
@@ -566,8 +569,10 @@ function readDiagramMode() {
 function savePracticeProgress() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(practiceProgress));
+    return true;
   } catch (error) {
     // localStorageが使えない環境では、進捗なしでそのまま動かす。
+    return false;
   }
 }
 
@@ -1809,6 +1814,30 @@ function renderNextStageGuide(progress) {
   elements.nextStageGuide.classList.remove("is-hidden");
 }
 
+function resetAllPracticeProgress() {
+  const previousProgress = practiceProgress;
+  practiceProgress = emptyPracticeProgress();
+  if (!savePracticeProgress()) {
+    practiceProgress = previousProgress;
+    elements.historyResetStatus.textContent = "学習履歴をリセットできませんでした。ブラウザの保存機能を確認して、もう一度お試しください。";
+    return;
+  }
+
+  activePracticeStage = null;
+  currentIndex = 0;
+  activeProgressionIndex = 0;
+  resetQuizState();
+  quizIndex = chooseNextQuizIndex();
+  isStoryListVisible = false;
+  setModeSelectOnly(true);
+  syncLearningMenuGroup();
+  renderPracticeStageChrome();
+  renderQuiz();
+  setView("card");
+  openLearningMenu();
+  elements.historyResetStatus.textContent = "学習履歴をリセットしました。「最初から」で始められます。";
+}
+
 function resetCurrentStageProgress() {
   if (!isPracticeMode()) {
     return;
@@ -2412,6 +2441,15 @@ elements.playQuiz.addEventListener("click", playQuizChord);
 elements.playRootAssist.addEventListener("click", playRootAssist);
 elements.playProgression.addEventListener("click", playSelectedProgression);
 elements.resetStageProgress.addEventListener("click", resetCurrentStageProgress);
+elements.resetPracticeHistory.addEventListener("click", () => {
+  elements.resetHistoryDialog.returnValue = "";
+  elements.resetHistoryDialog.showModal();
+});
+elements.resetHistoryDialog.addEventListener("close", () => {
+  if (elements.resetHistoryDialog.returnValue === "reset") {
+    resetAllPracticeProgress();
+  }
+});
 elements.startStoryFromBeginning.addEventListener("click", startStoryFromBeginning);
 elements.continueStory.addEventListener("click", continueStoryFromLastPlace);
 elements.showStoryList.addEventListener("click", toggleStoryList);
