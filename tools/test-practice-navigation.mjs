@@ -31,6 +31,17 @@ class Element {
     };
   }
   set innerHTML(value) { this.children = []; }
+  querySelector(selector) {
+    this.nested ||= new Map();
+    if (!this.nested.has(selector)) this.nested.set(selector, new Element());
+    return this.nested.get(selector);
+  }
+  showModal() { this.open = true; }
+  close(value = '') {
+    this.open = false;
+    this.returnValue = value;
+    for (const listener of this.listeners.close || []) listener();
+  }
   addEventListener(name, listener) { (this.listeners[name] ||= []).push(listener); }
   click() {
     if (!this.disabled) for (const listener of this.listeners.click || []) listener({ target: this });
@@ -70,7 +81,7 @@ function harness(saved, search = '?stage=0', activeStage = stage) {
     practiceCatalog = new Map(fixtureChords.flatMap(chord => [[chord.code_id, chord], [chord.display_name, chord]]));
     chordData = fixtureStage.code_ids.map(id => practiceCatalog.get(id));
     renderPracticeProgress = () => {};
-    renderPracticeStageChrome = () => {};
+    renderPracticeStageChrome = () => updateStoryEntryControls();
     updateModeGuide = () => {};
     closeMobileLearningMenu = () => {};
     renderCompare = () => {};
@@ -87,7 +98,7 @@ function harness(saved, search = '?stage=0', activeStage = stage) {
     renderQuiz();
   `);
   return {
-    run, dom, get,
+    run, dom, get, storage,
     flush: () => { while (timers.length) timers.shift()(); },
     progress: () => JSON.parse(storage.get(key) || '{}')
   };
@@ -196,3 +207,63 @@ for (const [name, saved] of [
     assert.equal(app.progress().stages[stage.id].heardCodeIds.includes('C_major'), true);
   });
 }
+
+
+test('history reset confirms once, clears every Stage and resume position, and survives reload', () => {
+  const saved = progressFor(stage, { lastView: 'quiz', quizAnsweredTotal: 12, heardCodeIds: ['C_major'] });
+  saved.stages[stageList[4].id] = { heard: true, quizzed: true, quizAnsweredTotal: 24 };
+  const app = harness(saved);
+  app.storage.set('codori.diagramMode.v1', 'piano');
+  app.storage.set('codori.songPractice.v1', '{"songs":["test-song"]}');
+  app.storage.set('codori.songPractice.records.v1', '{"test-song":{"score":80}}');
+  app.get('#reset-practice-history').click();
+  assert.equal(app.get('#reset-history-dialog').open, true);
+  assert.deepEqual(app.progress(), saved, 'no deletion before confirmation');
+  app.get('#reset-history-dialog').close('reset');
+  assert.deepEqual(app.progress(), { version: 1, stages: {}, last: null });
+  assert.equal(app.run('quizAnsweredCount'), 0);
+  assert.equal(app.run('activePracticeStage'), null);
+  assert.equal(app.run('activeView'), 'card');
+  assert.equal(app.run('isModeSelectOnly'), true);
+  assert.equal(app.get('#continue-story').disabled, true);
+  assert.equal(app.get('#continue-story-note').textContent, 'まだ記録なし');
+  assert.equal(app.storage.get('codori.diagramMode.v1'), 'piano');
+  assert.equal(app.storage.get('codori.songPractice.v1'), '{"songs":["test-song"]}');
+  assert.equal(app.storage.get('codori.songPractice.records.v1'), '{"test-song":{"score":80}}');
+  assert.match(app.get('#history-reset-status').textContent, /リセットしました/);
+  const reloaded = harness(app.storage.get(key));
+  assert.equal(reloaded.run('latestPracticeStageWithTrail()'), null);
+  assert.equal(reloaded.run('quizAnsweredCount'), 0);
+});
+
+test('canceling or dismissing history reset keeps progress and current counters', () => {
+  for (const choice of ['cancel', '']) {
+    const saved = progressFor(stage, { lastView: 'quiz', quizAnsweredTotal: 8 });
+    const app = harness(saved);
+    app.get('#reset-practice-history').click();
+    app.get('#reset-history-dialog').close(choice);
+    assert.deepEqual(app.progress(), saved);
+    assert.equal(app.run('quizAnsweredCount'), 8);
+    assert.equal(app.run('activePracticeStage.id'), stage.id);
+  }
+});
+
+test('history reset reports storage failure and keeps in-memory and saved progress', () => {
+  const saved = progressFor(stage, { quizAnsweredTotal: 8 });
+  const app = harness(saved);
+  app.run('localStorage.setItem = () => { throw new Error("storage unavailable"); };');
+  app.get('#reset-practice-history').click();
+  app.get('#reset-history-dialog').close('reset');
+  assert.deepEqual(app.progress(), saved);
+  assert.equal(app.run('quizAnsweredTotalForStage()'), 8);
+  assert.equal(app.run('quizAnsweredCount'), 8);
+  assert.match(app.get('#history-reset-status').textContent, /リセットできませんでした/);
+});
+
+test('resetting empty history is safe and does not recreate a resume location', () => {
+  const app = harness(undefined);
+  app.get('#reset-practice-history').click();
+  app.get('#reset-history-dialog').close('reset');
+  assert.deepEqual(app.progress(), { version: 1, stages: {}, last: null });
+  assert.equal(app.run('latestPracticeStageWithTrail()'), null);
+});
