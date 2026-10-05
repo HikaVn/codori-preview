@@ -55,9 +55,11 @@ const requestedRootFilter = urlParams.get("root");
 const requestedFamilyFilter = urlParams.get("family");
 const requestedSearchFilter = urlParams.get("search") || urlParams.get("q") || "";
 const STORAGE_KEY = "codori.practiceProgress.v1";
+const DIAGRAM_MODE_STORAGE_KEY = "codori.diagramMode.v1";
 const HARMONIC_GAIN_RATIO = 0.2;
 const USE_INTEGRATED_ACTION_ART = true;
 const QUIZ_REPETITIONS_PER_CHORD = 3;
+const PRACTICE_VIEWS = ["card", "compare", "quiz", "progression"];
 const hasDirectLaunchTarget = Boolean(
   requestedSetId
     || requestedStageId
@@ -189,7 +191,7 @@ const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
 const modeGuide = {
   card: {
     title: "音カード",
-    description: "1つのコードを、鳥・音・運指・きもちでゆっくり見る。"
+    description: "1つのコードを、鳥・音・コード図・きもちでゆっくり見る。"
   },
   compare: {
     title: "ききくらべ",
@@ -197,7 +199,7 @@ const modeGuide = {
   },
   quiz: {
     title: "音あて",
-    description: "音を聞いてコード名を選び、答えの鳥と運指でもう一度つなげる。"
+    description: "音を聞いてコード名を選び、答えの鳥とコード図でもう一度つなげる。"
   },
   progression: {
     title: "進行練習",
@@ -217,7 +219,7 @@ const stageViewGuides = {
     quiz: "夜の仲間を、音から思い出す。正解より、響きの色を耳に残す。"
   },
   4: {
-    card: "表情は同じまま、キー色と住む枝と運指が変わることを見る。",
+    card: "表情は同じまま、キー色と住む枝とコード図が変わることを見る。",
     compare: "Gの森、Fの森を聞きくらべる。同じ種類の鳥は同じ役割を持つ。",
     quiz: "どの枝にいる鳥か、音とコード名を結びつける。"
   },
@@ -280,9 +282,9 @@ const chordSets = {
   }
 };
 let activeSet = chordSets[requestedSetId || savedProgress.last?.setId] || chordSets["initial-four"];
-const initialView = ["card", "compare", "quiz", "progression"].includes(urlParams.get("view"))
+const initialView = PRACTICE_VIEWS.includes(urlParams.get("view"))
   ? urlParams.get("view")
-  : ["card", "compare", "quiz", "progression"].includes(savedProgress.last?.view)
+  : PRACTICE_VIEWS.includes(savedProgress.last?.view)
   ? savedProgress.last.view
   : "card";
 
@@ -310,6 +312,7 @@ let isModeSelectOnly = shouldStartOnModeSelect;
 let isStoryListVisible = false;
 let practiceCatalog = new Map();
 let practiceProgress = savedProgress;
+let diagramMode = readDiagramMode();
 // 音カードの展開形えらび（コードごとの選択はセッション中だけ覚える）
 let cardChordForms = [];
 let cardFormIndex = 0;
@@ -358,6 +361,7 @@ const elements = {
   modeTitle: document.querySelector("#mode-title"),
   modeDescription: document.querySelector("#mode-description"),
   firstStepTip: document.querySelector("#first-step-tip"),
+  diagramModeButtons: document.querySelectorAll(".diagram-mode-button"),
   chordName: document.querySelector("#chord-name"),
   familyLabel: document.querySelector("#family-label"),
   keyChip: document.querySelector("#key-chip"),
@@ -524,13 +528,38 @@ function readPracticeProgress() {
       return emptyPracticeProgress();
     }
     const parsed = JSON.parse(raw);
+    const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    if (!isRecord(parsed)) {
+      return emptyPracticeProgress();
+    }
+    // 有効な進捗は残し、旧データの不正な画面名や壊れた項目だけを除外する。
+    const stages = isRecord(parsed.stages)
+      ? Object.fromEntries(Object.entries(parsed.stages)
+        .filter(([, progress]) => isRecord(progress))
+        .map(([id, progress]) => [id, {
+          ...progress,
+          lastView: PRACTICE_VIEWS.includes(progress.lastView) ? progress.lastView : undefined
+        }]))
+      : {};
+    const last = isRecord(parsed.last)
+      ? { ...parsed.last, view: PRACTICE_VIEWS.includes(parsed.last.view) ? parsed.last.view : "card" }
+      : null;
     return {
       ...emptyPracticeProgress(),
       ...parsed,
-      stages: parsed.stages || {}
+      stages,
+      last
     };
   } catch (error) {
     return emptyPracticeProgress();
+  }
+}
+
+function readDiagramMode() {
+  try {
+    return localStorage.getItem(DIAGRAM_MODE_STORAGE_KEY) === "piano" ? "piano" : "ukulele";
+  } catch (error) {
+    return "ukulele";
   }
 }
 
@@ -1096,7 +1125,7 @@ function modeDescriptionForCurrentStep(guide) {
       return "4羽を並べて聞く。同じCでも、きもちだけが変わる入口。";
     }
     if (activeView === "quiz") {
-      return "音を聞いてコード名を選ぶ。答えの鳥と運指で、もう一度つなげる。";
+      return "音を聞いてコード名を選ぶ。答えの鳥とコード図で、もう一度つなげる。";
     }
   }
 
@@ -1214,7 +1243,7 @@ function quizPromptForCurrentStage() {
     return "夜の仲間のどの響きかな。透明感や余韻を聞いてみよう。";
   }
   if (activePracticeStage.stage_number === 4) {
-    return "どのキーの鳥かな。音名と運指を一緒に見つけよう。";
+    return "どのキーの鳥かな。音名とコード図を一緒に見つけよう。";
   }
   if (activePracticeStage.stage_number === 6) {
     return "浮いている音かな、水色の星みたいに空気が抜ける音かな。違いを聞いてみよう。";
@@ -1300,6 +1329,116 @@ function applyFilters() {
   renderProgression();
 }
 
+function diagramForChord(chord, options = {}) {
+  if (diagramMode === "piano" && window.CodoriChordForms?.keyboardDataUri) {
+    const notes = CodoriChordForms.keyboardNotesForChord(chord.display_name);
+    const src = CodoriChordForms.keyboardDataUri(chord.display_name, options);
+    if (notes && src) {
+      return {
+        src,
+        alt: `${chord.display_name}のピアノ鍵盤。構成音: ${notes.displayNames.join("、")}`,
+        isPiano: true
+      };
+    }
+  }
+  return {
+    src: assetPath(chord.fingering_asset),
+    alt: `${chord.display_name}のウクレレ運指`,
+    isPiano: false
+  };
+}
+
+function applyDiagramImage(image, chord, options = {}) {
+  const diagram = diagramForChord(chord, options);
+  image.src = diagram.src;
+  image.alt = diagram.alt;
+  image.classList.toggle("is-piano", diagram.isPiano);
+  makeDiagramPlayable(image, chord, options);
+}
+
+function makeDiagramPlayable(image, chord, options = {}) {
+  const piano = image.classList.contains("is-piano");
+  const mode = piano ? "piano" : "ukulele";
+  const frets = options.frets || chord.ukulele_fingering;
+  const notes = piano ? CodoriChordForms.keyboardNotesForChord(chord.display_name) : null;
+  let selected = piano ? notes?.root || 0 : 0;
+  const names = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const selectedNote = () => piano
+    ? { midi: 60 + selected, label: names[selected] }
+    : CodoriChordForms.diagramNoteAt("ukulele", 54 + 44 * selected, 160, { frets });
+  const updateLabel = () => {
+    const note = selectedNote();
+    image.setAttribute("aria-label", `${chord.display_name}の${piano ? "鍵盤" : "運指"}。左右キーで${piano ? "鍵" : "弦"}を選び、Enterで${note.label}を鳴らす`);
+  };
+  image.classList.add("playable-diagram");
+  image.tabIndex = 0;
+  image.setAttribute("role", "button");
+  updateLabel();
+  image.onclick = (event) => {
+    const rect = image.getBoundingClientRect();
+    const style = getComputedStyle(image);
+    const left = parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+    const top = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+    const width = rect.width - left - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+    const height = rect.height - top - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom);
+    const svgWidth = piano ? 260 : 240;
+    const svgHeight = piano ? (options.compact ? 108 : 180) : 320;
+    const scale = Math.min(width / svgWidth, height / svgHeight);
+    const x = (event.clientX - rect.left - left - (width - svgWidth * scale) / 2) / scale;
+    const y = (event.clientY - rect.top - top - (height - svgHeight * scale) / 2) / scale;
+    const note = CodoriChordForms.diagramNoteAt(mode, x, y, { frets, compact: options.compact });
+    if (!note) return;
+    selected = piano ? note.midi - 60 : note.index;
+    updateLabel();
+    playDiagramNote(note.midi);
+  };
+  image.onkeydown = (event) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      selected = (selected + (event.key === "ArrowRight" ? 1 : -1) + (piano ? 12 : 4)) % (piano ? 12 : 4);
+      updateLabel();
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const note = selectedNote();
+      if (note) playDiagramNote(note.midi);
+    }
+  };
+}
+
+function updateDiagramModeButtons() {
+  elements.diagramModeButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.diagramMode === diagramMode));
+  });
+}
+
+function setDiagramMode(mode) {
+  if ((mode !== "ukulele" && mode !== "piano")
+    || (mode === "piano" && !window.CodoriChordForms?.keyboardDataUri)) {
+    return;
+  }
+  if (diagramMode === "ukulele" && mode === "piano") {
+    cardFormSelections.clear();
+  }
+  diagramMode = mode;
+  try {
+    localStorage.setItem(DIAGRAM_MODE_STORAGE_KEY, mode);
+  } catch (error) {
+    // 保存できない環境でも、開いている間は切り替えられる。
+  }
+  updateDiagramModeButtons();
+  const cardChord = chordData[currentIndex];
+  if (cardChord) {
+    renderCardFormSelector(cardChord);
+  }
+  const quizChord = chordData[quizIndex];
+  if (quizChord) {
+    applyDiagramImage(elements.quizFingeringImage, quizChord);
+    elements.quizAnswerDetail.classList.toggle("is-piano", mode === "piano");
+  }
+  renderCompare();
+  renderProgression();
+}
+
 function renderCard() {
   const chord = chordData[currentIndex];
   const hasChord = Boolean(chord);
@@ -1316,6 +1455,13 @@ function renderCard() {
     elements.birdAccent.innerHTML = "";
     elements.fingeringImage.removeAttribute("src");
     elements.fingeringImage.alt = "条件に合う運指はまだ見つかりません";
+    elements.fingeringImage.classList.remove("is-piano");
+    elements.fingeringImage.onclick = null;
+    elements.fingeringImage.onkeydown = null;
+    elements.fingeringImage.removeAttribute("tabindex");
+    elements.fingeringImage.removeAttribute("role");
+    elements.fingeringImage.classList.remove("playable-diagram");
+    document.querySelector(".fingering-frame").classList.remove("is-piano");
     renderCardFormSelector(null);
     elements.learningNote.textContent = "そのコードは、いまの森では見つからなかった。";
     elements.memoryHint.textContent = "検索文字を少し短くするか、音名・コード種類のしぼりこみをゆるめてみよう。";
@@ -1336,8 +1482,14 @@ function renderCard() {
   elements.memoryHint.textContent = chord.memory_hint;
 }
 
-// 音カードの運指図: 基本形はレビュー済みアセット、展開形は動的生成SVGを表示する
 function applyCardFormImage(chord) {
+  const isPiano = diagramMode === "piano";
+  document.querySelector(".fingering-frame").classList.toggle("is-piano", isPiano);
+  if (isPiano) {
+    applyDiagramImage(elements.fingeringImage, chord);
+    return;
+  }
+  elements.fingeringImage.classList.remove("is-piano");
   const form = cardFormIndex > 0 ? cardChordForms[cardFormIndex] : null;
   if (form && window.CodoriChordForms) {
     elements.fingeringImage.src = CodoriChordForms.fingeringDataUri(chord.display_name, form.frets);
@@ -1345,6 +1497,9 @@ function applyCardFormImage(chord) {
   } else {
     elements.fingeringImage.src = assetPath(chord.fingering_asset);
     elements.fingeringImage.alt = `${chord.display_name}のウクレレ運指`;
+  }
+  if (window.CodoriChordForms?.diagramNoteAt) {
+    makeDiagramPlayable(elements.fingeringImage, chord, { frets: form?.frets || chord.ukulele_fingering });
   }
 }
 
@@ -1366,7 +1521,7 @@ function renderCardFormSelector(chord) {
     applyCardFormImage(chord);
     return;
   }
-  container.classList.remove("is-hidden");
+  container.classList.toggle("is-hidden", diagramMode === "piano");
   cardFormIndex = Math.min(cardFormSelections.get(chord.code_id) || 0, cardChordForms.length - 1);
   cardChordForms.forEach((form, index) => {
     const button = document.createElement("button");
@@ -1403,6 +1558,7 @@ function renderCompare() {
   }
   chordData.forEach((chord) => {
     const card = document.createElement("article");
+    const diagram = diagramForChord(chord, { compact: true });
     card.className = "compare-card";
     card.setAttribute("style", keyStyle(chord));
     card.innerHTML = `
@@ -1417,9 +1573,10 @@ function renderCompare() {
       </div>
       <p>${chord.learning_note}</p>
       ${chord.progression_hint ? `<p class="route-note">${chord.progression_hint}</p>` : ""}
-      <img class="compare-fingering" src="${assetPath(chord.fingering_asset)}" alt="${chord.display_name}のウクレレ運指" loading="lazy">
+      <img class="compare-fingering${diagram.isPiano ? " is-piano" : ""}" src="${diagram.src}" alt="${diagram.alt}" loading="lazy">
     `;
     card.querySelector("button").addEventListener("click", () => playChord(chord));
+    makeDiagramPlayable(card.querySelector(".compare-fingering"), chord, { compact: true });
     elements.compareGrid.appendChild(card);
   });
 }
@@ -1431,7 +1588,7 @@ function compareNoteForCurrentStep() {
   if (chordData.length > 8) {
     return `${activePracticeStage.short_title}の先頭8コードまで順番に聞く。多いStageは、気になるカードを1枚ずつ聞き直す。`;
   }
-  return `${activePracticeStage.short_title}の${chordData.length}コードを順番に聞いて、音・鳥・運指の違いを比べる。`;
+  return `${activePracticeStage.short_title}の${chordData.length}コードを順番に聞いて、音・鳥・コード図の違いを比べる。`;
 }
 
 function renderQuiz() {
@@ -1466,8 +1623,8 @@ function renderQuiz() {
   elements.nextCourseQuiz.textContent = nextCourseButtonText();
   elements.quizAnswerName.textContent = chord.display_name;
   elements.quizAnswerNote.textContent = chord.learning_note;
-  elements.quizFingeringImage.src = assetPath(chord.fingering_asset);
-  elements.quizFingeringImage.alt = `${chord.display_name}のウクレレ運指`;
+  applyDiagramImage(elements.quizFingeringImage, chord);
+  elements.quizAnswerDetail.classList.toggle("is-piano", diagramMode === "piano");
   elements.playQuiz.classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").classList.remove("is-hidden");
   document.querySelector(".quiz-listen-label").textContent = "音をきく";
@@ -1711,7 +1868,7 @@ function restorePracticePosition() {
   activeProgressionIndex = clampIndex(restoredProgressionIndex, activeProgressions().length);
   quizAnsweredCount = Math.min(quizAnsweredTotalForStage(progress), quizTargetCount());
 
-  if (!urlParams.get("view") && progress.lastView) {
+  if (!urlParams.get("view") && PRACTICE_VIEWS.includes(progress.lastView)) {
     activeView = progress.lastView;
   }
 }
@@ -1825,6 +1982,7 @@ function renderProgression() {
 
   routeChords.forEach((chord, index) => {
     const step = document.createElement("article");
+    const diagram = diagramForChord(chord, { compact: true });
     step.className = "progression-step";
     step.setAttribute("style", keyStyle(chord));
     step.innerHTML = `
@@ -1835,9 +1993,10 @@ function renderProgression() {
       <strong>${chord.display_name}</strong>
       <p>${chord.learning_note}</p>
       <button class="icon-button" type="button" aria-label="${chord.display_name}を再生">▶</button>
-      <img class="progression-fingering" src="${assetPath(chord.fingering_asset)}" alt="${chord.display_name}のウクレレ運指" loading="lazy">
+      <img class="progression-fingering${diagram.isPiano ? " is-piano" : ""}" src="${diagram.src}" alt="${diagram.alt}" loading="lazy">
     `;
     step.querySelector("button").addEventListener("click", () => playChord(chord));
+    makeDiagramPlayable(step.querySelector(".progression-fingering"), chord, { compact: true });
     elements.progressionPath.appendChild(step);
 
     if (index < routeChords.length - 1) {
@@ -1990,8 +2149,10 @@ function checkQuizAnswer(button, isCorrect) {
   const wasQuizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   quizHasAnswered = true;
   if (!wasQuizComplete) {
-    quizAnsweredCount += 1;
-    updateStageProgress({ quizAnsweredTotal: quizAnsweredCount });
+    quizAnsweredCount = isPracticeMode()
+      ? Math.min(quizAnsweredCount + 1, quizTargetCount())
+      : quizAnsweredCount + 1;
+    updateStageProgress({ quizAnsweredTotal: Math.max(quizAnsweredCount, quizAnsweredTotalForStage()) });
   }
   const quizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
   elements.nextQuiz.disabled = false;
@@ -2021,6 +2182,9 @@ function checkQuizAnswer(button, isCorrect) {
 }
 
 function setView(viewName) {
+  if (!PRACTICE_VIEWS.includes(viewName)) {
+    viewName = "card";
+  }
   if (viewName === "progression" && isPracticeMode() && !activeProgressions().length) {
     viewName = "card";
   }
@@ -2126,7 +2290,7 @@ async function playChord(chord, options = {}) {
   if (!options.frequencies && await playAudioFile(chord)) {
     return;
   }
-  playSyntheticChord(chord, context, options.frequencies);
+  playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes);
 }
 
 async function playAudioFile(chord) {
@@ -2148,8 +2312,7 @@ async function playAudioFile(chord) {
   }
 }
 
-function playSyntheticChord(chord, context = getAudioContext(), frequencies = null) {
-  const audioNotes = frequencies || chord.temp_audio_notes;
+function playSyntheticNotes(context, audioNotes) {
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
@@ -2185,6 +2348,18 @@ function playSyntheticChord(chord, context = getAudioContext(), frequencies = nu
     oscillator.stop(start + 2.6);
     harmonic.stop(start + 2.6);
   });
+}
+
+async function playDiagramNote(midi) {
+  if (!Number.isInteger(midi) || midi < 0 || midi > 127) return;
+  try {
+    const context = await ensureAudioContextReady();
+    if (context.state !== "running") return;
+    const frequency = 440 * Math.pow(2, (midi - 69) / 12);
+    playSyntheticNotes(context, [frequency]);
+  } catch (error) {
+    console.warn("Diagram note playback failed.", error);
+  }
 }
 
 function handleAppReturn() {
@@ -2228,6 +2403,9 @@ elements.clearSearch.addEventListener("click", () => {
 elements.playCurrent.addEventListener("click", () => {
   const form = cardFormIndex > 0 ? cardChordForms[cardFormIndex] : null;
   playChord(chordData[currentIndex], form ? { frequencies: form.frequencies } : {});
+});
+elements.diagramModeButtons.forEach((button) => {
+  button.addEventListener("click", () => setDiagramMode(button.dataset.diagramMode));
 });
 elements.playCompare.addEventListener("click", playSelectedCompare);
 elements.playQuiz.addEventListener("click", playQuizChord);
@@ -2330,6 +2508,12 @@ function cacheBustedDataPath(path) {
 async function init() {
   await loadPracticeResources();
   await loadChordData();
+  if (!window.CodoriChordForms?.keyboardDataUri) {
+    diagramMode = "ukulele";
+    elements.diagramModeButtons.forEach((button) => {
+      if (button.dataset.diagramMode === "piano") button.disabled = true;
+    });
+  }
   activePracticeStage = initialPracticeStage();
   if (activePracticeStage) {
     fullChordData = resolveStageCodes(activePracticeStage);
@@ -2341,6 +2525,7 @@ async function init() {
   renderFilterSummary();
   restorePracticePosition();
   quizIndex = chooseNextQuizIndex();
+  updateDiagramModeButtons();
   renderPracticeStageChrome();
   renderSetChrome();
   updateTabAvailability();
