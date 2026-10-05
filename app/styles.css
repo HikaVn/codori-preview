@@ -1692,6 +1692,16 @@ body.is-catalog-active .learning-menu-switch {
   gap: 10px;
 }
 
+.quiz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#next-course-quiz[hidden] {
+  display: none;
+}
+
 .quiz-option {
   font-size: 24px;
   font-weight: 900;

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20261004-diagram-sound-v1">
+    <link rel="stylesheet" href="./styles.css?v=20261005-practice-navigation-v1">
   </head>
   <body class="is-mode-select-only">
     <main class="app-shell">
@@ -232,7 +232,7 @@
           <div class="quiz-visual">
             <div class="quiz-listen-actions">
               <button class="quiz-play-button" id="play-quiz" type="button" aria-label="音あてのコード音をきく">▶</button>
-              <button class="root-assist-button" id="play-root-assist" type="button" aria-label="音あての土台をきく">土台をきく</button>
+              <button class="root-assist-button" id="play-root-assist" type="button" aria-label="今の問題の基準音をきく">基準音をきく</button>
             </div>
             <p class="quiz-listen-label">音をきく</p>
             <img id="quiz-image" src="../assets/approved/characters/major.png" alt="クイズ用Codori鳥">
@@ -252,7 +252,10 @@
             <p class="quiz-score" id="quiz-score">0 / 0</p>
             <div class="quiz-options" id="quiz-options"></div>
             <p class="quiz-result" id="quiz-result" aria-live="polite"></p>
-            <button class="secondary-button" id="next-quiz" type="button">次の音へ</button>
+            <div class="quiz-actions">
+              <button class="secondary-button" id="next-quiz" type="button">次の音へ</button>
+              <button class="primary-button" id="next-course-quiz" type="button" hidden>次のコースへ</button>
+            </div>
           </div>
         </div>
       </section>
@@ -274,6 +277,6 @@
     </main>
 
     <script src="./chord-forms.js?v=20261004-diagram-sound-v1"></script>
-    <script src="./main.js?v=20261004-form-reset-v1"></script>
+    <script src="./main.js?v=20261005-practice-navigation-v1"></script>
   </body>
 </html>
