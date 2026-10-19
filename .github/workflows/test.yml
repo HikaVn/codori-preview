@@ -18,6 +18,10 @@ jobs:
           node --check app/main.js
           node --check app/harmony.js
           node --check app/audio-engine.js
+          node --check app/codori-guide.js
+          node --check app/pops-course-data.js
+          node --check app/pops-course.js
+          node tools/test-pops-course.mjs
           node --check app/song/song.js
           node --check app/song/score.js
           node tools/test-audio-contract.mjs

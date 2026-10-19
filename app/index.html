@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20261019-shared-envelope-v1">
+    <link rel="stylesheet" href="./styles.css?v=20261019-pops-course-v1">
   </head>
   <body class="is-home is-mode-select-only">
     <main class="app-shell">
@@ -34,14 +34,14 @@
         <div data-home-area="learn">
           <p>しくみを知り、音と結びつけよう。</p>
           <div class="home-cards">
-            <button type="button" data-route="learn" disabled><strong>機能和声を学ぶ</strong><small>調・T / S / D・終止を、解説と音例で</small></button>
+            <button type="button" data-route="learn" disabled><strong>機能和声を学ぶ</strong><small>第1章 · 調・T / S / D・終止を、解説と音例で</small></button>
             <button type="button" data-route="catalog" disabled><strong>コード図鑑</strong><small>鳥・コード名・運指・響きを調べる</small></button>
           </div>
         </div>
         <div data-home-area="practice" hidden>
           <p>答えるたびに、響きと理由をたしかめよう。</p>
           <div class="home-cards">
-            <button type="button" id="open-harmony" data-route="practice" disabled><strong>機能和声を練習する</strong><small>進行の中の役割を3択で。すぐに正誤と解説</small></button>
+            <button type="button" id="open-harmony" data-route="practice" disabled><strong>機能和声を練習する</strong><small>第1章 · 進行の中の役割を3択で。すぐに正誤と解説</small></button>
           <a class="catalog-button song-mode-link" href="./song/">うた練習（β） 曲をつくって弾く</a>
           </div>
         </div>
@@ -49,18 +49,26 @@
           <p>ストーリーで音を思い出したり、最後まで答えてまとめて振り返ろう。</p>
           <div class="home-cards">
             <button type="button" data-route="legacy" disabled><strong>音あてストーリー</strong><small>音カード・ききくらべ・音あて・進行で、これまでのストーリーを進める</small></button>
-            <button type="button" data-route="test" disabled><strong>機能和声テスト</strong><small>3・6・9問から選ぶ。正解と解説は最後に</small></button>
+            <button type="button" data-route="test" disabled><strong>機能和声テスト</strong><small>第1章 · 3・6・9問から選ぶ。正解と解説は最後に</small></button>
           </div>
         </div>
           <div class="history-reset">
             <button class="stage-reset-button" id="reset-practice-history" type="button">学習履歴をリセット</button>
             <p id="history-reset-status" role="status">このブラウザの全Stageの学習記録と、続きの位置を消します。</p>
           </div>
+        <section id="pops-map" class="course-map" aria-label="ポップス和声の学習マップ"></section>
       </section>
+      <section id="course-view" class="harmony-panel" aria-labelledby="course-title" hidden></section>
       <section id="lesson-view" class="harmony-panel" aria-labelledby="lesson-title" hidden>
         <p class="eyebrow">学ぶ · 機能和声</p>
+        <div data-codori-guide></div>
         <h2 id="lesson-title" tabindex="-1">同じコードも、帰る場所で役割が変わる</h2>
         <p>コードには、響きの種類とは別に、曲の中での役割があります。その役割を「機能」と呼びます。まずは長調の I・IV・V / V7 を、転調しない短い進行で聞いてみよう。</p>
+        <section class="lesson-block"><h3>音の名前と三和音の小さな入口</h3>
+          <p>C長調の音階は C・D・E・F・G・A・B（ド・レ・ミ・ファ・ソ・ラ・シ）。三和音は、根音・3度・5度を重ねた和音です。CはC–E–G、AmはA–C–E。長三和音と短三和音は、3度などの音の間隔が異なります。</p>
+          <p>度数は調の中の位置。長三和音は I のように大文字、短三和音は vi のように小文字で表します。コードの種類とT/S/Dの機能は別に考えます。</p>
+          <button class="secondary-button" type="button" data-example="triads">CとAmを進行の中で比べる</button>
+        </section>
         <section class="lesson-block"><h3>1 · 調は「帰る場所」の手がかり</h3>
           <p>C長調なら C が主和音 I。I → IV → V7 → I と聞くと、最後の I に帰る感覚をつかみやすくなります。ローマ数字は、コードの根音がその調の何番目の音かを表します。</p>
           <p class="harmony-path">C長調: I（C）→ IV（F）→ V7（G7）→ I（C）</p>
@@ -96,6 +104,7 @@
       </section>
       <section id="test-view" class="harmony-panel" aria-labelledby="test-title" hidden>
         <p class="eyebrow">実践する · 機能和声</p><h2 id="test-title" tabindex="-1">最後にまとめて振り返る</h2>
+        <div data-codori-guide></div>
         <div id="test-setup">
           <p>主調の終止と問題の進行を聞き、★の和音の役割を選びます。途中では正解や点数を表示しません。</p>
           <label class="harmony-level" for="test-level">出題範囲<select id="test-level"><option value="step1">C長調の I / IV / V</option><option value="step2">C・F・G長調と V7</option></select></label>
@@ -116,8 +125,8 @@
         <div class="harmony-actions lesson-links"><button class="secondary-button" type="button" data-route="learn">役割の説明へ</button><button class="secondary-button" type="button" data-route="practice">解説つきで練習する</button></div>
       </section>
       <section id="harmony-view" class="harmony-panel" aria-labelledby="harmony-title" hidden>
+        <div data-codori-guide></div>
         <div class="harmony-heading">
-          <img src="../assets/approved/characters/major.png" alt="" width="100" height="100">
           <div><p class="eyebrow">練習する · 機能和声</p><h2 id="harmony-title">帰る・広がる・帰りたくなる</h2></div>
         </div>
         <p>同じメジャーコードでも、調と進行が変わると役割が変わります。最初に I → IV → V7 → I で帰る場所を聞いてから、問題の進行の ★ の和音に注目しよう。</p>
@@ -413,8 +422,11 @@
     </dialog>
 
     <script src="./chord-forms.js?v=20261004-diagram-sound-v1"></script>
-    <script src="./audio-engine.js?v=20261019-shared-envelope-v1"></script>
-    <script src="./harmony.js?v=20261019-shared-envelope-v1"></script>
-    <script src="./main.js?v=20261019-shared-envelope-v1"></script>
+    <script src="./audio-engine.js?v=20261019-pops-course-v1"></script>
+    <script src="./codori-guide.js?v=20261019-pops-course-v1"></script>
+    <script src="./pops-course-data.js?v=20261019-pops-course-v1"></script>
+    <script src="./pops-course.js?v=20261019-pops-course-v1"></script>
+    <script src="./harmony.js?v=20261019-pops-course-v1"></script>
+    <script src="./main.js?v=20261019-pops-course-v1"></script>
   </body>
 </html>

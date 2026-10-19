@@ -2269,3 +2269,34 @@ body.is-home .progress, body.is-harmony-active .progress { display: none; }
 body.is-home .diagram-toolbar, body.is-harmony-active .diagram-toolbar { display: none; }
 body.is-practice-active:not(.is-home):not(.is-harmony-active) .learning-menu { display: block; }
 .home-cards .song-mode-link { display: grid; gap: 12px; text-decoration: none; padding: 24px; background: #f4f8fc; border: 1px solid var(--line); border-radius: 12px; }
+
+/* Course uses the existing three intent tabs; the map selects a chapter only. */
+.course-map { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
+.course-map-heading, .course-heading, .course-breadcrumb { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.course-map-heading > div, .course-heading > div:first-child { flex: 1; min-width: 220px; }
+.course-map-heading img, .codori-guide img { object-fit: contain; flex: 0 0 auto; }
+.course-map-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 12px; }
+.course-map-list button { width: 100%; height: 100%; display: grid; gap: 10px; padding: 20px; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: #f4f8fc; color: var(--ink); cursor: pointer; }
+.course-map-list strong { color: var(--blue); font-size: 18px; }
+.course-map-list span, .course-map-list small { line-height: 1.7; }
+.course-map-list button:disabled { opacity: .6; cursor: default; }
+.codori-guide { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #f4f8fc; max-width: 340px; margin-bottom: 12px; }
+.codori-guide p { margin: 0; font-size: 14px; line-height: 1.7; }
+.codori-guide[data-guide-state="correct"] { border-color: #47836a; background: #f0faf3; }
+.codori-guide[data-guide-state="review"] { border-color: #a5804f; background: #fffaf0; }
+.course-prerequisite, .course-memory { font-size: 14px; color: var(--muted); }
+.course-caution, .course-open-answer { padding: 16px; border-left: 4px solid var(--blue); background: #f1f6fc; }
+.course-result { min-height: 4em; line-height: 1.8; }
+.course-lab-choices { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin: 20px 0; }
+.course-lab-choices label, .course-note { display: grid; gap: 8px; }
+.course-lab-choices select, .course-note textarea { width: 100%; max-width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); }
+.course-note { margin-top: 20px; }
+#course-view .secondary-button, #course-view .primary-button { margin: 4px 4px 4px 0; }
+@media(max-width:650px) {
+ .course-map-list, .course-lab-choices { grid-template-columns: 1fr; }
+ .course-map-heading img { width: 64px; height: 64px; }
+ .course-heading { align-items: flex-start; }
+ .codori-guide { max-width: 100%; width: 100%; }
+ .codori-guide img { width: 64px; height: 64px; }
+ .course-map-list button { padding: 16px; }
+}
