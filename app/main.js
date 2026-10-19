@@ -321,7 +321,7 @@ const activeAudioElements = new Set();
 const pendingPlaybackTimers = new Set();
 let playbackGeneration = 0;
 let routerReady = false;
-let harmonySession, harmonyTestSession, lessonPlayer;
+let harmonySession, harmonyTestSession, lessonPlayer, popsCourse;
 let isHarmonyActive = false;
 let currentAppRoute = "home";
 let homeArea = "learn";
@@ -329,29 +329,35 @@ let legacyStageId;
 let chordSetGeneration = 0;
 
 function stopLearningAudio() {
-  harmonySession?.stop(); harmonyTestSession?.stop(); lessonPlayer?.stop();
+  harmonySession?.stop(); harmonyTestSession?.stop(); lessonPlayer?.stop(); popsCourse?.stop();
   stopAudioPlayback();
 }
 
 async function navigateApp(route, options = {}) {
-  if (!["home", "learn", "practice", "test", "legacy", "catalog"].includes(route)) route = "home";
+  if (!["home", "learn", "practice", "test", "legacy", "catalog", "course"].includes(route)) route = "home";
   stopLearningAudio();
   currentAppRoute = route;
-  homeArea = route === "legacy" ? "test" : options.area || ({ learn: "learn", catalog: "learn", practice: "practice", legacy: "test", test: "test" }[route]) || homeArea;
-  isHarmonyActive = ["learn", "practice", "test"].includes(route);
+  homeArea = route === "legacy" ? "test" : options.area || options.intent || ({ learn: "learn", catalog: "learn", practice: "practice", legacy: "test", test: "test" }[route]) || homeArea;
+  isHarmonyActive = ["learn", "practice", "test", "course"].includes(route);
   isModeSelectOnly = route === "home";
   syncAppModeClasses();
   document.body.classList.toggle("is-home", route === "home");
   document.body.classList.toggle("is-harmony-active", isHarmonyActive);
-  for (const [id, expected] of [["home-view", "home"], ["lesson-view", "learn"], ["harmony-view", "practice"], ["test-view", "test"]]) {
+  for (const [id, expected] of [["home-view", "home"], ["lesson-view", "learn"], ["harmony-view", "practice"], ["test-view", "test"], ["course-view", "course"]]) {
     document.querySelector(`#${id}`).hidden = route !== expected;
   }
   document.querySelector("#home-button").hidden = route === "home";
   document.querySelectorAll("[data-home-area]").forEach(panel => { panel.hidden = panel.dataset.homeArea !== homeArea; });
   document.querySelectorAll("[data-area]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.area === homeArea)));
+  if (route === "course") {
+    const chapterId = Number(options.chapterId || popsCourse?.current().chapterId || 2);
+    if (!CodoriPops.available(CodoriPops.chapterFor(chapterId)) || chapterId === 1) return navigateApp("home", { ...options, area: homeArea });
+    popsCourse.open(chapterId, homeArea);
+  }
+  if (route === "home") CodoriPops.renderMap(document.querySelector("#pops-map"), homeArea, navigateApp);
   if (!options.fromHistory) {
     try {
-      const state = { ...window.history.state, codoriRoute: route, codoriArea: homeArea, codoriCatalogSet: options.catalogSetId || "all-main-chords" };
+      const state = { ...window.history.state, codoriRoute: route, codoriArea: homeArea, codoriCatalogSet: options.catalogSetId || "all-main-chords", codoriChapter: route === "course" ? popsCourse.current().chapterId : null };
       const method = options.replace ? "replaceState" : "pushState";
       window.history[method](state, "");
     } catch (error) { /* On-page navigation works without the History API. */ }
@@ -366,13 +372,14 @@ async function navigateApp(route, options = {}) {
     setLearningMenuGroup("story");
   }
   if (["legacy", "catalog"].includes(route)) elements.learningMenu.open = true;
-  const heading = { home: "home-title", learn: "lesson-title", practice: "harmony-prompt", test: "test-title" }[route];
+  const heading = { home: "home-title", learn: "lesson-title", practice: "harmony-prompt", test: "test-title", course: "course-title" }[route];
   if (heading) document.querySelector(`#${heading}`).focus();
   if (typeof window.scrollTo === "function") window.scrollTo({ top: 0 });
 }
 
 
 const LESSON_EXAMPLES = {
+  triads: { key: "C", degrees: ["I", "vi", "V7", "I"], chords: ["C", "Am", "G7", "C"] },
   tonic: { key: "C", degrees: ["I", "IV", "V7", "I"], chords: ["C", "F", "G7", "C"] },
   roles: { key: "C", degrees: ["I / T", "IV / S", "V7 / D", "I / T"], chords: ["C", "F", "G7", "C"] },
   "c-tonic": { key: "C", degrees: ["I / T", "IV / S", "V7 / D", "I / T"], chords: ["C", "F", "G7", "C"] },
@@ -876,7 +883,7 @@ function goToTop(options = {}) {
 
 window.addEventListener("popstate", event => {
   if (routerReady) {
-    navigateApp(event.state?.codoriRoute || "home", { fromHistory: true, area: event.state?.codoriArea || "learn", catalogSetId: event.state?.codoriCatalogSet });
+    navigateApp(event.state?.codoriRoute || "home", { fromHistory: true, area: event.state?.codoriArea || "learn", catalogSetId: event.state?.codoriCatalogSet, chapterId: event.state?.codoriChapter });
   } else if (!isModeSelectOnly) {
     goToTop({ fromPopstate: true });
   }
@@ -2619,6 +2626,24 @@ function playHarmonyChord(name, shouldContinue = () => true) {
       return playChord(chord, { trackProgress: false, frequencies, playbackToken: playbackGeneration, shouldContinue });
 }
 
+// All course chords, bass notes and fixed melodies use the shared audio owner.
+async function playCourseEvent(event, shouldContinue = () => true) {
+  const token = playbackGeneration;
+  const context = await ensureAudioContextReady();
+  if (token !== playbackGeneration || !shouldContinue()) return;
+  if (!CodoriAudio.isRenderable(context)) throw new Error("Audio unavailable");
+  const notes = CodoriPopsData.chords[event.chord];
+  if (!notes) throw new Error(`Missing course chord: ${event.chord}`);
+  const owner = CodoriAudio.forContext(context);
+  const frequency = midi => 440 * 2 ** ((midi - 69) / 12);
+  const gateSeconds = event.beats * CodoriAudio.policy.sequenceStepMs / 1000;
+  const voices = [trackSyntheticPlayback(owner.play({ frequencies: notes.map(frequency), gateSeconds }))];
+  if (event.melody.length) voices.push(trackSyntheticPlayback(owner.play({ profile: "melody", frequencies: event.melody.map(frequency), gateSeconds, gain: 0.45 })));
+  const stop = () => voices.forEach(voice => voice());
+  Object.assign(stop, { nextStepMs: event.beats * CodoriAudio.policy.sequenceStepMs, completeAfterMs: Math.max(...voices.map(voice => voice.completeAfterMs)) });
+  return stop;
+}
+
 async function init() {
   await loadPracticeResources();
   await loadChordData();
@@ -2649,25 +2674,27 @@ async function init() {
   setModeSelectOnly(shouldStartOnModeSelect);
   setView(activeView);
   if (window.CodoriHarmony) {
+    CodoriGuide.mount(document);
+    popsCourse = CodoriPops.mount({ root: document.querySelector("#course-view"), playEvent: playCourseEvent, beforePlay: stopLearningAudio, navigate: navigateApp });
     harmonySession = CodoriHarmony.mount({ root: document.querySelector("#harmony-view"), playChord: playHarmonyChord });
     harmonyTestSession = CodoriHarmony.mountTest({ root: document.querySelector("#test-view"), playChord: playHarmonyChord });
     lessonPlayer = CodoriHarmony.createPlayer({ playChord: playHarmonyChord,
-      onCue: cue => { document.querySelector("#lesson-cue").textContent = cue; },
-      onEnd: () => { document.querySelector("#lesson-cue").textContent = "音例を聞き終えました。別の帰り方や、練習を試してみよう。"; },
-      onError: () => { document.querySelector("#lesson-cue").textContent = "再生できませんでした。音例のボタンでもう一度試してください。"; }
+      onCue: cue => { document.querySelector("#lesson-cue").textContent = cue; CodoriGuide.update(document.querySelector("#lesson-view"), "playing"); },
+      onEnd: () => { CodoriGuide.update(document.querySelector("#lesson-view"), "heard"); document.querySelector("#lesson-cue").textContent = "音例を聞き終えました。別の帰り方や、練習を試してみよう。"; },
+      onError: () => { CodoriGuide.update(document.querySelector("#lesson-view"), "review"); document.querySelector("#lesson-cue").textContent = "再生できませんでした。音例のボタンでもう一度試してください。"; }
     });
     document.querySelectorAll("[data-route]").forEach(button => {
       button.disabled = false;
       button.addEventListener("click", () => navigateApp(button.dataset.route));
     });
-    document.querySelectorAll("[data-area]").forEach(button => button.addEventListener("click", () => navigateApp("home", { area: button.dataset.area })));
+    document.querySelectorAll("[data-area]").forEach(button => button.addEventListener("click", () => currentAppRoute === "course" ? navigateApp("course", { chapterId: popsCourse.current().chapterId, area: button.dataset.area }) : navigateApp("home", { area: button.dataset.area })));
     document.querySelectorAll("[data-example]").forEach(button => button.addEventListener("click", () => playLessonExample(button.dataset.example)));
-    document.querySelector("#lesson-stop").addEventListener("click", () => { stopLearningAudio(); document.querySelector("#lesson-cue").textContent = "停止しました。音例は何度でも聞き直せます。"; });
+    document.querySelector("#lesson-stop").addEventListener("click", () => { stopLearningAudio(); CodoriGuide.update(document.querySelector("#lesson-view"), "ready"); document.querySelector("#lesson-cue").textContent = "停止しました。音例は何度でも聞き直せます。"; });
     routerReady = true;
     const requestedMode = urlParams.get("mode");
-    const initialRoute = ["learn", "practice", "test"].includes(requestedMode) ? requestedMode
+    const initialRoute = requestedMode === "course" ? "course" : ["learn", "practice", "test"].includes(requestedMode) ? requestedMode
       : requestedSetId || requestedStageId === "none" ? "catalog" : requestedStageId || urlParams.has("view") ? "legacy" : "home";
-    navigateApp(initialRoute, { replace: true, catalogSetId: requestedSetId || activeSet.id });
+    navigateApp(initialRoute, { replace: true, catalogSetId: requestedSetId || activeSet.id, chapterId: Number(urlParams.get("chapter")) || 2, area: ["learn", "practice", "test"].includes(urlParams.get("intent")) ? urlParams.get("intent") : undefined });
   }
   if (isModeSelectOnly) {
     // トップ（モード選択）では、モバイルでも選択肢をたたまず見せる。
