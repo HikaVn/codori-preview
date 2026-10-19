@@ -61,7 +61,7 @@ function harness(saved, search = '?stage=0', activeStage = stage) {
   const storage = new Map(saved === undefined ? [] : [[key, typeof saved === 'string' ? saved : JSON.stringify(saved)]]);
   const document = {
     querySelector: get,
-    querySelectorAll: selector => selector === '.quiz-option' ? get('#quiz-options').children : [],
+    querySelectorAll: selector => ['.quiz-option', '#quiz-options .quiz-option'].includes(selector) ? get('#quiz-options').children : [],
     createElement: () => new Element(),
     addEventListener() {},
     body: new Element()

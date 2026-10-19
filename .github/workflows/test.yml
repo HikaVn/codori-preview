@@ -1,0 +1,24 @@
+name: Test Codori
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax and feature regressions
+        run: |
+          node --check app/main.js
+          node --check app/harmony.js
+          node tools/test-functional-harmony.mjs
+          node tools/test-functional-harmony-integration.mjs
+          node tools/test-practice-navigation.mjs
+          node tools/test-chord-diagram.mjs
+          node tools/test-repeats.mjs
