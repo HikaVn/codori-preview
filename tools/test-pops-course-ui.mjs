@@ -15,6 +15,8 @@ try{
  const original=await page.evaluate(()=>JSON.stringify({practiceProgress,storage:{...localStorage}}));
  check((await page.locator('.journey-nav [data-area]').allTextContents()).join('/')==='学ぶ/練習する/実践する','existing three intent tabs retained');
  check(await page.locator('[data-course-chapter]').count()===9,'one nine-chapter map');
+ check(await page.locator('#home-view [data-route="learn"],#home-view [data-route="practice"],#home-view [data-route="test"]').count()===0,'course map is the only chapter entry');
+ check((await page.locator('[data-course-chapter="1"]').textContent()).includes('機能和声の基礎'),'functional harmony is named as chapter1 of the course');
  check(await page.locator('[data-course-chapter]:enabled').count()===Number(process.env.CODORI_EXPECT_CHAPTERS||9),'only completed chapters enabled');
  await click('[data-course-chapter="2"]');check(await page.locator('#course-title').textContent()==='調の仲間と代理コード','chapter 2 opens from map');
  check(await page.locator('[data-course-example]').count()===6,'chapter 2 has six original comparisons');
@@ -59,11 +61,19 @@ try{
  await page.setViewportSize({width:390,height:844});
  await click('[data-area="learn"]');await click('[data-course-chapter="1"]');
  check(await page.locator('#lesson-view [data-codori-guide]').isVisible(),'chapter1 learning reuses original lesson with bird');
- await click('[data-area="practice"]');await click('[data-course-chapter="1"]');
+ check((await page.locator('#lesson-title').textContent()).includes('機能和声の基礎'),'chapter1 header uses canonical course title');
+ await click('[data-example="roles"]');
+ await click('[data-area="practice"]');
  check(await page.locator('#harmony-view [data-codori-guide]').isVisible(),'chapter1 practice reuses original exercise with bird');
- await click('[data-area="test"]');await click('[data-course-chapter="1"]');
+ check(await page.evaluate(()=>currentAppRoute==='practice'&&activeSyntheticPlaybacks.size===0&&currentCourseChapter()===1),'chapter1 intent switch stays in chapter and stops sound');
+ check(await page.locator('#harmony-view .harmony-guide').count()===0,'definitions live in chapter1 learning rather than duplicated hints');
+ await click('[data-area="test"]');
  check(await page.locator('#test-view [data-codori-guide]').isVisible(),'chapter1 practical route retains test and neutral bird');
- await click('#home-button');
+ await click('#test-view [data-route="home"]');
+ check(await page.evaluate(()=>currentAppRoute==='home'&&homeArea==='test'),'chapter1 chapter-picker returns to map with intent retained');
+ await page.goBack();await ready(()=>currentAppRoute==='test');
+ check((await page.locator('#test-view [data-foundation-context]').textContent()).includes('第1章'),'back restores the chapter1 context');
+ await page.goForward();await ready(()=>currentAppRoute==='home');
  const chapterIds=await page.evaluate(()=>CodoriPopsData.chapters.filter(c=>!c.legacy&&CodoriPops.available(c)).map(c=>c.id));
  for(const id of chapterIds){
   await click('[data-area="learn"]');await click(`[data-course-chapter="${id}"]`);
@@ -83,6 +93,11 @@ try{
   await click('#home-button');check(await page.evaluate(()=>currentAppRoute==='home'&&activeSyntheticPlaybacks.size===0),`chapter ${id} creative playback canceled by home`);
  }
  check(await page.evaluate(()=>JSON.stringify({practiceProgress,storage:{...localStorage}}))===original,'all chapter activities preserve original saved records');
+ for(const intent of ['learn','practice','test']){
+  const target=new URL(process.env.CODORI_TEST_URL||'http://127.0.0.1:8769/app/');target.search=new URLSearchParams({mode:'course',chapter:'1',intent}).toString();
+  await page.goto(target.href);await ready(()=>typeof popsCourse!=='undefined'&&popsCourse);
+  check(await page.evaluate(intent=>currentAppRoute===intent&&currentCourseChapter()===1,intent),`canonical chapter1 deep link: ${intent}`);
+ }
  const wave=await page.evaluate(async()=>{
   const results=[];stopLearningAudio();
   for(const chapter of CodoriPopsData.chapters.filter(c=>!c.legacy&&CodoriPops.available(c)))for(const lesson of chapter.lessons)for(const variant of lesson.variants){

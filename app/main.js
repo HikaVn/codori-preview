@@ -333,7 +333,13 @@ function stopLearningAudio() {
   stopAudioPlayback();
 }
 
+const FOUNDATION_ROUTES = ["learn", "practice", "test"];
+function currentCourseChapter() {
+  return FOUNDATION_ROUTES.includes(currentAppRoute) ? 1 : currentAppRoute === "course" ? popsCourse?.current().chapterId : null;
+}
+
 async function navigateApp(route, options = {}) {
+  if (route === "course" && Number(options.chapterId) === 1) route = CodoriPops.routeForChapter(1, options.area || options.intent || homeArea);
   if (!["home", "learn", "practice", "test", "legacy", "catalog", "course"].includes(route)) route = "home";
   stopLearningAudio();
   currentAppRoute = route;
@@ -349,6 +355,13 @@ async function navigateApp(route, options = {}) {
   document.querySelector("#home-button").hidden = route === "home";
   document.querySelectorAll("[data-home-area]").forEach(panel => { panel.hidden = panel.dataset.homeArea !== homeArea; });
   document.querySelectorAll("[data-area]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.area === homeArea)));
+  const resources = document.querySelector("#home-resources");
+  resources.hidden = !resources.querySelector(`[data-home-area="${homeArea}"]`)?.querySelector("button, a");
+  if (FOUNDATION_ROUTES.includes(route)) {
+    const root = document.querySelector({ learn: "#lesson-view", practice: "#harmony-view", test: "#test-view" }[route]);
+    root.querySelector("[data-foundation-context]").textContent = CodoriPops.contextLabel(1, route);
+    root.querySelector("[data-foundation-name]").textContent = CodoriPops.chapterFor(1).title;
+  }
   if (route === "course") {
     const chapterId = Number(options.chapterId || popsCourse?.current().chapterId || 2);
     if (!CodoriPops.available(CodoriPops.chapterFor(chapterId)) || chapterId === 1) return navigateApp("home", { ...options, area: homeArea });
@@ -357,7 +370,7 @@ async function navigateApp(route, options = {}) {
   if (route === "home") CodoriPops.renderMap(document.querySelector("#pops-map"), homeArea, navigateApp);
   if (!options.fromHistory) {
     try {
-      const state = { ...window.history.state, codoriRoute: route, codoriArea: homeArea, codoriCatalogSet: options.catalogSetId || "all-main-chords", codoriChapter: route === "course" ? popsCourse.current().chapterId : null };
+      const state = { ...window.history.state, codoriRoute: route, codoriArea: homeArea, codoriCatalogSet: options.catalogSetId || "all-main-chords", codoriChapter: currentCourseChapter() };
       const method = options.replace ? "replaceState" : "pushState";
       window.history[method](state, "");
     } catch (error) { /* On-page navigation works without the History API. */ }
@@ -2687,7 +2700,10 @@ async function init() {
       button.disabled = false;
       button.addEventListener("click", () => navigateApp(button.dataset.route));
     });
-    document.querySelectorAll("[data-area]").forEach(button => button.addEventListener("click", () => currentAppRoute === "course" ? navigateApp("course", { chapterId: popsCourse.current().chapterId, area: button.dataset.area }) : navigateApp("home", { area: button.dataset.area })));
+    document.querySelectorAll("[data-area]").forEach(button => button.addEventListener("click", () => {
+      const chapterId = currentCourseChapter();
+      navigateApp(chapterId ? CodoriPops.routeForChapter(chapterId, button.dataset.area) : "home", { chapterId, area: button.dataset.area });
+    }));
     document.querySelectorAll("[data-example]").forEach(button => button.addEventListener("click", () => playLessonExample(button.dataset.example)));
     document.querySelector("#lesson-stop").addEventListener("click", () => { stopLearningAudio(); CodoriGuide.update(document.querySelector("#lesson-view"), "ready"); document.querySelector("#lesson-cue").textContent = "停止しました。音例は何度でも聞き直せます。"; });
     routerReady = true;

@@ -22,6 +22,7 @@ jobs:
           node --check app/pops-course-data.js
           node --check app/pops-course.js
           node tools/test-pops-course.mjs
+          node tools/test-course-navigation.mjs
           node --check app/song/song.js
           node --check app/song/score.js
           node tools/test-audio-contract.mjs

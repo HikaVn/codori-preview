@@ -53,12 +53,21 @@
     chapter.lab.choices.forEach((slot,i)=>{const option=slot.options[selections[i]||0];if(!option)throw new Error('Invalid creative choice');events[slot.index].chord=option.chord;});
     return events;
   }
+  function routeForChapter(id,intent='learn') {
+    const chapter=chapterFor(id);if(!available(chapter))return 'home';
+    const area=['learn','practice','test'].includes(intent)?intent:'learn';
+    return chapter.legacy?area:'course';
+  }
+  function contextLabel(id,intent) {
+    const chapter=chapterFor(id);
+    return `ポップス和声 · 第${chapter.id}章${chapter.advanced?'（発展）':''} · ${{learn:'学ぶ',practice:'練習する',test:'実践する'}[intent]||'学ぶ'}`;
+  }
   function renderMap(root,area,navigate) {
     const verb={learn:'学ぶ',practice:'練習する',test:'実践する'}[area]||'学ぶ';
-    root.innerHTML=`<div class="course-map-heading"><div><p class="eyebrow">ポップス和声の学習マップ</p><h3>音から、使える和声へ</h3><p>上の3分類を選ぶと、同じ章を「学ぶ・練習する・実践する」で開けます。</p></div><img src="../assets/approved/characters/major.png" alt="" width="88" height="88"></div><ol class="course-map-list">${data.chapters.map(chapter=>`<li><button type="button" data-course-chapter="${chapter.id}" ${available(chapter)?'':'disabled'}><small>${chapter.advanced?'発展':'基礎'} · 第${chapter.id}章</small><strong>${escape(chapter.title)}</strong><span>${escape(chapter.goal)}</span><small>${available(chapter)?`${verb} →`:'準備中（未実装）'}</small></button></li>`).join('')}</ol>`;
+    root.innerHTML=`<div class="course-map-heading"><div><p class="eyebrow">基礎6章・発展3章</p><h3>章を選ぶ</h3><p>${{learn:"音例と解説で、しくみを知ろう。",practice:"聴き分けて、正解と理由をたしかめよう。",test:"学んだことを使い、最後に振り返ろう。"}[area]} 第1章は機能和声の基礎から。章を開いたら、上の3分類で同じ章の学び方を切り替えられます。</p></div><img src="../assets/approved/characters/major.png" alt="" width="88" height="88"></div><ol class="course-map-list">${data.chapters.map(chapter=>`<li><button type="button" data-course-chapter="${chapter.id}" ${available(chapter)?'':'disabled'}><small>${chapter.advanced?'発展':'基礎'} · 第${chapter.id}章</small><strong>${escape(chapter.title)}</strong><span>${escape(chapter.goal)}</span><small>${available(chapter)?`${verb} →`:'準備中（未実装）'}</small></button></li>`).join('')}</ol>`;
     root.querySelectorAll('[data-course-chapter]').forEach(button=>button.addEventListener('click',()=>{
       const chapter=chapterFor(button.dataset.courseChapter);
-      navigate(chapter.legacy?({learn:'learn',practice:'practice',test:'test'}[area]):'course',{chapterId:chapter.id,area,intent:area});
+      navigate(routeForChapter(chapter.id,area),{chapterId:chapter.id,area,intent:area});
     }));
   }
   function mount({root,playEvent,beforePlay,navigate}) {
@@ -106,7 +115,7 @@
       id=Number(id);
       chapter=chapterFor(id);if(!available(chapter)||chapter.legacy)throw new Error('Chapter unavailable');
       intent=['learn','practice','test'].includes(area)?area:'learn';shownQuestion='';
-      root.innerHTML=`<div class="course-breadcrumb"><button class="secondary-button" type="button" data-course-map>章を選ぶ</button><p>${{learn:'学ぶ',practice:'練習する',test:'実践する'}[intent]} · ${chapter.advanced?'発展':'基礎'} · 第${chapter.id}章</p></div><div class="course-heading"><div><h2 id="course-title" tabindex="-1">${escape(chapter.title)}</h2><p>${escape(chapter.goal)}</p></div><div data-codori-guide></div></div><p class="course-prerequisite">先に知っておくこと：${escape(chapter.prerequisite)}</p><div data-course-content></div><div class="lesson-audio-status"><p data-course-cue role="status">音例を選んで聴いてみよう。</p><button class="secondary-button" type="button" data-course-stop disabled>停止</button></div><p class="course-memory">この章の回答・伴奏の選択・メモはページ内だけに保持します。再読み込みで消え、ストーリーや曲の保存記録は変更しません。</p>`;
+      root.innerHTML=`<div class="course-breadcrumb"><button class="secondary-button" type="button" data-course-map>章を選ぶ</button><p>${contextLabel(chapter.id,intent)}</p></div><div class="course-heading"><div><h2 id="course-title" tabindex="-1">${escape(chapter.title)}</h2><p>${escape(chapter.goal)}</p></div><div data-codori-guide></div></div><p class="course-prerequisite">先に知っておくこと：${escape(chapter.prerequisite)}</p><div data-course-content></div><div class="lesson-audio-status"><p data-course-cue role="status">音例を選んで聴いてみよう。</p><button class="secondary-button" type="button" data-course-stop disabled>停止</button></div><p class="course-memory">この章の回答・伴奏の選択・メモはページ内だけに保持します。再読み込みで消え、ストーリーや曲の保存記録は変更しません。</p>`;
       window.CodoriGuide.mount(root);
       if(intent==='learn'){
         q('[data-course-content]').innerHTML=`<p>${escape(chapter.intro)}</p>${chapter.lessons.map((lesson,i)=>`<article class="lesson-block"><p class="eyebrow">${i+1} / ${chapter.lessons.length}</p><h3>${escape(lesson.title)}</h3>${lesson.body.map(text=>`<p>${escape(text)}</p>`).join('')}<div class="lesson-comparison">${lesson.variants.map((variant,v)=>`<button class="secondary-button" type="button" data-course-example="${i}-${v}"><strong>${v?'B':'A'} · ${escape(variant.label)}</strong><span>${escape(path(variant.events))}</span>${variant.events.some(e=>e.melody.length)?'<small>上の旋律も一緒に鳴ります</small>':''}</button>`).join('')}</div></article>`).join('')}<aside class="course-caution"><h3>使うときの手がかり</h3><p>${escape(chapter.caution)}</p></aside><p>次は上の「練習する」で聴き分け、「実践する」で伴奏を選べます。</p>`;
@@ -142,5 +151,5 @@
     function stop(){player.stop();preview=false;sessions.forEach(session=>session.stop());const button=q('[data-course-stop]');if(button)button.disabled=true;}
     return {open,stop,current:()=>({chapterId:chapter?.id,intent}),sessions,previewEvents};
   }
-  window.CodoriPops=Object.freeze({chapterFor,available,expectedAnswer,questionPool,buildDeck,practiceSteps,createSession,labEvents,renderMap,mount});
+  window.CodoriPops=Object.freeze({chapterFor,available,routeForChapter,contextLabel,expectedAnswer,questionPool,buildDeck,practiceSteps,createSession,labEvents,renderMap,mount});
 })();

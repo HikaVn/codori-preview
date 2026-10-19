@@ -14,13 +14,13 @@ const route = async (selector) => page.locator(selector).click();
 const ready = async (expression) => page.waitForFunction(expression, null, { timeout: 20000 });
 try {
   await page.goto(process.env.CODORI_TEST_URL || 'http://127.0.0.1:8765/app/');
-  await page.locator('#home-view [data-route="learn"]:enabled').waitFor({ timeout: 10000 });
+  await page.locator('#pops-map [data-course-chapter="1"]:enabled').waitFor({ timeout: 10000 });
   check(await page.locator('#home-view').isVisible(), 'one home with learn/practice/test categories');
   check((await page.locator('[data-area]').allTextContents()).join('/') === '学ぶ/練習する/実践する', 'three requested menu labels');
   if (!process.env.CODORI_UI_EXISTING_ONLY) {
   const before = await page.evaluate(() => JSON.stringify(practiceProgress));
   await page.screenshot({ path: `${output}/home-three-areas.png`, fullPage: true });
-  await route('#home-view [data-route="learn"]');
+  await route('#pops-map [data-course-chapter="1"]');
   check(await page.locator('#lesson-title').isVisible(), 'lesson entry and explanations');
   await route('[data-example="roles"]');
   await page.waitForTimeout(100);
@@ -70,6 +70,8 @@ try {
     await page.evaluate(() => { for (let j = 0; j < 10; j++) document.querySelector('[data-test-function="T"]').click(); });
     check(await page.evaluate(() => document.querySelector('#test-review').children.length === 0 && document.querySelector('#test-score').textContent === '' && document.querySelectorAll('#test-view .is-correct, #test-view .is-wrong').length === 0), `test Q${i + 1} hides answers and grades`);
     check(await page.evaluate(() => harmonyTestSession.snapshot().answered) === i + 1, `test Q${i + 1} repeated answer counts once`);
+    check(await page.locator('#test-view [data-codori-guide]').getAttribute('data-guide-state') === 'heard', `test Q${i + 1} bird stays neutral after answer`);
+    check(await page.evaluate(() => !('answer' in harmonyTestSession.snapshot().question) && harmonyTestSession.snapshot().results.length === 0), `test Q${i + 1} snapshot keeps answers private`);
     if (i === 0) {
       await route('#test-view [data-route="learn"]');
       await page.goBack(); await ready(() => currentAppRoute === 'test');
@@ -80,6 +82,7 @@ try {
     await route('#test-next');
   }
   check(await page.evaluate(() => harmonyTestSession.snapshot().status === 'finished') && await page.locator('#test-review li').count() === 3, 'test end reveals score and three explanations');
+  check(await page.locator('#test-view [data-codori-guide]').getAttribute('data-guide-state') === 'finished', 'bird reflects completion only after final grading');
   await page.screenshot({ path: `${output}/test-results-mobile.png`, fullPage: true });
   await route('#test-again');
   check(await page.evaluate(() => harmonyTestSession.snapshot().answered === 0) && await page.locator('#test-setup').isVisible(), 'restart resets answers and result DOM');
@@ -113,10 +116,10 @@ try {
   await page.evaluate(() => { navigateApp('legacy'); navigateApp('catalog'); navigateApp('legacy'); });
   await page.waitForTimeout(500);
   check(await page.evaluate(() => currentAppRoute === 'legacy' && activePracticeStage && chordData.length === resolveStageCodes(activePracticeStage).length), 'rapid catalog/story routing ignores stale data fetch');
-  await route('#home-button'); await route('[data-area="learn"]'); await route('#home-view [data-route="learn"]');
+  await route('#home-button'); await route('[data-area="learn"]'); await route('#pops-map [data-course-chapter="1"]');
   await route('[data-example="plagal"]'); await route('#home-button');
   check(await page.evaluate(() => activeSyntheticPlaybacks.size === 0), 'home cancels lesson example');
-  await route('[data-area="practice"]'); await route('#open-harmony'); await route('#harmony-play');
+  await route('[data-area="practice"]'); await route('#pops-map [data-course-chapter="1"]'); await route('#harmony-play');
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
   check(await page.evaluate(() => activeSyntheticPlaybacks.size === 0 && harmonySession.snapshot().phase !== 'playing'), 'hidden page stops sound and reservations');
   await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
