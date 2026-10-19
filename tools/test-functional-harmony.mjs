@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 
 const context = vm.createContext({ window: {} });
+vm.runInContext(fs.readFileSync(new URL('../app/audio-engine.js', import.meta.url), 'utf8'), context);
 vm.runInContext(fs.readFileSync(new URL('../app/harmony.js', import.meta.url), 'utf8'), context);
 const { questionPool, createSession, createTestSession, audioNotesFor } = context.window.CodoriHarmony;
 const plain = value => JSON.parse(JSON.stringify(value));
