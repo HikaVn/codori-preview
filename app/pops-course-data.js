@@ -14,7 +14,7 @@
   const lesson = (id,title,body,a,b,ask,reason) => ({id,title,body,variants:[a,b],ask,reason});
   const choice = (index,prompt,options) => ({index,prompt,options:options.map(([chord,why])=>({chord,why}))});
   const chapters = [
-    {id:1,title:'調と、帰る場所',goal:'度数・T/S/D・終止を、主調と前後の流れから聴く。',prerequisite:'ドレミと拍。長調の基本から始めます。',legacy:true,lessons:[]},
+    {id:1,title:'機能和声の基礎：調と帰る場所',goal:'度数・T/S/D・終止を、主調と前後の流れから聴く。',prerequisite:'ドレミと拍。長調の基本から始めます。',legacy:true,lessons:[]},
     {id:2,title:'調の仲間と代理コード',goal:'iiとIV、viとIを比べ、旋律と前後関係に合わせて選ぶ。',prerequisite:'第1章。長三和音・短三和音の構成音。',key:'C長調',
       intro:'C長調の三和音は C・Dm・Em・F・G・Am・Bdim。「ダイアトニック」は同じ音階の音からできること。「機能が近い」と「どこでも交換できる」は別です。',
       caution:'iii（Em）はCともGとも共通音を持ちますが、機能は文脈次第。vii°（Bdim）はB–D–FからCへの解決を聴く和音です。どちらも無条件のT/S/D当てや自由な置換としては採点しません。',

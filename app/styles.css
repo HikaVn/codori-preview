@@ -2271,7 +2271,9 @@ body.is-practice-active:not(.is-home):not(.is-harmony-active) .learning-menu { d
 .home-cards .song-mode-link { display: grid; gap: 12px; text-decoration: none; padding: 24px; background: #f4f8fc; border: 1px solid var(--line); border-radius: 12px; }
 
 /* Course uses the existing three intent tabs; the map selects a chapter only. */
-.course-map { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
+.course-map { margin: 20px 0; }
+.home-resources { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 18px; }
+.home-resources[hidden] { display: none; }
 .course-map-heading, .course-heading, .course-breadcrumb { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .course-map-heading > div, .course-heading > div:first-child { flex: 1; min-width: 220px; }
 .course-map-heading img, .codori-guide img { object-fit: contain; flex: 0 0 auto; }

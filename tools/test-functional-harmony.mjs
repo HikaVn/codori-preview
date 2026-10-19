@@ -255,3 +255,29 @@ test('six-question tests balance T/S/D two times each without repeating a questi
   assert.equal(new Set(rows.map(item => item.question.id)).size, 6);
   for (const role of ['T', 'S', 'D']) assert.equal(rows.filter(item => item.question.answer === role).length, 2);
 });
+
+
+test('mounted test guide stays neutral for correct and incorrect answers until grading without exposing answers', async () => {
+  const timers = new Map(), states = [], nodes = new Map(); let timerId = 0;
+  const node = () => ({hidden:false, disabled:false, textContent:'', children:[], addEventListener(){}, setAttribute(){}, replaceChildren(){this.children=[];}, appendChild(item){this.children.push(item);}, append(...items){this.children.push(...items);}});
+  const buttons = ['T','S','D'].map(value => Object.assign(node(), {dataset:{testFunction:value}}));
+  const root = {querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector);}, querySelectorAll(){return buttons;}};
+  const scope = vm.createContext({window:{CodoriGuide:{update(_root,state){states.push(state);}}},
+    setTimeout(fn){timers.set(++timerId,fn);return timerId;}, clearTimeout(id){timers.delete(id);},
+    document:{createElement:node}});
+  for(const file of ['app/audio-engine.js','app/harmony.js'])vm.runInContext(fs.readFileSync(new URL('../'+file,import.meta.url),'utf8'),scope);
+  const session = scope.window.CodoriHarmony.mountTest({root,playChord:async()=>()=>{}});
+  const finish = async()=>{let steps=0;while(timers.size){assert.ok(++steps<30);const [id,fn]=timers.entries().next().value;timers.delete(id);await fn();}};
+  session.start('step1',3);
+  for(let i=0;i<3;i++){
+    await session.play();assert.equal(states.at(-1),'playing');await finish();assert.equal(states.at(-1),'heard');
+    session.answer('T');assert.equal(states.at(-1),'heard');
+    assert.equal(session.snapshot().question.answer,undefined);assert.equal(session.snapshot().correct,undefined);assert.equal(session.snapshot().results.length,0);
+    await session.play();await finish();session.stop();assert.equal(states.at(-1),'heard');
+    assert.ok(states.every(value=>!['correct','review','finished'].includes(value)));
+    session.next();
+  }
+  assert.equal(session.snapshot().correct,1,'balanced test includes one correct and two incorrect answers');
+  assert.equal(states.at(-1),'finished');assert.equal(root.querySelector('#test-review').children.length,3);
+  session.reset();assert.equal(states.at(-1),'ready');
+});

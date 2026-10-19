@@ -48,7 +48,8 @@ test('the three menu areas put the story only under practical use and preserve s
   assert.doesNotMatch(practice, /data-route="legacy"/);
   const practical = html.split('data-home-area="test"')[1].split('id="lesson-view"')[0];
   assert.match(practical, /data-route="legacy"[^>]*><strong>音あてストーリー/);
-  assert.match(practical, /data-route="test"/);
+  assert.doesNotMatch(practical, /data-route="test"/);
+  assert.match(read('app/pops-course-data.js'), /id:1,title:'機能和声の基礎/);
   assert.match(read('app/main.js'), /const STORAGE_KEY = "codori\.practiceProgress\.v1"/);
   assert.match(read('app/main.js'), /legacy: "test"/);
 });

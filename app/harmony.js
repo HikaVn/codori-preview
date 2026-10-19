@@ -185,14 +185,16 @@
   function mountTest({ root, playChord }) {
     const get = id => root.querySelector(`#test-${id}`);
     const session = createTestSession({ playChord, onChange(state) {
-      window.CodoriGuide?.update(root, state.phase === "playing" ? "playing" : state.status === "finished" ? "finished" : state.selected ? "heard" : "ready");
+      // The test snapshot deliberately hides correctness until final grading.
+      const guideState = state.status === "finished" ? "finished" : state.status !== "running" ? "ready"
+        : state.phase === "playing" ? "playing" : state.selected || state.heard ? "heard" : "ready";
+      window.CodoriGuide?.update(root, guideState);
       get("setup").hidden = state.status !== "setup";
       get("running").hidden = state.status !== "running";
       get("results").hidden = state.status !== "finished";
       get("review").replaceChildren();
       if (state.status === "running") {
-        window.CodoriGuide?.update(root, state.phase === "playing" ? "playing" : state.selected ? (state.selected === state.question.answer ? "correct" : "review") : state.heard ? "heard" : "ready");
-      const q = state.question;
+        const q = state.question;
         get("prompt").textContent = `第 ${state.index} / ${state.count} 問 · ${q.key}長調の ${q.target + 1} 音目（★）の役割は？`;
         get("path").textContent = Array.from({ length: q.length }, (_, i) => `${i === q.target ? "★ " : ""}${i + 1}音目`).join(" → ");
         get("cue").textContent = state.selected ? "回答を記録しました。正解と解説は最後に表示します。" : state.cue || "主調の終止と問題の進行を聞いてください。";
