@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Codori MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20261005-history-reset-v1">
+    <link rel="stylesheet" href="./styles.css?v=20261019-harmony-learning-v1">
   </head>
-  <body class="is-mode-select-only">
+  <body class="is-home is-mode-select-only">
     <main class="app-shell">
       <header class="top-bar">
         <div class="brand-block" id="brand-home" role="button" tabindex="0" aria-label="トップにもどる">
@@ -23,6 +23,131 @@
           </div>
         </div>
       </header>
+
+      <nav class="journey-nav" aria-label="学習の進め方">
+        <button type="button" data-area="learn" aria-pressed="true">学ぶ</button>
+        <button type="button" data-area="practice" aria-pressed="false">練習する</button>
+        <button type="button" data-area="test" aria-pressed="false">テスト</button>
+      </nav>
+      <section id="home-view" class="home-panel" aria-labelledby="home-title">
+        <h2 id="home-title" tabindex="-1">今日はどう進める？</h2>
+        <div data-home-area="learn">
+          <p>しくみを知り、音と結びつけよう。</p>
+          <div class="home-cards">
+            <button type="button" data-route="learn" disabled><strong>機能和声を学ぶ</strong><small>調・T / S / D・終止を、解説と音例で</small></button>
+            <button type="button" data-route="catalog" disabled><strong>コード図鑑</strong><small>鳥・コード名・運指・響きを調べる</small></button>
+          </div>
+        </div>
+        <div data-home-area="practice" hidden>
+          <p>答えるたびに、響きと理由をたしかめよう。</p>
+          <div class="home-cards">
+            <button type="button" id="open-harmony" data-route="practice" disabled><strong>機能和声を練習する</strong><small>進行の中の役割を3択で。すぐに正誤と解説</small></button>
+            <button type="button" data-route="legacy" disabled><strong>コードの音を練習する</strong><small>これまでのストーリー・音カード・ききくらべ・音あて・進行</small></button>
+          <a class="catalog-button song-mode-link" href="./song/">うた練習（β） 曲をつくって弾く</a>
+          </div>
+        </div>
+        <div data-home-area="test" hidden>
+          <p>最後まで答えてから、まとめて振り返ろう。</p>
+          <div class="home-cards">
+            <button type="button" data-route="test" disabled><strong>機能和声テスト</strong><small>3・6・9問から選ぶ。正解と解説は最後に</small></button>
+          </div>
+        </div>
+          <div class="history-reset">
+            <button class="stage-reset-button" id="reset-practice-history" type="button">学習履歴をリセット</button>
+            <p id="history-reset-status" role="status">このブラウザの全Stageの学習記録と、続きの位置を消します。</p>
+          </div>
+      </section>
+      <section id="lesson-view" class="harmony-panel" aria-labelledby="lesson-title" hidden>
+        <p class="eyebrow">学ぶ · 機能和声</p>
+        <h2 id="lesson-title" tabindex="-1">同じコードも、帰る場所で役割が変わる</h2>
+        <p>コードには、響きの種類とは別に、曲の中での役割があります。その役割を「機能」と呼びます。まずは長調の I・IV・V / V7 を、転調しない短い進行で聞いてみよう。</p>
+        <section class="lesson-block"><h3>1 · 調は「帰る場所」の手がかり</h3>
+          <p>C長調なら C が主和音 I。I → IV → V7 → I と聞くと、最後の I に帰る感覚をつかみやすくなります。ローマ数字は、コードの根音がその調の何番目の音かを表します。</p>
+          <p class="harmony-path">C長調: I（C）→ IV（F）→ V7（G7）→ I（C）</p>
+          <button class="primary-button" type="button" data-example="tonic">C長調の帰る場所をきく</button>
+        </section>
+        <section class="lesson-block"><h3>2 · 基本の3つの役割</h3>
+          <div class="lesson-functions">
+            <article><h4>トニック（T） · I</h4><p>帰ってきた、落ち着く場所。出発点にも、終止の到着点にもなります。</p></article>
+            <article><h4>サブドミナント（S） · IV</h4><p>帰る場所から外へ広がる役割。Vへつなぐほか、IV → Iでやわらかく帰ることもあります。</p></article>
+            <article><h4>ドミナント（D） · V / V7</h4><p>Iへの解決を待つ役割。V7の第7音も、次へ動きたい響きを強めます。</p></article>
+          </div>
+          <p>すべてメジャーの三和音でも I・IV・V の役割は違います。「明るいからトニック」とは決められません。</p>
+          <button class="primary-button" type="button" data-example="roles">T → S → D → T をきく</button>
+        </section>
+        <section class="lesson-block"><h3>3 · 同じ C の役割を比べよう</h3>
+          <p>C長調では C は I、F長調では V、G長調では IV。コード名だけで機能は決まりません。調を示す進行全体と、前後への動きを聞きます。</p>
+          <div class="lesson-comparison">
+            <button type="button" class="secondary-button" data-example="c-tonic">C長調: C（I / T）<small>C → F → G7 → C</small></button>
+            <button type="button" class="secondary-button" data-example="c-dominant">F長調: C（V / D）<small>F → Bb → C → F</small></button>
+            <button type="button" class="secondary-button" data-example="c-subdominant">G長調: C（IV / S）<small>G → C → D7 → G</small></button>
+          </div>
+        </section>
+        <section class="lesson-block"><h3>4 · 終止で「帰り方」を聞く</h3>
+          <p>V / V7 → I はドミナントから主和音へ解決する終止です。IV → I は変格終止と呼ばれ、違う帰り方を作ります。ここではまず主調を示してから、2つの結びを比べます。</p>
+          <div class="harmony-actions">
+            <button class="primary-button" type="button" data-example="authentic">V7 → I をきく</button>
+            <button class="secondary-button" type="button" data-example="plagal">IV → I をきく</button>
+          </div>
+          <p>実際の曲ではリズム、旋律、転回形、前後の和音も解釈に関わります。iii・vi などには文脈で複数の役割が考えられるため、今回の3択では扱いません。</p>
+        </section>
+        <div class="lesson-audio-status"><p id="lesson-cue" role="status">音例のボタンを押すと、進行と役割を表示しながら再生します。</p><button class="secondary-button" id="lesson-stop" type="button">音例を停止</button></div>
+        <div class="harmony-actions"><button class="primary-button" type="button" data-route="practice">練習してみる</button><button class="secondary-button" type="button" data-route="test">テストへ進む</button></div>
+      </section>
+      <section id="test-view" class="harmony-panel" aria-labelledby="test-title" hidden>
+        <p class="eyebrow">テスト · 機能和声</p><h2 id="test-title" tabindex="-1">最後にまとめて振り返る</h2>
+        <div id="test-setup">
+          <p>主調の終止と問題の進行を聞き、★の和音の役割を選びます。途中では正解や点数を表示しません。</p>
+          <label class="harmony-level" for="test-level">出題範囲<select id="test-level"><option value="step1">C長調の I / IV / V</option><option value="step2">C・F・G長調と V7</option></select></label>
+          <label class="harmony-level" for="test-count">問題数<select id="test-count"><option value="3">3問</option><option value="6" selected>6問</option><option value="9">9問</option></select></label>
+          <button class="primary-button" id="test-start" type="button">テストを始める</button>
+        </div>
+        <div id="test-running" hidden>
+          <h3 id="test-prompt"></h3><p class="harmony-path" id="test-path"></p>
+          <div class="harmony-actions"><button class="primary-button" id="test-play" type="button">進行をきく・聞き直す</button><button class="secondary-button" id="test-stop" type="button">停止</button></div>
+          <p id="test-cue" role="status"></p>
+          <div class="harmony-options" role="group" aria-label="テストの回答">
+            <button class="quiz-option" type="button" data-test-function="T">トニック（T）</button><button class="quiz-option" type="button" data-test-function="S">サブドミナント（S）</button><button class="quiz-option" type="button" data-test-function="D">ドミナント（D）</button>
+          </div>
+          <div class="harmony-actions"><button class="primary-button" id="test-next" type="button" disabled>次の問題へ</button><button class="secondary-button" id="test-restart" type="button">途中終了して設定に戻る</button></div>
+          <p>画面を移動すると音は止まります。途中の回答はこのページ内で保持し、「途中終了」で消します。再読み込みでは消えます。</p>
+        </div>
+        <div id="test-results" hidden><h3 id="test-score" aria-live="polite"></h3><ol id="test-review" class="test-review"></ol><button class="primary-button" id="test-again" type="button">設定に戻ってもう一度</button></div>
+        <div class="harmony-actions lesson-links"><button class="secondary-button" type="button" data-route="learn">役割の説明へ</button><button class="secondary-button" type="button" data-route="practice">解説つきで練習する</button></div>
+      </section>
+      <section id="harmony-view" class="harmony-panel" aria-labelledby="harmony-title" hidden>
+        <div class="harmony-heading">
+          <img src="../assets/approved/characters/major.png" alt="" width="100" height="100">
+          <div><p class="eyebrow">練習する · 機能和声</p><h2 id="harmony-title">帰る・広がる・帰りたくなる</h2></div>
+        </div>
+        <p>同じメジャーコードでも、調と進行が変わると役割が変わります。最初に I → IV → V7 → I で帰る場所を聞いてから、問題の進行の ★ の和音に注目しよう。</p>
+        <label class="harmony-level" for="harmony-level">練習の段階
+          <select id="harmony-level">
+            <option value="step1">1 · C長調の I / IV / V</option>
+            <option value="step2">2 · C・F・G長調と V7</option>
+          </select>
+        </label>
+        <p class="family-label" id="harmony-key"></p>
+        <h3 id="harmony-prompt" tabindex="-1"></h3>
+        <p class="harmony-path" id="harmony-path" aria-label="問題の進行と対象の和音"></p>
+        <div class="harmony-actions">
+          <button class="primary-button" id="harmony-play" type="button">進行をきく</button>
+          <button class="secondary-button" id="harmony-stop" type="button" disabled>停止</button>
+        </div>
+        <p id="harmony-cue" role="status"></p>
+        <div class="harmony-options" role="group" aria-label="和音の機能を選ぶ">
+          <button class="quiz-option" type="button" data-function="T" disabled><strong>トニック（T）</strong><small>帰ってきた・落ち着く</small></button>
+          <button class="quiz-option" type="button" data-function="S" disabled><strong>サブドミナント（S）</strong><small>外へ広がる・次へつなぐ</small></button>
+          <button class="quiz-option" type="button" data-function="D" disabled><strong>ドミナント（D）</strong><small>帰りたくなる・解決を待つ</small></button>
+        </div>
+        <p id="harmony-result" class="harmony-result" aria-live="polite"></p>
+        <div class="harmony-actions"><button class="secondary-button" id="harmony-next" type="button" disabled>次の問題へ</button><p id="harmony-score"></p></div>
+        <div class="harmony-actions lesson-links"><button class="secondary-button" type="button" data-route="learn">役割の説明へ</button><button class="secondary-button" type="button" data-route="test">テストへ進む</button></div>
+        <details class="harmony-guide"><summary>役割のヒント</summary>
+          <p>I はトニック、IV はサブドミナント、V / V7 はドミナント。たとえば C は C長調では I、F長調では V、G長調では IV です。コード名だけで役割は決まりません。</p>
+          <p>今回は転調のない長調の基本形を練習します。iii・vi など役割の解釈が分かれる和音は出題しません。記録はこの画面を開いている間だけ。レベルを変えると回数がゼロになります。</p>
+        </details>
+      </section>
 
       <details class="learning-menu" id="learning-menu" open>
         <summary class="learning-menu-summary">
@@ -79,12 +204,7 @@
             <div class="practice-stage-buttons" id="practice-stage-buttons" role="group" aria-label="練習ステージ"></div>
           </div>
           <p class="stage-number-note" id="stage-number-note">迷ったら「最初から」。慣れたらリストから好きなStageを選ぶ。</p>
-          <div class="history-reset">
-            <button class="stage-reset-button" id="reset-practice-history" type="button">学習履歴をリセット</button>
-            <p id="history-reset-status" role="status">このブラウザの全Stageの学習記録と、続きの位置を消します。</p>
-          </div>
           <button class="catalog-button" id="open-catalog" type="button">コード図鑑へ</button>
-          <a class="catalog-button song-mode-link" href="./song/">うた練習（β） 曲をつくって弾く</a>
         </div>
       </section>
         </div>
@@ -293,6 +413,7 @@
     </dialog>
 
     <script src="./chord-forms.js?v=20261004-diagram-sound-v1"></script>
-    <script src="./main.js?v=20261005-history-reset-v1"></script>
+    <script src="./harmony.js?v=20261019-harmony-learning-v1"></script>
+    <script src="./main.js?v=20261019-harmony-learning-v1"></script>
   </body>
 </html>

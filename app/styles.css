@@ -2201,3 +2201,71 @@ body.is-catalog-active .learning-menu-switch {
     min-height: 28px;
   }
 }
+
+/* Three learning areas share the existing public app owners. */
+
+
+body.is-harmony-active .learning-menu,
+body.is-harmony-active .tabs,
+body.is-harmony-active .mode-guide,
+body.is-harmony-active .harmony-entry,
+body.is-harmony-active .progress,
+body.is-harmony-active .view.is-active { display: none; }
+.harmony-panel { padding: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+.harmony-panel[hidden] { display: none; }
+.harmony-panel p { line-height: 1.8; }
+.harmony-heading, .harmony-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.harmony-heading img { object-fit: contain; }
+.harmony-heading h2 { margin: 0; }
+.harmony-level { display: grid; gap: 8px; margin: 24px 0; }
+.harmony-level select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px; max-width: 100%; }
+.harmony-path { padding: 16px; background: #f0f6fb; border-radius: 10px; font-weight: bold; overflow-wrap: anywhere; }
+.harmony-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.harmony-options button { display: grid; gap: 8px; min-height: 100px; }
+.harmony-options small { font-size: 12px; font-weight: normal; }
+.harmony-result { min-height: 4em; }
+.harmony-guide { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.harmony-guide summary { cursor: pointer; }
+@media (max-width: 650px) {
+  .harmony-panel { padding: 18px; }
+  .harmony-heading img { width: 65px; height: 65px; }
+  .harmony-heading h2 { font-size: 19px; }
+  .harmony-options { grid-template-columns: 1fr; }
+  .harmony-options button { min-height: 76px; }
+}
+
+.harmony-entry { display: flex; justify-content: flex-start; margin: 0 0 18px; }
+#home-button[hidden] { display: none; }
+
+/* One home, three learning intents. Existing code practice stays in its original owner. */
+body.is-home .learning-menu, body.is-home .tabs, body.is-home .mode-guide, body.is-home .view.is-active,
+body.is-home .progress, body.is-harmony-active .progress { display: none; }
+.home-panel[hidden], [data-home-area][hidden], #lesson-view[hidden], #test-view[hidden], #test-setup[hidden], #test-running[hidden], #test-results[hidden] { display: none; }
+.journey-nav { display: flex; gap: 8px; margin-bottom: 18px; }
+.journey-nav button { flex: 1; padding: 12px 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; color: var(--blue); cursor: pointer; font-weight: bold; }
+.journey-nav button[aria-pressed="true"] { color: #fff; background: var(--blue); }
+.home-panel { padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+.home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.home-cards button { display: grid; gap: 12px; text-align: left; padding: 24px; background: #f4f8fc; color: var(--ink); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.home-cards strong { color: var(--blue); font-size: 18px; }
+.home-cards small { line-height: 1.7; }
+.lesson-block { padding: 16px 0; border-top: 1px solid var(--line); }
+.lesson-functions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lesson-functions article { padding: 16px; background: #f4f8fc; border-radius: 12px; }
+.lesson-functions h4 { margin: 0; }
+.lesson-comparison { display: grid; gap: 10px; }
+.lesson-comparison button { display: grid; gap: 8px; }
+.lesson-audio-status { position: sticky; bottom: 10px; display: flex; gap: 16px; align-items: center; padding: 12px; margin: 18px 0; background: #f1f6fc; border: 1px solid var(--line); border-radius: 12px; }
+.lesson-audio-status p { flex: 1; margin: 0; }
+.lesson-links { margin: 24px 0 0; }
+.test-review { padding-left: 24px; }
+.test-review li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.harmony-options [aria-pressed="true"] { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media(max-width:650px) { .lesson-functions { grid-template-columns: 1fr; } .home-cards { grid-template-columns: 1fr; } .lesson-audio-status { position: static; } }
+
+.learning-menu-switch { display: none; }
+#home-title:focus { outline: none; }
+
+body.is-home .diagram-toolbar, body.is-harmony-active .diagram-toolbar { display: none; }
+body.is-practice-active:not(.is-home):not(.is-harmony-active) .learning-menu { display: block; }
+.home-cards .song-mode-link { display: grid; gap: 12px; text-decoration: none; padding: 24px; background: #f4f8fc; border: 1px solid var(--line); border-radius: 12px; }

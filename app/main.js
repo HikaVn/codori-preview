@@ -318,6 +318,80 @@ let cardChordForms = [];
 let cardFormIndex = 0;
 const cardFormSelections = new Map();
 const missingAudioFiles = new Set();
+const activeSyntheticPlaybacks = new Set();
+const activeAudioElements = new Set();
+const pendingPlaybackTimers = new Set();
+let playbackGeneration = 0;
+let routerReady = false;
+let harmonySession, harmonyTestSession, lessonPlayer;
+let isHarmonyActive = false;
+let currentAppRoute = "home";
+let homeArea = "learn";
+let legacyStageId;
+let chordSetGeneration = 0;
+
+function stopLearningAudio() {
+  harmonySession?.stop(); harmonyTestSession?.stop(); lessonPlayer?.stop();
+  stopAudioPlayback();
+}
+
+async function navigateApp(route, options = {}) {
+  if (!["home", "learn", "practice", "test", "legacy", "catalog"].includes(route)) route = "home";
+  stopLearningAudio();
+  currentAppRoute = route;
+  homeArea = options.area || ({ learn: "learn", catalog: "learn", practice: "practice", legacy: "practice", test: "test" }[route]) || homeArea;
+  isHarmonyActive = ["learn", "practice", "test"].includes(route);
+  isModeSelectOnly = route === "home";
+  syncAppModeClasses();
+  document.body.classList.toggle("is-home", route === "home");
+  document.body.classList.toggle("is-harmony-active", isHarmonyActive);
+  for (const [id, expected] of [["home-view", "home"], ["lesson-view", "learn"], ["harmony-view", "practice"], ["test-view", "test"]]) {
+    document.querySelector(`#${id}`).hidden = route !== expected;
+  }
+  document.querySelector("#home-button").hidden = route === "home";
+  document.querySelectorAll("[data-home-area]").forEach(panel => { panel.hidden = panel.dataset.homeArea !== homeArea; });
+  document.querySelectorAll("[data-area]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.area === homeArea)));
+  if (!options.fromHistory) {
+    try {
+      const state = { ...window.history.state, codoriRoute: route, codoriArea: homeArea, codoriCatalogSet: options.catalogSetId || "all-main-chords" };
+      const method = options.replace ? "replaceState" : "pushState";
+      window.history[method](state, "");
+    } catch (error) { /* On-page navigation works without the History API. */ }
+  }
+  if (route === "catalog") {
+    if (activePracticeStage) legacyStageId = activePracticeStage.id;
+    await setChordSet(options.catalogSetId || 'all-main-chords');
+    if (currentAppRoute !== route) return;
+    setLearningMenuGroup("catalog");
+  } else if (route === "legacy") {
+    if (!activePracticeStage) setPracticeStage(legacyStageId || latestPracticeStageWithTrail()?.id || practiceStages[0]?.id);
+    setLearningMenuGroup("story");
+  }
+  if (["legacy", "catalog"].includes(route)) elements.learningMenu.open = true;
+  const heading = { home: "home-title", learn: "lesson-title", practice: "harmony-prompt", test: "test-title" }[route];
+  if (heading) document.querySelector(`#${heading}`).focus();
+  if (typeof window.scrollTo === "function") window.scrollTo({ top: 0 });
+}
+
+
+const LESSON_EXAMPLES = {
+  tonic: { key: "C", degrees: ["I", "IV", "V7", "I"], chords: ["C", "F", "G7", "C"] },
+  roles: { key: "C", degrees: ["I / T", "IV / S", "V7 / D", "I / T"], chords: ["C", "F", "G7", "C"] },
+  "c-tonic": { key: "C", degrees: ["I / T", "IV / S", "V7 / D", "I / T"], chords: ["C", "F", "G7", "C"] },
+  "c-dominant": { key: "F", degrees: ["I / T", "IV / S", "V / D", "I / T"], chords: ["F", "Bb", "C", "F"] },
+  "c-subdominant": { key: "G", degrees: ["I / T", "IV / S", "V7 / D", "I / T"], chords: ["G", "C", "D7", "G"] },
+  authentic: { key: "C", degrees: ["I", "IV", "V7 / D", "I / T"], chords: ["C", "F", "G7", "C"] },
+  plagal: { key: "C", degrees: ["I", "IV", "V7", "I", null, "I", "IV / S", "I / T"], chords: ["C", "F", "G7", "C", null, "C", "F", "C"] }
+};
+
+function playLessonExample(id) {
+  const example = LESSON_EXAMPLES[id];
+  if (!example || currentAppRoute !== "learn") return;
+  stopLearningAudio();
+  return lessonPlayer.start(example.chords.map((chord, index) => ({ chord, gap: !chord,
+    cue: chord ? `${example.key}長調 · ${example.degrees[index]}（${chord}）` : "主調を聞けたら、IV → I の帰り方を聞こう" })));
+}
+
 
 const elements = {
   practiceStageDescription: document.querySelector("#practice-stage-description"),
@@ -692,7 +766,7 @@ function goToNextCourse() {
     setPracticeStage(nextStage.id, { restore: false, view: "card" });
     return;
   }
-  setChordSet("all-main-chords");
+  navigateApp("catalog");
 }
 
 function lastLocationForActiveStage() {
@@ -744,11 +818,12 @@ function updateStoryEntryControls() {
 
 function setModeSelectOnly(enabled) {
   isModeSelectOnly = Boolean(enabled);
-  if (!isModeSelectOnly) {
+  if (!isModeSelectOnly && !routerReady) {
     enterSessionHistory();
   }
   syncAppModeClasses();
   updateLearningMenuStatus();
+  if (routerReady && isModeSelectOnly && currentAppRoute !== "home") navigateApp("home", { replace: true });
 }
 
 function openLearningMenu() {
@@ -770,6 +845,11 @@ function enterSessionHistory() {
 }
 
 function goToTop(options = {}) {
+  if (routerReady) {
+    if (["legacy", "catalog"].includes(currentAppRoute)) saveLastLocation();
+    navigateApp("home", { fromHistory: options.fromPopstate });
+    return;
+  }
   // ストーリーは好きなときに中断できる。進捗は常に自動保存しているので、
   // トップへ戻ってからでも「つづける」で同じ場所から再開できる。
   if (isModeSelectOnly) {
@@ -796,8 +876,10 @@ function goToTop(options = {}) {
   }
 }
 
-window.addEventListener("popstate", () => {
-  if (!isModeSelectOnly) {
+window.addEventListener("popstate", event => {
+  if (routerReady) {
+    navigateApp(event.state?.codoriRoute || "home", { fromHistory: true, area: event.state?.codoriArea || "learn", catalogSetId: event.state?.codoriCatalogSet });
+  } else if (!isModeSelectOnly) {
     goToTop({ fromPopstate: true });
   }
 });
@@ -1319,6 +1401,7 @@ function updateTabAvailability() {
 }
 
 function applyFilters() {
+  stopAudioPlayback();
   chordData = filteredChordData();
   currentIndex = 0;
   resetQuizState();
@@ -1661,6 +1744,8 @@ async function setChordSet(setId) {
     setModeSelectOnly(false);
     return;
   }
+  const request = ++chordSetGeneration;
+  stopAudioPlayback();
 
   activePracticeStage = null;
   setModeSelectOnly(false);
@@ -1675,7 +1760,8 @@ async function setChordSet(setId) {
   resetQuizState();
   renderedCompareKey = "";
   activeProgressionIndex = 0;
-  await loadChordData();
+  await loadChordData(() => request === chordSetGeneration);
+  if (request !== chordSetGeneration) return;
   setLearningMenuGroup("catalog");
   renderFilterPanel();
   chordData = filteredChordData();
@@ -1914,6 +2000,8 @@ function clampIndex(value, length) {
 }
 
 function setPracticeStage(stageId, options = {}) {
+  chordSetGeneration += 1;
+  stopAudioPlayback();
   const nextStage = practiceStages.find((stage) => stage.id === stageId);
   if (!nextStage) {
     return;
@@ -2043,13 +2131,18 @@ function playSelectedProgression() {
     return;
   }
 
+  const playbackToken = stopAudioPlayback();
   resumeAudioContext();
   updateStageProgress({ progressionHeard: true });
   progression.code_ids
     .map((codeId) => practiceCatalog.get(codeId))
     .filter(Boolean)
     .forEach((chord, index) => {
-      window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
+      const timer = window.setTimeout(() => {
+        pendingPlaybackTimers.delete(timer);
+        playChord(chord, { trackProgress: false, playbackToken });
+      }, index * 950);
+      pendingPlaybackTimers.add(timer);
     });
 }
 
@@ -2058,6 +2151,7 @@ function playSelectedCompare() {
     return;
   }
 
+  const playbackToken = stopAudioPlayback();
   resumeAudioContext();
   const chordsToPlay = chordData.slice(0, Math.min(chordData.length, 8));
   if (isPracticeMode()) {
@@ -2066,7 +2160,11 @@ function playSelectedCompare() {
     updateStageProgress({ heardCodeIds: [...heardCodeIds] });
   }
   chordsToPlay.forEach((chord, index) => {
-    window.setTimeout(() => playChord(chord, { trackProgress: false }), index * 950);
+    const timer = window.setTimeout(() => {
+        pendingPlaybackTimers.delete(timer);
+        playChord(chord, { trackProgress: false, playbackToken });
+      }, index * 950);
+      pendingPlaybackTimers.add(timer);
   });
 }
 
@@ -2086,7 +2184,7 @@ function recordChordHeard(chord) {
 }
 
 function enableQuizOptions() {
-  document.querySelectorAll(".quiz-option").forEach((optionButton) => {
+  document.querySelectorAll("#quiz-options .quiz-option").forEach((optionButton) => {
     optionButton.disabled = false;
   });
 }
@@ -2104,49 +2202,14 @@ function playQuizChord() {
 }
 
 async function playRootAssist() {
-  if (!chordData[quizIndex]) {
-    return;
-  }
-
-  const root = rootForChord(chordData[quizIndex]);
-  const frequency = ROOT_NOTE_FREQUENCIES[root];
-  if (!frequency) {
-    return;
-  }
-
+  if (!chordData[quizIndex]) return;
+  const frequency = ROOT_NOTE_FREQUENCIES[rootForChord(chordData[quizIndex])];
+  if (!frequency) return;
+  const token = stopAudioPlayback();
   const context = await ensureAudioContextReady();
-  const now = context.currentTime;
-  const fundamental = context.createOscillator();
-  const harmonic = context.createOscillator();
-  const fundamentalGain = context.createGain();
-  const harmonicGain = context.createGain();
-
-  fundamental.type = "sine";
-  fundamental.frequency.value = frequency;
-  harmonic.type = "sine";
-  harmonic.frequency.value = frequency * 2;
-
-  fundamentalGain.gain.setValueAtTime(0.0001, now);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
-  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  harmonicGain.gain.setValueAtTime(0.0001, now);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
-  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-
-  fundamental.connect(fundamentalGain);
-  harmonic.connect(harmonicGain);
-  fundamentalGain.connect(context.destination);
-  harmonicGain.connect(context.destination);
-  fundamental.start(now);
-  harmonic.start(now);
-  fundamental.stop(now + 0.95);
-  harmonic.stop(now + 0.95);
-
-  if (!quizHasAnswered) {
-    elements.quizResult.textContent = currentQuizAssist.message;
-  }
+  if (token !== playbackGeneration) return;
+  playSyntheticTone(frequency, context);
+  if (!quizHasAnswered) elements.quizResult.textContent = currentQuizAssist.message;
 }
 
 function handleQuizOption(button, option) {
@@ -2172,7 +2235,7 @@ function checkQuizAnswer(button, isCorrect) {
     return;
   }
 
-  document.querySelectorAll(".quiz-option").forEach((optionButton) => {
+  document.querySelectorAll("#quiz-options .quiz-option").forEach((optionButton) => {
     optionButton.disabled = true;
   });
   const wasQuizComplete = isPracticeMode() && isStageQuizComplete(activePracticeStage, stageProgress());
@@ -2199,11 +2262,11 @@ function checkQuizAnswer(button, isCorrect) {
   } else {
     button.classList.add("is-wrong");
     elements.quizResult.textContent = `だいじょうぶ。答えは ${chordData[quizIndex].display_name}。もう一度、音のきもちを聞いてみよう。`;
-    const correct = [...document.querySelectorAll(".quiz-option")]
+    const correct = [...document.querySelectorAll("#quiz-options .quiz-option")]
       .find((optionButton) => optionButton.textContent === chordData[quizIndex].display_name);
     correct.classList.add("is-correct");
   }
-  document.querySelectorAll(".quiz-option").forEach((optionButton) => {
+  document.querySelectorAll("#quiz-options .quiz-option").forEach((optionButton) => {
     optionButton.disabled = false;
     optionButton.classList.add("is-reviewable");
   });
@@ -2211,6 +2274,7 @@ function checkQuizAnswer(button, isCorrect) {
 }
 
 function setView(viewName) {
+  if (activeView !== viewName) stopAudioPlayback();
   if (!PRACTICE_VIEWS.includes(viewName)) {
     viewName = "card";
   }
@@ -2310,30 +2374,124 @@ function resumeAudioContext() {
   return context;
 }
 
-async function playChord(chord, options = {}) {
-  if (options.trackProgress !== false) {
-    recordChordHeard(chord);
-  }
-  const context = await ensureAudioContextReady();
-  // 展開形を選んでいるときは、録音済み音源（基本形の音）ではなく実際の押さえ方の音を鳴らす
-  if (!options.frequencies && await playAudioFile(chord)) {
-    return;
-  }
-  playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes);
+function registerSyntheticPlayback(context, master, sources, durationSeconds) {
+  let stopped = false;
+  const stopPlayback = () => {
+    if (stopped) return;
+    stopped = true;
+    const now = context.currentTime;
+    try {
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(0.0001, now);
+    } catch (error) {
+      console.warn("Failed to mute synthetic playback", error);
+    }
+    sources.forEach(({ node, startTime }) => {
+      try {
+        node.stop(Math.max(now + 0.02, startTime + 0.001));
+      } catch (error) {
+        // Nodes that already stopped are safe to ignore during cleanup.
+      }
+    });
+    activeSyntheticPlaybacks.delete(stopPlayback);
+  };
+
+  activeSyntheticPlaybacks.add(stopPlayback);
+  window.setTimeout(() => activeSyntheticPlaybacks.delete(stopPlayback), (durationSeconds + 0.2) * 1000);
+  return stopPlayback;
 }
 
-async function playAudioFile(chord) {
+function stopAudioPlayback() {
+  playbackGeneration += 1;
+  pendingPlaybackTimers.forEach((timer) => window.clearTimeout(timer));
+  pendingPlaybackTimers.clear();
+  activeSyntheticPlaybacks.forEach((stopPlayback) => stopPlayback());
+  activeAudioElements.forEach((audio) => {
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (error) {
+      console.warn("Failed to stop audio file", error);
+    }
+  });
+  activeAudioElements.clear();
+  return playbackGeneration;
+}
+
+function playSyntheticTone(frequency, context, durationSeconds = 0.95) {
+  const now = context.currentTime;
+  const master = context.createGain();
+  const fundamental = context.createOscillator();
+  const harmonic = context.createOscillator();
+  const fundamentalGain = context.createGain();
+  const harmonicGain = context.createGain();
+
+  master.gain.setValueAtTime(1, now);
+  master.connect(context.destination);
+  fundamental.type = "sine";
+  fundamental.frequency.value = frequency;
+  harmonic.type = "sine";
+  harmonic.frequency.value = frequency * 2;
+  fundamentalGain.gain.setValueAtTime(0.0001, now);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
+  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
+  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  harmonicGain.gain.setValueAtTime(0.0001, now);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
+  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  fundamental.connect(fundamentalGain);
+  harmonic.connect(harmonicGain);
+  fundamentalGain.connect(master);
+  harmonicGain.connect(master);
+  fundamental.start(now);
+  harmonic.start(now);
+  fundamental.stop(now + durationSeconds);
+  harmonic.stop(now + durationSeconds);
+  registerSyntheticPlayback(
+    context,
+    master,
+    [
+      { node: fundamental, startTime: now },
+      { node: harmonic, startTime: now },
+    ],
+    durationSeconds,
+  );
+}
+
+async function playChord(chord, options = {}) {
+  if (!chord) return;
+  const token = options.playbackToken ?? stopAudioPlayback();
+  const context = await ensureAudioContextReady();
+  if (token !== playbackGeneration || (options.shouldContinue && !options.shouldContinue())) return;
+  if (options.shouldContinue && context.state !== "running") throw new Error("Audio unavailable");
+  if (options.trackProgress !== false) recordChordHeard(chord);
+  if (!options.frequencies && await playAudioFile(chord, () => token === playbackGeneration)) return;
+  if (token !== playbackGeneration) return;
+  return playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes, options.durationSeconds);
+}
+async function playAudioFile(chord, shouldContinue = () => true) {
   if (!chord.sound_file_ready || !chord.sound_file || missingAudioFiles.has(chord.sound_file)) {
     return false;
   }
 
   const soundUrl = assetPath(chord.sound_file);
+  let cleanup = () => {};
   try {
     const audio = new Audio(soundUrl);
+    cleanup = () => activeAudioElements.delete(audio);
     audio.preload = "auto";
+    audio.addEventListener("ended", cleanup, { once: true });
+    activeAudioElements.add(audio);
     await audio.play();
+    if (!shouldContinue()) {
+      cleanup();
+      audio.pause();
+      audio.currentTime = 0;
+    }
     return true;
   } catch (error) {
+    cleanup();
     if (!TRANSIENT_AUDIO_ERROR_NAMES.has(error?.name)) {
       missingAudioFiles.add(chord.sound_file);
     }
@@ -2341,17 +2499,20 @@ async function playAudioFile(chord) {
   }
 }
 
-function playSyntheticNotes(context, audioNotes) {
+
+function playSyntheticNotes(context, audioNotes, durationSeconds = 2.6) {
+  const scale = durationSeconds / 2.6;
+  const sources = [];
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.setValueAtTime(0.0001, now);
   master.gain.exponentialRampToValueAtTime(0.16, now + 0.04);
-  master.gain.setValueAtTime(0.16, now + 1.15);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
+  master.gain.setValueAtTime(0.16, now + 1.15 * scale);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 2.6 * scale);
   master.connect(context.destination);
 
   audioNotes.forEach((frequency, index) => {
-    const start = now + index * ARPEGGIO_NOTE_INTERVAL_SECONDS;
+    const start = now + index * Math.min(ARPEGGIO_NOTE_INTERVAL_SECONDS, durationSeconds / (audioNotes.length * 2));
     const oscillator = context.createOscillator();
     const harmonic = context.createOscillator();
     const gain = context.createGain();
@@ -2362,28 +2523,31 @@ function playSyntheticNotes(context, audioNotes) {
     harmonic.frequency.value = frequency * 2;
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
-    gain.gain.setValueAtTime(0.13, start + 1.05);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5);
+    gain.gain.setValueAtTime(0.13, start + 1.05 * scale);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5 * scale);
     harmonicGain.gain.setValueAtTime(0.0001, start);
     harmonicGain.gain.exponentialRampToValueAtTime(0.16 * HARMONIC_GAIN_RATIO, start + 0.025);
-    harmonicGain.gain.setValueAtTime(0.13 * HARMONIC_GAIN_RATIO, start + 1.05);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5);
+    harmonicGain.gain.setValueAtTime(0.13 * HARMONIC_GAIN_RATIO, start + 1.05 * scale);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5 * scale);
     oscillator.connect(gain);
     harmonic.connect(harmonicGain);
     gain.connect(master);
     harmonicGain.connect(master);
     oscillator.start(start);
     harmonic.start(start);
-    oscillator.stop(start + 2.6);
-    harmonic.stop(start + 2.6);
+    oscillator.stop(start + 2.6 * scale);
+    harmonic.stop(start + 2.6 * scale);
+    sources.push({ node: oscillator, startTime: start }, { node: harmonic, startTime: start });
   });
+  return registerSyntheticPlayback(context, master, sources, durationSeconds);
 }
 
 async function playDiagramNote(midi) {
   if (!Number.isInteger(midi) || midi < 0 || midi > 127) return;
   try {
+    const token = stopAudioPlayback();
     const context = await ensureAudioContextReady();
-    if (context.state !== "running") return;
+    if (context.state !== "running" || token !== playbackGeneration) return;
     const frequency = 440 * Math.pow(2, (midi - 69) / 12);
     playSyntheticNotes(context, [frequency]);
   } catch (error) {
@@ -2393,6 +2557,7 @@ async function playDiagramNote(midi) {
 
 function handleAppReturn() {
   if (document.hidden) {
+    stopLearningAudio();
     return;
   }
   if (audioContext?.state === "closed") {
@@ -2460,7 +2625,7 @@ elements.hideStoryList.addEventListener("click", () => {
 elements.nextStageButton.addEventListener("click", () => {
   goToNextCourse();
 });
-elements.openCatalog.addEventListener("click", () => setChordSet("all-main-chords"));
+elements.openCatalog.addEventListener("click", () => navigateApp("catalog"));
 elements.homeButton.addEventListener("click", () => goToTop());
 elements.brandHome.addEventListener("click", () => goToTop());
 elements.brandHome.addEventListener("keydown", (event) => {
@@ -2502,16 +2667,17 @@ if (mobileMenuMedia.addEventListener) {
   mobileMenuMedia.addListener(syncLearningMenuMode);
 }
 
-async function loadChordData() {
+async function loadChordData(shouldApply = () => true) {
   try {
     const response = await fetch(cacheBustedDataPath(activeSet.dataPath));
     if (!response.ok) {
       throw new Error(`Failed to load chord data: ${response.status}`);
     }
-    fullChordData = await response.json();
+    const loaded = await response.json();
+    if (shouldApply()) fullChordData = loaded;
   } catch (error) {
     console.warn("Using bundled chord data.", error);
-    fullChordData = [...chordData];
+    if (shouldApply()) fullChordData = [...chordData];
   }
 }
 
@@ -2572,6 +2738,33 @@ async function init() {
   renderProgression();
   setModeSelectOnly(shouldStartOnModeSelect);
   setView(activeView);
+  if (window.CodoriHarmony) {
+    const playHarmonyChord = (name, shouldContinue) => {
+      const chord = practiceCatalog.get(name);
+      if (!chord) throw new Error(`Missing harmony chord: ${name}`);
+      const frequencies = CodoriHarmony.audioNotesFor(chord, ROOT_NOTE_FREQUENCIES[rootForChord(chord)]);
+      return playChord(chord, { trackProgress: false, frequencies, durationSeconds: 0.75, shouldContinue });
+    };
+    harmonySession = CodoriHarmony.mount({ root: document.querySelector("#harmony-view"), playChord: playHarmonyChord });
+    harmonyTestSession = CodoriHarmony.mountTest({ root: document.querySelector("#test-view"), playChord: playHarmonyChord });
+    lessonPlayer = CodoriHarmony.createPlayer({ playChord: playHarmonyChord,
+      onCue: cue => { document.querySelector("#lesson-cue").textContent = cue; },
+      onEnd: () => { document.querySelector("#lesson-cue").textContent = "音例を聞き終えました。別の帰り方や、練習を試してみよう。"; },
+      onError: () => { document.querySelector("#lesson-cue").textContent = "再生できませんでした。音例のボタンでもう一度試してください。"; }
+    });
+    document.querySelectorAll("[data-route]").forEach(button => {
+      button.disabled = false;
+      button.addEventListener("click", () => navigateApp(button.dataset.route));
+    });
+    document.querySelectorAll("[data-area]").forEach(button => button.addEventListener("click", () => navigateApp("home", { area: button.dataset.area })));
+    document.querySelectorAll("[data-example]").forEach(button => button.addEventListener("click", () => playLessonExample(button.dataset.example)));
+    document.querySelector("#lesson-stop").addEventListener("click", () => { stopLearningAudio(); document.querySelector("#lesson-cue").textContent = "停止しました。音例は何度でも聞き直せます。"; });
+    routerReady = true;
+    const requestedMode = urlParams.get("mode");
+    const initialRoute = ["learn", "practice", "test"].includes(requestedMode) ? requestedMode
+      : requestedSetId || requestedStageId === "none" ? "catalog" : requestedStageId || urlParams.has("view") ? "legacy" : "home";
+    navigateApp(initialRoute, { replace: true, catalogSetId: requestedSetId || activeSet.id });
+  }
   if (isModeSelectOnly) {
     // トップ（モード選択）では、モバイルでも選択肢をたたまず見せる。
     openLearningMenu();
