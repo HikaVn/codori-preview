@@ -473,11 +473,6 @@ const scorePreview = {
   melodyCache: [], // [{startBeat, beats, midi}]（繰り返し展開済み）
   chordCache: []   // [{startBeat, end, freqs}]
 };
-const MELODY_PARTIALS = [[1, 1], [2, 0.35], [3, 0.18]]; // 基音＋2倍音＋3倍音
-const CHORD_PARTIALS = [[1, 1], [2, 0.22]];
-// 「コードをピアノ音で」トグルON時の倍音構成（鍵盤らしく倍音を多めに重ねる）
-const CHORD_PARTIALS_PIANO = [[1, 1], [2, 0.5], [3, 0.28], [4, 0.14], [5, 0.07]];
-
 // 試聴のスウィング: 拍の8分ウラ（後半）を後ろへずらしてハネさせる。拍頭は動かさない。
 function scoreSwingBeat(beat) {
   if (!scoreEl.swingToggle?.checked) return beat;
@@ -509,47 +504,14 @@ function scorePreviewRunPlayhead(ctx) {
   scorePreview.raf = requestAnimationFrame(tick);
 }
 
-// 持続音の1声を鳴らす。アタックは柔らかめ、指定倍音までを重ねる。停止できるよう保持する。
-// attack省略時は従来どおり0.03（ピアノ音トグルON時のみ、コード側で少し速いアタックを渡す）。
-function scorePreviewVoice(freq, start, dur, gain, partials, attack = 0.03) {
-  const ctx = ensureAudioContext();
-  const peak = Math.max(0.0001, gain);
-  const atk = attack;  // 柔らかいアタック（既定0.03）
-  const rel = 0.09;  // 末尾リリース（プチッ音の防止）
-  const hold = Math.max(0.06, dur);
-  const env = ctx.createGain();
-  env.gain.setValueAtTime(0.0001, start);
-  env.gain.linearRampToValueAtTime(peak, start + atk);                  // ソフトアタック
-  env.gain.setValueAtTime(peak, start + Math.max(atk, hold - rel));     // 持続
-  env.gain.exponentialRampToValueAtTime(0.0001, start + hold + rel);    // リリース
-  env.connect(ctx.destination);
-  const oscs = [];
-  for (const [mult, amp] of partials) {
-    const osc = ctx.createOscillator();
-    const og = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq * mult;
-    og.gain.value = amp;
-    osc.connect(og); og.connect(env);
-    osc.start(start);
-    osc.stop(start + hold + rel + 0.05);
-    oscs.push(osc);
-  }
-  scorePreview.nodes.push({ oscs, gain: env });
+// Score previews deliberately use sustained profiles; their fixed release is owned by CodoriAudio.
+function scorePreviewVoice(freq, start, dur, gain, profile = "score-melody") {
+  const handle = CodoriAudio.forContext(ensureAudioContext()).play({ profile, frequencies: [freq], startTime: start, gateSeconds: dur, voiceGain: gain });
+  scorePreview.nodes.push(handle);
 }
 
-// 鳴っているノードだけ止める（再生状態・RAFは触らない＝シーク/速度変更で使う）
 function scoreStopNodes() {
-  const ctx = typeof audioCtx !== "undefined" ? audioCtx : null;
-  const now = ctx ? ctx.currentTime : 0;
-  for (const n of scorePreview.nodes) {
-    try {
-      n.gain.gain.cancelScheduledValues(now);
-      n.gain.gain.setValueAtTime(Math.max(0.0001, n.gain.gain.value), now);
-      n.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
-      for (const o of n.oscs) o.stop(now + 0.06);
-    } catch (e) { /* 既に停止済み */ }
-  }
+  scorePreview.nodes.forEach(stop => stop());
   scorePreview.nodes = [];
 }
 
@@ -583,17 +545,16 @@ function scoreScheduleFrom(fromBeat) {
     if (nt.startBeat + nt.beats <= fromBeat + 1e-6) continue; // もう終わった音
     const ps = Math.max(nt.startBeat, fromBeat);
     const t = start + (scoreSwingBeat(ps) - ref) * spb;
-    scorePreviewVoice(midiToFrequency(nt.midi), t, ((nt.startBeat + nt.beats) - ps) * spb, 0.16, MELODY_PARTIALS);
+    scorePreviewVoice(midiToFrequency(nt.midi), t, ((nt.startBeat + nt.beats) - ps) * spb, 0.16, "score-melody");
   }
   if (scorePreview.mode === "chords") {
     const chordPiano = scoreEl.chordPianoToggle?.checked;
-    const chordPartials = chordPiano ? CHORD_PARTIALS_PIANO : CHORD_PARTIALS;
-    const chordAttack = chordPiano ? 0.008 : 0.03;
+    const chordProfile = chordPiano ? "score-piano" : "score-chord";
     for (const c of scorePreview.chordCache) {
       if (c.end <= fromBeat + 1e-6) continue;
       const ps = Math.max(c.startBeat, fromBeat);
       const t = start + (scoreSwingBeat(ps) - ref) * spb;
-      for (const f of c.freqs) scorePreviewVoice(f, t, (c.end - ps) * spb, 0.05, chordPartials, chordAttack);
+      for (const f of c.freqs) scorePreviewVoice(f, t, (c.end - ps) * spb, 0.05, chordProfile);
     }
   }
   scorePreview.startTime = start;
@@ -686,9 +647,8 @@ function scorePlayChordAt(beat) {
   const spb = 60 / bpm;
   const start = ctx.currentTime + 0.05;
   const chordPiano = scoreEl.chordPianoToggle?.checked;
-  const chordPartials = chordPiano ? CHORD_PARTIALS_PIANO : CHORD_PARTIALS;
-  const chordAttack = chordPiano ? 0.008 : 0.03;
-  for (const f of freqs) scorePreviewVoice(f, start, lenBeats * spb, 0.06, chordPartials, chordAttack);
+  const chordProfile = chordPiano ? "score-piano" : "score-chord";
+  for (const f of freqs) scorePreviewVoice(f, start, lenBeats * spb, 0.06, chordProfile);
   if (!scorePreview.nodes.length) return;
   scorePreview.playing = true;
   scorePreview.mode = "chord";

@@ -56,7 +56,6 @@ const requestedFamilyFilter = urlParams.get("family");
 const requestedSearchFilter = urlParams.get("search") || urlParams.get("q") || "";
 const STORAGE_KEY = "codori.practiceProgress.v1";
 const DIAGRAM_MODE_STORAGE_KEY = "codori.diagramMode.v1";
-const HARMONIC_GAIN_RATIO = 0.2;
 const USE_INTEGRATED_ACTION_ART = true;
 const QUIZ_REPETITIONS_PER_CHORD = 3;
 const PRACTICE_VIEWS = ["card", "compare", "quiz", "progression"];
@@ -186,7 +185,6 @@ const PRACTICE_SOURCE_PATHS = [
 ];
 const DATA_CACHE_VERSION = "20260610-mode-select-v1";
 const MOBILE_MENU_QUERY = "(max-width: 520px)";
-const ARPEGGIO_NOTE_INTERVAL_SECONDS = 0.1;
 const TRANSIENT_AUDIO_ERROR_NAMES = new Set(["AbortError", "NotAllowedError"]);
 const modeGuide = {
   card: {
@@ -339,7 +337,7 @@ async function navigateApp(route, options = {}) {
   if (!["home", "learn", "practice", "test", "legacy", "catalog"].includes(route)) route = "home";
   stopLearningAudio();
   currentAppRoute = route;
-  homeArea = options.area || ({ learn: "learn", catalog: "learn", practice: "practice", legacy: "practice", test: "test" }[route]) || homeArea;
+  homeArea = route === "legacy" ? "test" : options.area || ({ learn: "learn", catalog: "learn", practice: "practice", legacy: "test", test: "test" }[route]) || homeArea;
   isHarmonyActive = ["learn", "practice", "test"].includes(route);
   isModeSelectOnly = route === "home";
   syncAppModeClasses();
@@ -2141,7 +2139,7 @@ function playSelectedProgression() {
       const timer = window.setTimeout(() => {
         pendingPlaybackTimers.delete(timer);
         playChord(chord, { trackProgress: false, playbackToken });
-      }, index * 950);
+      }, index * CodoriAudio.policy.sequenceStepMs);
       pendingPlaybackTimers.add(timer);
     });
 }
@@ -2163,7 +2161,7 @@ function playSelectedCompare() {
     const timer = window.setTimeout(() => {
         pendingPlaybackTimers.delete(timer);
         playChord(chord, { trackProgress: false, playbackToken });
-      }, index * 950);
+      }, index * CodoriAudio.policy.sequenceStepMs);
       pendingPlaybackTimers.add(timer);
   });
 }
@@ -2198,7 +2196,7 @@ function playQuizChord() {
     enableQuizOptions();
     elements.quizResult.textContent = quizReadyPromptForCurrentStage();
   }
-  playChord(chordData[quizIndex], { trackProgress: false });
+  return playChord(chordData[quizIndex], { trackProgress: false });
 }
 
 async function playRootAssist() {
@@ -2351,6 +2349,7 @@ function getAudioContext() {
 
 async function ensureAudioContextReady() {
   const context = getAudioContext();
+  if (typeof context.startRendering === "function") return context;
   if (context.state !== "running" && typeof context.resume === "function") {
     try {
       await context.resume();
@@ -2374,101 +2373,42 @@ function resumeAudioContext() {
   return context;
 }
 
-function registerSyntheticPlayback(context, master, sources, durationSeconds) {
-  let stopped = false;
-  const stopPlayback = () => {
-    if (stopped) return;
-    stopped = true;
-    const now = context.currentTime;
-    try {
-      master.gain.cancelScheduledValues(now);
-      master.gain.setValueAtTime(0.0001, now);
-    } catch (error) {
-      console.warn("Failed to mute synthetic playback", error);
-    }
-    sources.forEach(({ node, startTime }) => {
-      try {
-        node.stop(Math.max(now + 0.02, startTime + 0.001));
-      } catch (error) {
-        // Nodes that already stopped are safe to ignore during cleanup.
-      }
-    });
-    activeSyntheticPlaybacks.delete(stopPlayback);
-  };
-
-  activeSyntheticPlaybacks.add(stopPlayback);
-  window.setTimeout(() => activeSyntheticPlaybacks.delete(stopPlayback), (durationSeconds + 0.2) * 1000);
-  return stopPlayback;
+function trackSyntheticPlayback(handle) {
+  const stop = () => { handle(); activeSyntheticPlaybacks.delete(stop); };
+  Object.assign(stop, handle);
+  activeSyntheticPlaybacks.add(stop);
+  window.setTimeout(() => activeSyntheticPlaybacks.delete(stop), handle.completeAfterMs);
+  return stop;
 }
 
 function stopAudioPlayback() {
   playbackGeneration += 1;
-  pendingPlaybackTimers.forEach((timer) => window.clearTimeout(timer));
+  pendingPlaybackTimers.forEach(timer => window.clearTimeout(timer));
   pendingPlaybackTimers.clear();
-  activeSyntheticPlaybacks.forEach((stopPlayback) => stopPlayback());
-  activeAudioElements.forEach((audio) => {
-    try {
-      audio.pause();
-      audio.currentTime = 0;
-    } catch (error) {
-      console.warn("Failed to stop audio file", error);
-    }
+  if (audioContext) CodoriAudio.forContext(audioContext).stopAll();
+  activeSyntheticPlaybacks.clear();
+  activeAudioElements.forEach(audio => {
+    try { audio.pause(); audio.currentTime = 0; } catch (error) { console.warn("Failed to stop audio file", error); }
   });
   activeAudioElements.clear();
   return playbackGeneration;
 }
 
-function playSyntheticTone(frequency, context, durationSeconds = 0.95) {
-  const now = context.currentTime;
-  const master = context.createGain();
-  const fundamental = context.createOscillator();
-  const harmonic = context.createOscillator();
-  const fundamentalGain = context.createGain();
-  const harmonicGain = context.createGain();
-
-  master.gain.setValueAtTime(1, now);
-  master.connect(context.destination);
-  fundamental.type = "sine";
-  fundamental.frequency.value = frequency;
-  harmonic.type = "sine";
-  harmonic.frequency.value = frequency * 2;
-  fundamentalGain.gain.setValueAtTime(0.0001, now);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
-  fundamentalGain.gain.setValueAtTime(0.1, now + 0.55);
-  fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  harmonicGain.gain.setValueAtTime(0.0001, now);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.12 * HARMONIC_GAIN_RATIO, now + 0.03);
-  harmonicGain.gain.setValueAtTime(0.1 * HARMONIC_GAIN_RATIO, now + 0.55);
-  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  fundamental.connect(fundamentalGain);
-  harmonic.connect(harmonicGain);
-  fundamentalGain.connect(master);
-  harmonicGain.connect(master);
-  fundamental.start(now);
-  harmonic.start(now);
-  fundamental.stop(now + durationSeconds);
-  harmonic.stop(now + durationSeconds);
-  registerSyntheticPlayback(
-    context,
-    master,
-    [
-      { node: fundamental, startTime: now },
-      { node: harmonic, startTime: now },
-    ],
-    durationSeconds,
-  );
+function playSyntheticTone(frequency, context) {
+  return trackSyntheticPlayback(CodoriAudio.forContext(context).play({ profile: "reference", frequencies: [frequency] }));
 }
 
 async function playChord(chord, options = {}) {
   if (!chord) return;
+  if ("durationSeconds" in options) throw new TypeError("Use gateSeconds for musical note length; envelopes belong to CodoriAudio.");
   const token = options.playbackToken ?? stopAudioPlayback();
   const context = await ensureAudioContextReady();
   if (token !== playbackGeneration || (options.shouldContinue && !options.shouldContinue())) return;
-  if (options.shouldContinue && context.state !== "running") throw new Error("Audio unavailable");
+  if (options.shouldContinue && !CodoriAudio.isRenderable(context)) throw new Error("Audio unavailable");
   if (options.trackProgress !== false) recordChordHeard(chord);
   if (!options.frequencies && await playAudioFile(chord, () => token === playbackGeneration)) return;
   if (token !== playbackGeneration) return;
-  return playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes, options.durationSeconds);
+  return playSyntheticNotes(context, options.frequencies || chord.temp_audio_notes, { gateSeconds: options.gateSeconds, performance: options.performance });
 }
 async function playAudioFile(chord, shouldContinue = () => true) {
   if (!chord.sound_file_ready || !chord.sound_file || missingAudioFiles.has(chord.sound_file)) {
@@ -2500,46 +2440,9 @@ async function playAudioFile(chord, shouldContinue = () => true) {
 }
 
 
-function playSyntheticNotes(context, audioNotes, durationSeconds = 2.6) {
-  const scale = durationSeconds / 2.6;
-  const sources = [];
-  const now = context.currentTime;
-  const master = context.createGain();
-  master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(0.16, now + 0.04);
-  master.gain.setValueAtTime(0.16, now + 1.15 * scale);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 2.6 * scale);
-  master.connect(context.destination);
-
-  audioNotes.forEach((frequency, index) => {
-    const start = now + index * Math.min(ARPEGGIO_NOTE_INTERVAL_SECONDS, durationSeconds / (audioNotes.length * 2));
-    const oscillator = context.createOscillator();
-    const harmonic = context.createOscillator();
-    const gain = context.createGain();
-    const harmonicGain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = frequency;
-    harmonic.type = "sine";
-    harmonic.frequency.value = frequency * 2;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
-    gain.gain.setValueAtTime(0.13, start + 1.05 * scale);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5 * scale);
-    harmonicGain.gain.setValueAtTime(0.0001, start);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.16 * HARMONIC_GAIN_RATIO, start + 0.025);
-    harmonicGain.gain.setValueAtTime(0.13 * HARMONIC_GAIN_RATIO, start + 1.05 * scale);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5 * scale);
-    oscillator.connect(gain);
-    harmonic.connect(harmonicGain);
-    gain.connect(master);
-    harmonicGain.connect(master);
-    oscillator.start(start);
-    harmonic.start(start);
-    oscillator.stop(start + 2.6 * scale);
-    harmonic.stop(start + 2.6 * scale);
-    sources.push({ node: oscillator, startTime: start }, { node: harmonic, startTime: start });
-  });
-  return registerSyntheticPlayback(context, master, sources, durationSeconds);
+function playSyntheticNotes(context, audioNotes, options = {}) {
+  if (typeof options !== "object") throw new TypeError("Use the shared audio request, not an envelope duration.");
+  return trackSyntheticPlayback(CodoriAudio.forContext(context).play({ frequencies: audioNotes, ...options, profile: "ukulele" }));
 }
 
 async function playDiagramNote(midi) {
@@ -2709,6 +2612,13 @@ function cacheBustedDataPath(path) {
   return `${path}${separator}v=${DATA_CACHE_VERSION}`;
 }
 
+function playHarmonyChord(name, shouldContinue = () => true) {
+      const chord = practiceCatalog.get(name);
+      if (!chord) throw new Error(`Missing harmony chord: ${name}`);
+      const frequencies = CodoriHarmony.audioNotesFor(chord, ROOT_NOTE_FREQUENCIES[rootForChord(chord)]);
+      return playChord(chord, { trackProgress: false, frequencies, playbackToken: playbackGeneration, shouldContinue });
+}
+
 async function init() {
   await loadPracticeResources();
   await loadChordData();
@@ -2739,12 +2649,6 @@ async function init() {
   setModeSelectOnly(shouldStartOnModeSelect);
   setView(activeView);
   if (window.CodoriHarmony) {
-    const playHarmonyChord = (name, shouldContinue) => {
-      const chord = practiceCatalog.get(name);
-      if (!chord) throw new Error(`Missing harmony chord: ${name}`);
-      const frequencies = CodoriHarmony.audioNotesFor(chord, ROOT_NOTE_FREQUENCIES[rootForChord(chord)]);
-      return playChord(chord, { trackProgress: false, frequencies, durationSeconds: 0.75, shouldContinue });
-    };
     harmonySession = CodoriHarmony.mount({ root: document.querySelector("#harmony-view"), playChord: playHarmonyChord });
     harmonyTestSession = CodoriHarmony.mountTest({ root: document.querySelector("#test-view"), playChord: playHarmonyChord });
     lessonPlayer = CodoriHarmony.createPlayer({ playChord: playHarmonyChord,

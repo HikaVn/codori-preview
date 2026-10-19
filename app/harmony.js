@@ -48,25 +48,29 @@
 
   // One cancelable sequence owner for lessons, practice and tests.
   function createPlayer({ playChord, schedule = (fn, ms) => setTimeout(fn, ms), cancel = id => clearTimeout(id), onCue = () => {}, onEnd = () => {}, onError = () => {} }) {
-    let generation = 0, timer, stopTone;
+    let generation = 0, timer;
+    const voices = new Set();
+    const timing = window.CodoriAudio.policy;
     function stop() {
-      generation += 1; cancel(timer); stopTone?.(); stopTone = null;
+      generation += 1; cancel(timer); voices.forEach(stop => stop()); voices.clear();
     }
     async function start(steps) {
       stop();
       const token = generation;
       async function step(index) {
         if (token !== generation) return;
-        if (index === steps.length) { onEnd(); return; }
+        if (index === steps.length) { voices.clear(); onEnd(); return; }
         const item = steps[index];
         onCue(item.cue);
         try {
+          let delay = timing.sequenceGapMs;
           if (!item.gap) {
             const stopCurrent = await playChord(item.chord, () => token === generation);
             if (token !== generation) { stopCurrent?.(); return; }
-            stopTone = stopCurrent;
+            if (stopCurrent) voices.add(stopCurrent);
+            delay = index === steps.length - 1 ? (stopCurrent?.completeAfterMs ?? timing.sequenceStepMs) : (stopCurrent?.nextStepMs ?? timing.sequenceStepMs);
           }
-          timer = schedule(() => step(index + 1), item.gap ? 700 : 1150);
+          timer = schedule(() => step(index + 1), delay);
         } catch (error) {
           if (token !== generation) return;
           stop(); onError(error);
@@ -134,13 +138,16 @@
       if (value === question.answer) correct += 1;
       phase = "answered"; emit();
     }
-    function setLevel(value) {
-      if (!["step1", "step2"].includes(value) || value === level) return;
+    function reset(value = level) {
+      if (!["step1", "step2"].includes(value)) return;
       level = value; deck = []; correct = 0; answered = 0;
       next();
     }
+    function setLevel(value) {
+      if (value !== level) reset(value);
+    }
     next();
-    return { snapshot, next, play, answer, setLevel, stop: () => { stop(); emit(); } };
+    return { snapshot, next, play, answer, setLevel, reset, stop: () => { stop(); emit(); } };
   }
 
   function createTestSession(options) {
@@ -159,7 +166,7 @@
       if (status === "running") return;
       count = [3, 6, 9].includes(Number(amount)) ? Number(amount) : 6;
       records = []; status = "running";
-      engine.setLevel(level); engine.next(); emit();
+      engine.reset(level); emit();
     }
     function answer(value) {
       if (status !== "running" || current.selected || !current.heard || current.phase === "playing" || !functions[value]) return;

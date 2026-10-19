@@ -20,6 +20,7 @@ function harness() {
   const param = label => ({
     setValueAtTime: (value, time) => events.push([label, 'set', value, time]),
     exponentialRampToValueAtTime: (value, time) => events.push([label, 'ramp', value, time]),
+    linearRampToValueAtTime: (value, time) => events.push([label, 'linear', value, time]),
     cancelScheduledValues: time => events.push([label, 'cancel', time])
   });
   const audio = {
@@ -38,8 +39,10 @@ function harness() {
       setTimeout: callback => { timers.set(++id, callback); return id; }, clearTimeout: id => timers.delete(id) }
   });
   const run = code => vm.runInContext(code, context);
+  run(fs.readFileSync(new URL('../app/audio-engine.js', import.meta.url), 'utf8'));
+  context.CodoriAudio = context.window.CodoriAudio;
   run(source);
-  run('audioContext = fixtureAudio; chordData = fixtureChords; quizIndex = 0; var progressWrites = 0; recordChordHeard = () => progressWrites++;');
+  run('audioContext = fixtureAudio; chordData = fixtureChords; quizIndex = 0; var progressWrites = 0; if (typeof recordChordHeard === "function") recordChordHeard = () => progressWrites++; else updateStageProgress = () => progressWrites++;');
   return { run, audio, oscillators, events, timers };
 }
 
@@ -57,9 +60,9 @@ test('existing synthetic chords retain their default 2.6-second envelope and str
 test('short harmony chords return an idempotent stop and preserve source notes', async () => {
   const h = harness();
   const before = JSON.stringify(data[0].temp_audio_notes);
-  const stop = await h.run('playChord(fixtureChords[0], { frequencies: [261.63, 329.63, 392], durationSeconds: 0.75, trackProgress: false, shouldContinue: () => true })');
+  const stop = await h.run('playChord(fixtureChords[0], { frequencies: [261.63, 329.63, 392], gateSeconds: 0.75, trackProgress: false, shouldContinue: () => true })');
   assert.equal(h.oscillators.length, 6);
-  assert.equal(h.oscillators[0].stops[0], 10.75);
+  assert.equal(h.oscillators[0].stops[0], 12.2);
   assert.equal(h.run('progressWrites'), 0);
   stop(); stop();
   assert.equal(h.run('activeSyntheticPlaybacks.size'), 0);
@@ -113,4 +116,10 @@ test('root assist retains the named root for F despite A being its first voicing
   await h.run('playRootAssist()');
   assert.equal(h.oscillators[0].frequency.value, 349.23);
   assert.equal(h.oscillators[1].frequency.value, 698.46);
+});
+
+
+test('screens cannot scale attack and release through durationSeconds', async () => {
+  const h = harness();
+  await assert.rejects(h.run('playChord(fixtureChords[0], { durationSeconds: 0.75 })'), /gateSeconds/);
 });

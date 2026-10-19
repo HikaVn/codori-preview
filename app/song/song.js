@@ -480,114 +480,29 @@ function ensureAudioContext() {
   if (!audioCtx || audioCtx.state === "closed") {
     audioCtx = new Ctx();
   }
-  if (audioCtx.state !== "running" && typeof audioCtx.resume === "function") {
+  if (!CodoriAudio.isRenderable(audioCtx) && typeof audioCtx.resume === "function") {
     audioCtx.resume().catch(() => {});
   }
   return audioCtx;
 }
 
-// 鳴っている最中のコード（コード切り替え時にカットするための追跡）
+// Natural chord changes release notes; user transport cancellation aborts every voice.
 let ringingChords = [];
-
 function cutRingingChords(time) {
-  ringingChords.forEach((node) => {
-    if (node.until <= time) {
-      return;
-    }
-    const gainParam = node.gain.gain;
-    try {
-      gainParam.cancelAndHoldAtTime(time);
-    } catch (error) {
-      gainParam.cancelScheduledValues(time);
-      gainParam.setValueAtTime(0.1, time);
-    }
-    gainParam.exponentialRampToValueAtTime(0.0001, time + 0.06);
-  });
+  ringingChords.forEach(handle => handle.noteOff(time));
   ringingChords = [];
 }
-
-// 音あて（コードカード）と同じ音色（倍音0.2＋長い余韻）。
-// プレイモードでは分散和音の間隔を30msに詰めて、リズムに食い込まないようにする。
-// 余韻はコード切り替え時に cutRingingChords で全音同時にカットされる。
-const STRUM_ARPEGGIO_INTERVAL = 0.03;
-const STRUM_HARMONIC_RATIO = 0.2;
-// 「コードをピアノ音で」トグルON時の音色。倍音を多めに重ねて鍵盤らしい響きにする。
-const PIANO_CHORD_PARTIALS = [[1, 1], [2, 0.5], [3, 0.28], [4, 0.14], [5, 0.07]];
-// ピアノ音のアタック（秒）。ストラムより速く立ち上がり、そのあとは指数減衰する。
-const PIANO_ATTACK = 0.005;
-// コードが切り替わる直前に作るわずかな隙間（秒）。次のコードへ被らせない。
-const CHORD_CHANGE_GAP = 0.07;
 // スウィングの8分ウラの位置（0.5=ストレート, 0.667=三連スウィング）。やや浅めの三連寄り。
 const SWING_RATIO = 0.64;
 
 function strumChord(chord, time, beats, strumGain = 1, frequencies = chordFrequencies(chord)) {
-  if (!frequencies) {
-    return;
-  }
-  // 「コードをピアノ音で」トグル。OFF時は従来どおりのウクレレ・ストラム音のまま。
-  const piano = el.chordPianoToggle?.checked;
-  const ctx = audioCtx;
-  const secPerBeatNow = 60 / song.bpm;
-  // コードが切り替わる際に、ほんの少し前で音を切って隙間を作る（次のコードへ被らせない）。
-  // 割り当てられた拍ぶんの長さから CHORD_CHANGE_GAP だけ手前で消えるようにする。
-  const fullSec = beats * secPerBeatNow;
-  const duration = Math.min(Math.max(fullSec - CHORD_CHANGE_GAP, 0.3), 2.6);
-  const masterHold = Math.min(1.15, duration * 0.45);
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(0.0001, time);
-  master.gain.exponentialRampToValueAtTime(0.16 * strumGain, time + 0.04);
-  master.gain.setValueAtTime(0.16 * strumGain, time + masterHold);
-  master.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-  master.connect(ctx.destination);
-  ringingChords.push({ gain: master, until: time + duration + 0.3 });
-
-  frequencies.forEach((frequency, index) => {
-    const start = time + index * STRUM_ARPEGGIO_INTERVAL;
-    const end = Math.max(start + 0.2, time + duration);
-    if (piano) {
-      // ピアノ風の声：倍音を重ねた減衰音（保持せず、立ち上がり後は指数的に鳴り減っていく）
-      const attackEnd = Math.min(start + PIANO_ATTACK, end - 0.02);
-      PIANO_CHORD_PARTIALS.forEach(([mult, amp]) => {
-        const posc = ctx.createOscillator();
-        const pgain = ctx.createGain();
-        posc.type = "sine";
-        posc.frequency.value = frequency * mult;
-        pgain.gain.setValueAtTime(0.0001, start);
-        pgain.gain.linearRampToValueAtTime(0.16 * amp, attackEnd);
-        pgain.gain.exponentialRampToValueAtTime(0.0001, end);
-        posc.connect(pgain);
-        pgain.connect(master);
-        posc.start(start);
-        posc.stop(end + 0.05);
-      });
-      return;
-    }
-    const hold = Math.min(start + 1.05, end - 0.1);
-    const osc = ctx.createOscillator();
-    const harmonic = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const harmonicGain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = frequency;
-    harmonic.type = "sine";
-    harmonic.frequency.value = frequency * 2;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
-    gain.gain.setValueAtTime(0.13, hold);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    harmonicGain.gain.setValueAtTime(0.0001, start);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.16 * STRUM_HARMONIC_RATIO, start + 0.025);
-    harmonicGain.gain.setValueAtTime(0.13 * STRUM_HARMONIC_RATIO, hold);
-    harmonicGain.gain.exponentialRampToValueAtTime(0.0001, end);
-    osc.connect(gain);
-    harmonic.connect(harmonicGain);
-    gain.connect(master);
-    harmonicGain.connect(master);
-    osc.start(start);
-    harmonic.start(start);
-    osc.stop(end + 0.05);
-    harmonic.stop(end + 0.05);
+  if (!frequencies) return;
+  const gateSeconds = beats * (60 / song.bpm);
+  const handle = CodoriAudio.forContext(audioCtx).play({
+    profile: el.chordPianoToggle?.checked ? "piano" : "ukulele",
+    performance: "rhythmic", frequencies, startTime: time, gateSeconds, gain: strumGain
   });
+  ringingChords.push(handle);
 }
 
 // アーティキュレーションを再生に反映する係数。gate=鳴る長さ比、gain=音量比。
@@ -605,40 +520,15 @@ function articFactors(artic) {
 }
 
 function playTone(frequency, time, duration, gain, type = "sine", registerAsChord = false) {
-  if (!frequency) {
-    return;
-  }
-  const ctx = audioCtx;
-  const osc = ctx.createOscillator();
-  const gainNode = ctx.createGain();
-  osc.type = type;
-  osc.frequency.value = frequency;
-  const dur = Math.max(0.12, duration);
-  gainNode.gain.setValueAtTime(0.0001, time);
-  gainNode.gain.exponentialRampToValueAtTime(gain, time + 0.015);
-  gainNode.gain.exponentialRampToValueAtTime(0.0001, time + dur);
-  osc.connect(gainNode);
-  gainNode.connect(ctx.destination);
-  osc.start(time);
-  osc.stop(time + dur + 0.05);
-  if (registerAsChord) {
-    ringingChords.push({ gain: gainNode, until: time + dur + 0.1 });
-  }
+  if (!frequency) return;
+  const handle = CodoriAudio.forContext(audioCtx).play({
+    profile: type === "triangle" ? "melody" : "pluck", frequencies: [frequency], startTime: time, gateSeconds: duration, voiceGain: gain
+  });
+  if (registerAsChord) ringingChords.push(handle);
 }
 
 function metronomeClick(time, isBarHead) {
-  const ctx = audioCtx;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "triangle";
-  osc.frequency.value = isBarHead ? 1700 : 1100;
-  gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.exponentialRampToValueAtTime(isBarHead ? 0.22 : 0.12, time + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(time);
-  osc.stop(time + 0.1);
+  CodoriAudio.forContext(audioCtx).click(time, isBarHead);
 }
 
 // ===== 再生エンジン =====
@@ -835,7 +725,8 @@ function stopPlayback() {
 function haltPlayback() {
   player.playing = false;
   if (audioCtx) {
-    cutRingingChords(audioCtx.currentTime);
+    CodoriAudio.forContext(audioCtx).stopAll();
+    ringingChords = [];
   }
   if (player.audioSource) {
     try {
@@ -1864,3 +1755,6 @@ function init() {
 }
 
 init();
+
+window.addEventListener("pagehide", () => { if (audioCtx) CodoriAudio.forContext(audioCtx).stopAll(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && player.playing) pausePlayback(); });

@@ -16,7 +16,7 @@ try {
   await page.goto(process.env.CODORI_TEST_URL || 'http://127.0.0.1:8765/app/');
   await page.locator('#home-view [data-route="learn"]:enabled').waitFor({ timeout: 10000 });
   check(await page.locator('#home-view').isVisible(), 'one home with learn/practice/test categories');
-  check((await page.locator('[data-area]').allTextContents()).join('/') === '学ぶ/練習する/テスト', 'three requested menu labels');
+  check((await page.locator('[data-area]').allTextContents()).join('/') === '学ぶ/練習する/実践する', 'three requested menu labels');
   if (!process.env.CODORI_UI_EXISTING_ONLY) {
   const before = await page.evaluate(() => JSON.stringify(practiceProgress));
   await page.screenshot({ path: `${output}/home-three-areas.png`, fullPage: true });
@@ -87,8 +87,15 @@ try {
   await route('#home-button');
   }
   await page.setViewportSize({ width: 1200, height: 1000 });
-  await route('[data-area="practice"]');
+  await route('[data-area="test"]');
+  check(await page.locator('[data-home-area="practice"] [data-route="legacy"]').count() === 0 && await page.locator('[data-home-area="test"] [data-route="legacy"]').isVisible(), 'story entry only exists in practical area');
   await route('#home-view [data-route="legacy"]');
+  check(await page.evaluate(() => homeArea === 'test'), 'story keeps practical category selected');
+  const storyProgress = await page.evaluate(() => JSON.stringify(practiceProgress));
+  await page.goBack(); await ready(() => currentAppRoute === 'home');
+  check(await page.locator('[data-home-area="test"] [data-route="legacy"]').isVisible(), 'story back returns to practical menu');
+  await page.goForward(); await ready(() => currentAppRoute === 'legacy');
+  check(await page.evaluate(() => JSON.stringify(practiceProgress)) === storyProgress, 'story forward restores screen without changing progress');
   await route('#play-current'); await route('#play-current');
   check(await page.evaluate(() => activeView === 'card' && activeSyntheticPlaybacks.size <= 1), 'original card playback and cancellation');
   await route('[data-view="quiz"]'); await route('#play-quiz');
@@ -122,6 +129,7 @@ try {
   await direct.waitForFunction(() => harmonySession && currentAppRoute === 'catalog');
   check(await direct.evaluate(() => activeSet.id === 'expansion-set-01' && activeView === 'compare'), 'original set/view deep link');
   await direct.close();
+  if (process.env.CODORI_TEST_VARIANT !== 'local') {
   await route('[data-area="learn"]'); await route('#home-view [data-route="catalog"]');
   await page.locator('[data-diagram-mode="piano"]').click();
   check(await page.evaluate(() => diagramMode === 'piano'), 'public piano diagram mode preserved');
@@ -141,8 +149,9 @@ try {
   await ready(() => !document.querySelector('#reset-history-dialog').open && Object.keys(practiceProgress.stages).length === 0 && practiceProgress.last === null);
   check(await page.evaluate(() => Object.keys(practiceProgress.stages).length === 0 && practiceProgress.last === null && currentAppRoute === 'home'), 'public history reset returns to unified home');
   check(await page.evaluate(() => localStorage.getItem('codori.songPractice.v1') === '{"songs":["ui-fixture"]}' && localStorage.getItem('codori.songPractice.records.v1') === '{"ui-fixture":{"score":80}}'), 'history reset keeps song records');
+  }
   assert.deepEqual(errors, []);
-  await fs.writeFile(`${output}/ui-main-result.json`, JSON.stringify({ status: 'passed', muted: true, isolatedStorage: true, browser: await browser.version(), url: page.url(), checks }, null, 2));
+  await fs.writeFile(`${output}/ui-main-result.json`, JSON.stringify({ status: 'passed', variant: process.env.CODORI_TEST_VARIANT || 'public', muted: true, isolatedStorage: true, browser: await browser.version(), url: page.url(), checks }, null, 2));
   console.log(`Main integration UI: ${checks.length} checks passed.`);
 } catch (error) {
   console.error('Page errors:', errors);
